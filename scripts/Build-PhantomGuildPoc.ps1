@@ -1,16 +1,149 @@
 param(
     [string]$GamePath = "C:\Program Files (x86)\Steam\steamapps\common\Majesty HD",
     [string]$OutputRoot = ".\dist\PhantomGuildPoc",
+    [string]$PortraitImage = ".\assets\source\phantom-portrait.png",
+    [string]$BuildingProfileImage = ".\assets\source\phantom-guild-profile.png",
+    [string]$IconSheet = ".\assets\source\phantom-icons-sheet.png",
     [string]$GplCompiler = ""
 )
 
 $ErrorActionPreference = "Stop"
 
+function Convert-ImageToRawRgb {
+    param(
+        [Parameter(Mandatory = $true)][string]$InputPath,
+        [Parameter(Mandatory = $true)][string]$OutputPath,
+        [int]$Width = 100,
+        [int]$Height = 100,
+        [int]$GridColumns = 1,
+        [int]$GridRows = 1,
+        [int]$GridColumn = 0,
+        [int]$GridRow = 0,
+        [switch]$BrightenForSmallIcon
+    )
+
+    Add-Type -AssemblyName System.Drawing
+
+    $resolvedInput = (Resolve-Path $InputPath).Path
+    $source = [System.Drawing.Image]::FromFile($resolvedInput)
+    $bitmap = $null
+    $graphics = $null
+
+    try {
+        $cellWidth = [int]($source.Width / $GridColumns)
+        $cellHeight = [int]($source.Height / $GridRows)
+        $cellX = $GridColumn * $cellWidth
+        $cellY = $GridRow * $cellHeight
+        $side = [Math]::Min($cellWidth, $cellHeight)
+        $sourceX = $cellX + [int](($cellWidth - $side) / 2)
+        $sourceY = $cellY + [int](($cellHeight - $side) / 2)
+        $sourceRect = New-Object System.Drawing.Rectangle $sourceX, $sourceY, $side, $side
+        $destRect = New-Object System.Drawing.Rectangle 0, 0, $Width, $Height
+
+        $bitmap = New-Object System.Drawing.Bitmap $Width, $Height, ([System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+        $graphics.Clear([System.Drawing.Color]::Black)
+        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+        $graphics.DrawImage($source, $destRect, $sourceRect, [System.Drawing.GraphicsUnit]::Pixel)
+
+        $bytes = New-Object byte[] ($Width * $Height * 3)
+        $offset = 0
+        for ($y = 0; $y -lt $Height; $y++) {
+            for ($x = 0; $x -lt $Width; $x++) {
+                $pixel = $bitmap.GetPixel($x, $y)
+                $red = $pixel.R
+                $green = $pixel.G
+                $blue = $pixel.B
+                if ($BrightenForSmallIcon) {
+                    if (($red + $green + $blue) -lt 36) {
+                        $red = 30
+                        $green = 64
+                        $blue = 92
+                    }
+                    else {
+                        $red = [Math]::Min(255, [int]($red * 1.18) + 18)
+                        $green = [Math]::Min(255, [int]($green * 1.18) + 18)
+                        $blue = [Math]::Min(255, [int]($blue * 1.28) + 28)
+                    }
+                }
+                $bytes[$offset] = $red
+                $bytes[$offset + 1] = $green
+                $bytes[$offset + 2] = $blue
+                $offset += 3
+            }
+        }
+
+        [System.IO.File]::WriteAllBytes($OutputPath, $bytes)
+    }
+    finally {
+        if ($graphics) { $graphics.Dispose() }
+        if ($bitmap) { $bitmap.Dispose() }
+        $source.Dispose()
+    }
+}
+
+function Resolve-RepoPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$PathValue
+    )
+
+    if ([System.IO.Path]::IsPathRooted($PathValue)) {
+        return $PathValue
+    }
+
+    return (Join-Path $repoRoot $PathValue)
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$workspaceRoot = Split-Path -Parent $repoRoot
+$toolsPython = Join-Path $workspaceRoot ".tools\python.cmd"
 $builder = Join-Path $repoRoot "src\build_phantom_guild.py"
+$iconGenerator = Join-Path $repoRoot "scripts\generate_phantom_icons.py"
 $outputRootPath = Join-Path $repoRoot $OutputRoot
 
-python $builder --game-path $GamePath --output-root $outputRootPath
+$tempDir = Join-Path $repoRoot "dist\temp"
+New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+
+$portraitRgb = Join-Path $tempDir "phantom_portrait_100.rgb"
+$buildingProfileRgb = Join-Path $tempDir "phantom_guild_profile_100.rgb"
+$heroIconRgb = Join-Path $tempDir "phantom_hero_icon_25.rgb"
+$buildingIconRgb = Join-Path $tempDir "phantom_guild_icon_25.rgb"
+$iceLanceIconRgb = Join-Path $tempDir "ice_lance_icon_29.rgb"
+$iceLanceSpellIconRgb = Join-Path $tempDir "ice_lance_spell_icon_24.rgb"
+$frostArmorSpellIconRgb = Join-Path $tempDir "frost_armor_spell_icon_24.rgb"
+$blizzardSpellIconRgb = Join-Path $tempDir "blizzard_spell_icon_24.rgb"
+$phantomCowlIconRgb = Join-Path $tempDir "phantom_cowl_icon_23.rgb"
+$darkStaffSmallIconRgb = Join-Path $tempDir "dark_staff_icon_16.rgb"
+$darkStaffMxIconRgb = Join-Path $tempDir "dark_staff_icon_23.rgb"
+$darkStaffIconRgb = Join-Path $tempDir "dark_staff_icon_50x19.rgb"
+
+Convert-ImageToRawRgb -InputPath (Resolve-RepoPath $PortraitImage) -OutputPath $portraitRgb -Width 100 -Height 100
+Convert-ImageToRawRgb -InputPath (Resolve-RepoPath $BuildingProfileImage) -OutputPath $buildingProfileRgb -Width 100 -Height 100
+if (-not (Test-Path $toolsPython)) {
+    throw "Shared tools Python does not exist: $toolsPython"
+}
+& $toolsPython $iconGenerator --out-dir $tempDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Phantom icon generator failed with exit code $LASTEXITCODE"
+}
+
+& $toolsPython $builder `
+    --game-path $GamePath `
+    --output-root $outputRootPath `
+    --portrait-rgb $portraitRgb `
+    --hero-icon-rgb $heroIconRgb `
+    --building-profile-rgb $buildingProfileRgb `
+    --building-icon-rgb $buildingIconRgb `
+    --ice-lance-icon-rgb $iceLanceIconRgb `
+    --ice-lance-spell-icon-rgb $iceLanceSpellIconRgb `
+    --frost-armor-spell-icon-rgb $frostArmorSpellIconRgb `
+    --blizzard-spell-icon-rgb $blizzardSpellIconRgb `
+    --phantom-cowl-icon-rgb $phantomCowlIconRgb `
+    --dark-staff-small-icon-rgb $darkStaffSmallIconRgb `
+    --dark-staff-mx-icon-rgb $darkStaffMxIconRgb `
+    --dark-staff-icon-rgb $darkStaffIconRgb
 
 if ($GplCompiler -eq "") {
     $GplCompiler = Join-Path $GamePath "SDK\Gplbcc.exe"
