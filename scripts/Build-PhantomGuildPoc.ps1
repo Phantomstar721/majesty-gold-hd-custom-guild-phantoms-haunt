@@ -103,6 +103,10 @@ $builder = Join-Path $repoRoot "src\build_phantom_guild.py"
 $iconGenerator = Join-Path $repoRoot "scripts\generate_phantom_icons.py"
 $outputRootPath = Join-Path $repoRoot $OutputRoot
 
+if (Test-Path $outputRootPath) {
+    Remove-Item -LiteralPath $outputRootPath -Recurse -Force
+}
+
 $tempDir = Join-Path $repoRoot "dist\temp"
 New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
