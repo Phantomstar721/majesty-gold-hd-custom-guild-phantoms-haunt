@@ -3,7 +3,7 @@ param(
     [string]$OutputRoot = ".\dist\PhantomGuildPoc",
     [string]$PortraitImage = ".\assets\source\phantom-portrait.png",
     [string]$BuildingProfileImage = ".\assets\source\phantom-guild-profile.png",
-    [string]$IconSheet = ".\assets\source\phantom-icons-sheet.png",
+    [string]$BuildingSpriteSheet = ".\assets\source\phantom-guild-sprite-sheet.png",
     [string]$GplCompiler = ""
 )
 
@@ -101,6 +101,7 @@ $workspaceRoot = Split-Path -Parent $repoRoot
 $toolsPython = Join-Path $workspaceRoot ".tools\python.cmd"
 $builder = Join-Path $repoRoot "src\build_phantom_guild.py"
 $iconGenerator = Join-Path $repoRoot "scripts\generate_phantom_icons.py"
+$buildingSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_building_sprites.py"
 $outputRootPath = Join-Path $repoRoot $OutputRoot
 
 if (Test-Path $outputRootPath) {
@@ -122,6 +123,7 @@ $phantomCowlIconRgb = Join-Path $tempDir "phantom_cowl_icon_23.rgb"
 $darkStaffSmallIconRgb = Join-Path $tempDir "dark_staff_icon_16.rgb"
 $darkStaffMxIconRgb = Join-Path $tempDir "dark_staff_icon_23.rgb"
 $darkStaffIconRgb = Join-Path $tempDir "dark_staff_icon_50x19.rgb"
+$buildingSpriteDir = Join-Path $tempDir "building_sprites"
 
 Convert-ImageToRawRgb -InputPath (Resolve-RepoPath $PortraitImage) -OutputPath $portraitRgb -Width 100 -Height 100
 Convert-ImageToRawRgb -InputPath (Resolve-RepoPath $BuildingProfileImage) -OutputPath $buildingProfileRgb -Width 100 -Height 100
@@ -132,6 +134,10 @@ if (-not (Test-Path $toolsPython)) {
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom icon generator failed with exit code $LASTEXITCODE"
 }
+& $toolsPython $buildingSpriteGenerator --sheet (Resolve-RepoPath $BuildingSpriteSheet) --out-dir $buildingSpriteDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Phantom building sprite generator failed with exit code $LASTEXITCODE"
+}
 
 & $toolsPython $builder `
     --game-path $GamePath `
@@ -140,6 +146,7 @@ if ($LASTEXITCODE -ne 0) {
     --hero-icon-rgb $heroIconRgb `
     --building-profile-rgb $buildingProfileRgb `
     --building-icon-rgb $buildingIconRgb `
+    --building-sprite-rgb-dir $buildingSpriteDir `
     --ice-lance-icon-rgb $iceLanceIconRgb `
     --ice-lance-spell-icon-rgb $iceLanceSpellIconRgb `
     --frost-armor-spell-icon-rgb $frostArmorSpellIconRgb `
@@ -148,6 +155,9 @@ if ($LASTEXITCODE -ne 0) {
     --dark-staff-small-icon-rgb $darkStaffSmallIconRgb `
     --dark-staff-mx-icon-rgb $darkStaffMxIconRgb `
     --dark-staff-icon-rgb $darkStaffIconRgb
+if ($LASTEXITCODE -ne 0) {
+    throw "Phantom CAM builder failed with exit code $LASTEXITCODE"
+}
 
 if ($GplCompiler -eq "") {
     $GplCompiler = Join-Path $GamePath "SDK\Gplbcc.exe"

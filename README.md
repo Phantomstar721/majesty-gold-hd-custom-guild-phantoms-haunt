@@ -8,6 +8,8 @@ This currently builds:
 - `Phantoms Guild`, building ID `MBPhantomGuild`, castle build-menu cost `1`.
 - `Phantom`, hero ID `PHM1`, recruit cost `1`.
 - Custom generated Phantom profile art, small hero icon, and small guild icon.
+- Custom generated Phantom Guild world/building sprite frames, including
+  inactive, active, damaged, destroyed, and build-progress variants.
 - Custom Phantom starter special items:
   - `Frozen Cowl`, item ID `80`, grants `+1` armor.
   - `Black Icerod`, item ID `81`, grants `+8` weapon damage.
@@ -20,8 +22,7 @@ This currently builds:
   and copied Frost Field hit overlay art.
 
 The in-map animated hero sprite is currently based on the Priestess of Krypta
-sprite set with a Phantom recolor. Some building world art still reuses stable
-stock art while the custom guild rules are developed.
+sprite set with a Phantom recolor.
 
 ## Current Status
 
@@ -31,16 +32,19 @@ Confirmed working in-game:
   reloads and main-menu returns.
 - `Phantoms Guild` is buildable from the castle menu and recruits `Phantom`
   heroes.
-- Phantom profile art, hero-list icon, guild member icon, Priestess-based
-  in-map sprite recolor, starter special items, and death cleanup all work.
+- Phantom profile art, matching hero-list/guild member icons, custom guild
+  build-menu icon, Priestess-based in-map sprite recolor, starter special
+  items, and death cleanup all work.
 - `Ice Lance` is a Phantom-only custom spell with its own directional
   projectile art and Frost Field hit overlay, without modifying stock Wizard
   spell visuals.
+- `Phantoms Guild` now has a generated Phantom-only building sprite set wired
+  through appended tile records, without modifying the stock Wizard Guild art.
 
 Next planned work:
 
-- Replace the stock Wizard Guild world/building sprite with a custom Phantom
-  Guild building sprite.
+- Continue tuning Phantom balance, spell progression, and any additional
+  Phantom-only items or spells.
 
 ## Custom Special Items
 
@@ -122,6 +126,48 @@ Keep the SDK/RGSeditor path available for updating the private Workshop item
 metadata, but day-to-day local testing should use the registered Workshop deploy
 script once the item exists.
 
+### Custom Building Sprite Art
+
+The working custom guild sprite path is:
+
+- Start from the stock `ABX1Rogue Guild1` image record because it has normal
+  peasant-built guild state wiring and avoids the Wizard Guild's magical
+  construction visuals.
+- Generate exact-size RGB replacements for the specific Rogue Guild source
+  tiles used by the Phantom Guild clone. The current generator reads from
+  `assets\source\phantom-guild-sprite-sheet.png` and writes files named like
+  `building_tile_01755.rgb`.
+- Append those rendered tiles to `phantom_maindata.cam` under `PHG1Bld####`
+  tile entries.
+- Remap only the cloned `PHG1Phantom Guild` image entry to the appended tile
+  indices.
+- Do not overwrite or replace the stock `ABX1Rogue Guild1` image entry, and do
+  not replace the stock Rogue Guild tile IDs in-place.
+
+This keeps the original Wizard Guild functioning normally while giving the
+Phantom Guild its own inactive, active, damaged, destroyed, and build-progress
+world art.
+
+The Phantom Guild should remain a normal peasant-built guild. Its building XML
+intentionally matches normal guild placement behavior and does not use
+terrain-height modification.
+
+### Custom Icon Art
+
+The current icon build path is generated rather than manually sliced from a
+source sheet:
+
+- `scripts\generate_phantom_icons.py` writes the current Phantom hero, guild,
+  spell, and equipment icon PNG/RGB files into `dist\temp`.
+- `assets\source\phantom-icons-sheet.png` is a current reference/contact sheet
+  for humans, not build input.
+- The Phantom Guild build-menu icon, hero-list icon, guild member/count icon,
+  and Phantom profile portrait are palette-remapped to palette `560` so they
+  share the same cyan/blue visual family in-game.
+- The cloned Phantom image has an internal hero icon tile copied from the
+  Priestess source image. That appended tile must be patched too, or the guild
+  count and roster/list icons can appear with different palette tones.
+
 ### Custom Spell Art
 
 The working custom directional projectile path is:
@@ -199,7 +245,6 @@ The working path is:
 ## Current Limitations
 
 - `Frost Armor` and `Blizzard` still need a dedicated stability pass.
-- Building world art still reuses stock Wizard Guild art.
 - The Phantom Guild is still a proof of concept rather than a balanced finished
   content mod.
 

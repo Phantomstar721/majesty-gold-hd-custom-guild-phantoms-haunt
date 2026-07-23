@@ -21,7 +21,7 @@ BUILDING_ID = "MBPhantomGuild"
 BUILDING_TEXT_ID = "PHG1"
 SOURCE_HERO_IMAGE = b"AVN1Wizard"
 SOURCE_PHANTOM_SPRITE_IMAGE = b"AVG1Priestess"
-SOURCE_BUILDING_IMAGE = b"ABY1Wizard Guild1"
+SOURCE_BUILDING_IMAGE = b"ABX1Rogue Guild1"
 SOURCE_ICE_LANCE_ICON = b"XL15PowerShock"
 SOURCE_ICE_LANCE_PROJECTILE = b"WPc2fire_blast_M"
 SOURCE_FROST_ARMOR_ICON = b"WRb2fireshield_IC"
@@ -38,8 +38,11 @@ PHANTOM_ICE_LANCE_HIT_IMAGE = b"PHo3Ice Lance Hit"
 HERO_PORTRAIT_TILE = 6293
 HERO_ICON_TILE = 6299
 ROGUE_HERO_ICON_TILE = 4996
-BUILDING_PROFILE_TILE = 1779
-BUILDING_ICON_TILE = 1904
+BUILDING_PROFILE_TILE = 1760
+BUILDING_ICON_TILE = 1761
+BUILDING_SPRITE_PALETTE_INDEX = 560
+PHANTOM_HERO_ICON_PALETTE_INDEX = BUILDING_SPRITE_PALETTE_INDEX
+PHANTOM_HERO_PORTRAIT_PALETTE_INDEX = BUILDING_SPRITE_PALETTE_INDEX
 ICE_LANCE_ICON_TILE = 202
 ICE_LANCE_PROJECTILE_TILES = tuple(range(202, 214))
 ICE_LANCE_DIRECTIONAL_PROJECTILE_TILES = tuple(range(8368, 8496))
@@ -79,6 +82,7 @@ def main() -> int:
     parser.add_argument("--hero-icon-rgb", type=Path)
     parser.add_argument("--building-profile-rgb", type=Path)
     parser.add_argument("--building-icon-rgb", type=Path)
+    parser.add_argument("--building-sprite-rgb-dir", type=Path)
     parser.add_argument("--ice-lance-icon-rgb", type=Path)
     parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
     parser.add_argument("--frost-armor-spell-icon-rgb", type=Path)
@@ -122,6 +126,7 @@ def main() -> int:
         args.hero_icon_rgb,
         args.building_profile_rgb,
         args.building_icon_rgb,
+        args.building_sprite_rgb_dir,
         args.ice_lance_icon_rgb,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
     )
@@ -252,7 +257,6 @@ def phantom_units_xml() -> str:
 \t\t\t<Info value="BlockGround"/>
 \t\t\t<Info value="BlockFlying"/>
 \t\t\t<Info value="ModifyTerrainTextureOnPlacement"/>
-\t\t\t<Info value="ModifyTerrainHeightOnPlacement"/>
 \t\t\t<CanUse value="HumanPlayer"/>
 \t\t\t<Menu value="1"/>
 \t\t\t<ImageIDBase value="PHG1"/>
@@ -831,6 +835,7 @@ def write_maindata_cam(
     hero_icon_rgb: Path | None,
     building_profile_rgb: Path | None,
     building_icon_rgb: Path | None,
+    building_sprite_rgb_dir: Path | None,
     ice_lance_icon_rgb: Path | None,
     ice_effect_maindata: Path | None,
 ) -> None:
@@ -878,10 +883,15 @@ def write_maindata_cam(
         for index in referenced_tile_indices(hero_imag, len(tiles))
         if 4586 <= index <= 4793
     )
+    building_sprite_rgb_paths = building_sprite_replacement_paths(building_sprite_rgb_dir)
+    building_sprite_tile_indices = sorted(
+        referenced_low16_tile_indices(building_imag, len(tiles)) & set(building_sprite_rgb_paths)
+    )
 
     tile_indices: set[int] = set()
     tile_indices.update(referenced_tile_indices(rogue_hero_imag, len(tiles)))
     tile_indices.update(referenced_tile_indices(building_imag, len(tiles)))
+    tile_indices.update(building_sprite_tile_indices)
     tile_indices.update(referenced_tile_indices(ice_lance_icon, len(tiles)))
     tile_indices.update(referenced_tile_indices(ice_lance_projectile, len(tiles)))
     tile_indices.update(referenced_tile_indices(frost_armor_icon, len(tiles)))
@@ -891,17 +901,17 @@ def write_maindata_cam(
 
     replacement_tiles = {
         ROGUE_HERO_ICON_TILE: tile_from_rgb(
-            tiles[ROGUE_HERO_ICON_TILE].data,
+            remap_tile_palette_index(tiles[ROGUE_HERO_ICON_TILE].data, PHANTOM_HERO_ICON_PALETTE_INDEX),
             palettes,
             hero_icon_rgb.read_bytes() if hero_icon_rgb else None,
         ),
         HERO_PORTRAIT_TILE: tile_from_rgb(
-            tiles[HERO_PORTRAIT_TILE].data,
+            remap_tile_palette_index(tiles[HERO_PORTRAIT_TILE].data, PHANTOM_HERO_PORTRAIT_PALETTE_INDEX),
             palettes,
             portrait_rgb.read_bytes() if portrait_rgb else None,
         ),
         HERO_ICON_TILE: tile_from_rgb(
-            tiles[HERO_ICON_TILE].data,
+            remap_tile_palette_index(tiles[HERO_ICON_TILE].data, PHANTOM_HERO_ICON_PALETTE_INDEX),
             palettes,
             hero_icon_rgb.read_bytes() if hero_icon_rgb else None,
         ),
@@ -911,7 +921,7 @@ def write_maindata_cam(
             building_profile_rgb.read_bytes() if building_profile_rgb else None,
         ),
         BUILDING_ICON_TILE: tile_from_rgb(
-            tiles[BUILDING_ICON_TILE].data,
+            remap_tile_palette_index(tiles[BUILDING_ICON_TILE].data, BUILDING_SPRITE_PALETTE_INDEX),
             palettes,
             building_icon_rgb.read_bytes() if building_icon_rgb else None,
         ),
@@ -925,7 +935,6 @@ def write_maindata_cam(
         )
     ice_lance_icon = remap_imag_animation_sequence(ice_lance_icon, [204, 205, 206, 207, 208])
     extra_tiles: list[CamEntry] = []
-    extra_palette_entries: list[CamEntry] = []
     _ = ice_lance_icon_rgb
 
     directional_projectile_tile_indices = sorted(
@@ -933,6 +942,24 @@ def write_maindata_cam(
         for index in referenced_tile_indices(ice_lance_projectile, len(tiles))
         if index in ICE_LANCE_DIRECTIONAL_PROJECTILE_TILES
     )
+    if building_sprite_tile_indices:
+        first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
+        building_tile_replacements: dict[int, int] = {}
+        for offset, source_tile_index in enumerate(building_sprite_tile_indices):
+            custom_tile_index = first_custom_tile_index + offset
+            building_tile_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHG1Bld{offset:04d}".encode("ascii")),
+                    data=tile_from_rgb(
+                        remap_tile_palette_index(tiles[source_tile_index].data, BUILDING_SPRITE_PALETTE_INDEX),
+                        palettes,
+                        building_sprite_rgb_paths[source_tile_index].read_bytes(),
+                    ),
+                )
+            )
+        building_imag = remap_imag_low16_tile_indices(building_imag, building_tile_replacements)
+
     if directional_projectile_tile_indices:
         first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
         projectile_tile_replacements: dict[int, int] = {}
@@ -962,9 +989,17 @@ def write_maindata_cam(
             phantom_sprite_tile_replacements[source_tile_index] = custom_tile_index
             source_tile = tiles[source_tile_index].data
             if source_tile_index == 4786 and portrait_rgb:
-                tile = tile_from_rgb(source_tile, palettes, portrait_rgb.read_bytes())
+                tile = tile_from_rgb(
+                    remap_tile_palette_index(source_tile, PHANTOM_HERO_PORTRAIT_PALETTE_INDEX),
+                    palettes,
+                    portrait_rgb.read_bytes(),
+                )
             elif source_tile_index == 4792 and hero_icon_rgb:
-                tile = tile_from_rgb(source_tile, palettes, hero_icon_rgb.read_bytes())
+                tile = tile_from_rgb(
+                    remap_tile_palette_index(source_tile, PHANTOM_HERO_ICON_PALETTE_INDEX),
+                    palettes,
+                    hero_icon_rgb.read_bytes(),
+                )
             else:
                 tile = recolored_priestess_phantom_sprite_tile(source_tile, palettes)
             extra_tiles.append(
@@ -1002,14 +1037,14 @@ def write_maindata_cam(
     tile_entries.extend(extra_tiles)
     for tile_entry in extra_tiles:
         palette_index = tile_palette_index(tile_entry.data)
-        if palette_index is not None and palette_index < len(palettes):
+        if palette_index is not None:
             palette_indices.add(palette_index)
 
     max_palette_index = max(palette_indices)
     palette_entries = tuple(
         CamEntry(name=palettes[index].name, data=palettes[index].data)
         for index in range(max_palette_index + 1)
-    ) + tuple(extra_palette_entries)
+    )
     image_entries = [
         CamEntry(name=pad_name(ROGUE_HERO_IMAGE), data=rogue_hero_imag),
         CamEntry(name=pad_name(PHANTOM_HERO_IMAGE), data=hero_imag),
@@ -1183,7 +1218,12 @@ def tile_from_rgb(original_tile: bytes, palettes: list[CamEntry], rgb: bytes | N
     return bytes(output)
 
 
-def tile_v3_from_rgb(original_tile: bytes, palettes: list[CamEntry], rgb: bytes) -> bytes:
+def tile_v3_from_rgb(
+    original_tile: bytes,
+    palettes: list[CamEntry],
+    rgb: bytes,
+    palette_override: tuple[int, list[tuple[int, int, int]]] | None = None,
+) -> bytes:
     height = struct.unpack_from("<H", original_tile, 2)[0]
     width = struct.unpack_from("<H", original_tile, 4)[0]
     expected_rgb_size = width * height * 3
@@ -1192,11 +1232,18 @@ def tile_v3_from_rgb(original_tile: bytes, palettes: list[CamEntry], rgb: bytes)
             f"Expected {expected_rgb_size} RGB bytes for {width}x{height} tile, got {len(rgb)}"
         )
 
-    colors = tile_palette_colors(original_tile, palettes)
+    if palette_override:
+        target_palette_index, colors = palette_override
+    else:
+        target_palette_index = None
+        colors = tile_palette_colors(original_tile, palettes)
     if colors is None:
         return original_tile
 
     header = bytearray(original_tile[:26])
+    if target_palette_index is not None:
+        struct.pack_into("<H", header, 20, 0)
+        struct.pack_into("<I", header, 22, target_palette_index)
     rows: list[bytes] = []
     for y in range(height):
         row = bytearray()
@@ -1209,7 +1256,7 @@ def tile_v3_from_rgb(original_tile: bytes, palettes: list[CamEntry], rgb: bytes)
 
             start = x
             pixels: list[int] = []
-            while x < width and len(pixels) < 255:
+            while x < width and len(pixels) < 80:
                 pixel_offset = (y * width + x) * 3
                 red = rgb[pixel_offset]
                 green = rgb[pixel_offset + 1]
@@ -1247,7 +1294,7 @@ def tile_v3_from_rgb(original_tile: bytes, palettes: list[CamEntry], rgb: bytes)
 
     palette_mode = struct.unpack_from("<H", original_tile, 20)[0]
     original_palette_offset = struct.unpack_from("<I", original_tile, 22)[0]
-    if palette_mode == 1 and 0 <= original_palette_offset < len(original_tile):
+    if target_palette_index is None and palette_mode == 1 and 0 <= original_palette_offset < len(original_tile):
         new_palette_offset = len(output)
         struct.pack_into("<I", output, 22, new_palette_offset)
         output += original_tile[original_palette_offset:]
@@ -1997,6 +2044,30 @@ def referenced_tile_indices(imag: bytes, tile_count: int) -> set[int]:
     }
 
 
+def referenced_low16_tile_indices(imag: bytes, tile_count: int) -> set[int]:
+    result: set[int] = set()
+    for offset in range(0, len(imag) - 3, 4):
+        low_tile_index = u32(imag, offset) & 0xFFFF
+        if low_tile_index < tile_count:
+            result.add(low_tile_index)
+    return result
+
+
+def building_sprite_replacement_paths(building_sprite_rgb_dir: Path | None) -> dict[int, Path]:
+    if building_sprite_rgb_dir is None or not building_sprite_rgb_dir.exists():
+        return {}
+
+    prefix = "building_tile_"
+    paths: dict[int, Path] = {}
+    for path in sorted(building_sprite_rgb_dir.glob(f"{prefix}*.rgb")):
+        try:
+            tile_index = int(path.stem[len(prefix) :])
+        except ValueError:
+            continue
+        paths[tile_index] = path
+    return paths
+
+
 def splt_palette_colors(palette: bytes) -> list[tuple[int, int, int]]:
     if len(palette) < 8 + 256 * 4:
         raise ValueError("Expected a 256-color SPLT palette")
@@ -2054,7 +2125,9 @@ def nearest_visible_palette_index(red: int, green: int, blue: int, colors: list[
     for index, (palette_red, palette_green, palette_blue) in enumerate(colors):
         if index in (0, 255):
             continue
-        if palette_red > 235 and palette_green < 30 and palette_blue > 235:
+        if palette_red > 115 and palette_green < 80 and palette_blue > 115:
+            continue
+        if index >= 247 and palette_green < 80 and palette_red > 80 and palette_blue > 80:
             continue
         distance = (
             (red - palette_red) * (red - palette_red)
