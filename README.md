@@ -42,11 +42,14 @@ Confirmed working in-game:
   spell visuals.
 - `Phantoms Guild` now has a generated Phantom-only building sprite set wired
   through appended tile records, without modifying the stock Wizard Guild art.
+- Occupied Phantom Guilds use an eight-frame full-building active animation so
+  the cyan windows and arcane highlights pulse while heroes are inside.
 - `A Deal with the Demon` is patched for testing so it starts with both a
   Phantom Guild and an Elven Bungalow.
 
 Next planned work:
 
+- Restore or reattach proper Phantom hero sprite shadows.
 - Continue tuning Phantom balance, spell progression, and any additional
   Phantom-only items or spells.
 
@@ -208,19 +211,27 @@ PHANTOM_RAW_TEXTURES_IMAGE = PHTIraw textures
 
 The working custom guild sprite path is:
 
-- Start from the stock `ABX1Rogue Guild1` image record because it has normal
-  peasant-built guild state wiring and avoids the Wizard Guild's magical
-  construction visuals.
-- Generate exact-size RGB replacements for the specific Rogue Guild source
-  tiles used by the Phantom Guild clone. The current generator reads from
-  `assets\source\phantom-guild-sprite-sheet.png` and writes files named like
-  `building_tile_01755.rgb`.
+- Start from the stock `ABQ1Temple, Fervus1` image record. It has normal
+  peasant-built construction behavior and a scaffold footprint that fits the
+  large Phantom Guild art better than the Rogue Guild source did.
+- Do not start from the Wizard Guild image record for this building. Its
+  construction state has special magical self-build visuals that look wrong
+  when reused for the Phantom Guild, even though the Wizard active-state pulse
+  behavior was useful as a reference.
+- Generate exact-size PNG/RGB replacements for the specific Fervus source tiles
+  used by the Phantom Guild clone. The current generator reads from
+  `assets\source\phantom-guild-sprite-sheet-smooth.png` and writes files named
+  like `building_tile_01505.png`.
+- Generate the three construction states from
+  `assets\source\phantom-guild-construction-proof-v1.png`. This is a
+  high-resolution generated interpretation of normal construction stages,
+  downscaled into the stock Fervus build-state tile sizes.
 - Append those rendered tiles to `phantom_maindata.cam` under `PHG1Bld####`
   tile entries.
 - Remap only the cloned `PHG1Phantom Guild` image entry to the appended tile
   indices.
-- Do not overwrite or replace the stock `ABX1Rogue Guild1` image entry, and do
-  not replace the stock Rogue Guild tile IDs in-place.
+- Do not overwrite or replace the stock `ABQ1Temple, Fervus1` image entry, and
+  do not replace the stock Fervus tile IDs in-place.
 
 This keeps the original Wizard Guild functioning normally while giving the
 Phantom Guild its own inactive, active, damaged, destroyed, and build-progress
@@ -229,6 +240,28 @@ world art.
 The Phantom Guild should remain a normal peasant-built guild. Its building XML
 intentionally matches normal guild placement behavior and does not use
 terrain-height modification.
+
+#### Occupied / Active Building Animation
+
+Fervus has a separate small active overlay state (`Active-256`) for its cave
+fire layer. Blanking those tiles removes the stock overlay, but replacing them
+with hand-painted low-resolution art looks bad and is not the path to use.
+
+The better working path is to mimic the Wizard Guild's main `Active` state
+behavior while keeping the Fervus construction scaffold:
+
+- `scripts\generate_phantom_building_sprites.py` emits
+  `building_active_frame_00.png` through `building_active_frame_07.png`.
+- These are full-building frames generated from the same smooth Phantom Guild
+  source art, with only the cyan highlight intensity pulsed.
+- `src\build_phantom_guild.py` appends those frames as `PHG1Act00` through
+  `PHG1Act07`.
+- The cloned `PHG1Phantom Guild` image record has only its stock `Active`
+  state (`set ID 192`) rewritten to point at those appended active-frame tiles.
+- The stock Fervus and Wizard Guild image records are left untouched.
+
+This gave the desired occupied-building pulse without reintroducing Wizard
+Guild construction effects or breaking normal peasant construction.
 
 ### Custom Icon Art
 
@@ -326,6 +359,8 @@ The working art path is:
 Current build input:
 
 ```text
+assets\source\phantom-guild-sprite-sheet-smooth.png
+assets\source\phantom-guild-construction-proof-v1.png
 assets\source\phantom-hero-sprite-source-sheet.png
 assets\source\phantom-gravestone-source.png
 assets\source\phantom-interface-panel-source.png

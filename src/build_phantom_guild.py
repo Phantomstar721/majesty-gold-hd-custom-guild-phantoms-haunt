@@ -26,7 +26,7 @@ PHANTOM_GUILD_DIALOG_ID = b"AP07"
 SOURCE_RECRUIT_GUILD_DIALOG_ID = PHANTOM_GUILD_DIALOG_ID
 SOURCE_HERO_IMAGE = b"AVN1Wizard"
 SOURCE_PHANTOM_SPRITE_IMAGE = b"AVG1Priestess"
-SOURCE_BUILDING_IMAGE = b"ABX1Rogue Guild1"
+SOURCE_BUILDING_IMAGE = b"ABQ1Temple, Fervus1"
 SOURCE_ICE_LANCE_ICON = b"XL15PowerShock"
 SOURCE_ICE_LANCE_PROJECTILE = b"WPc2fire_blast_M"
 SOURCE_FROST_ARMOR_ICON = b"WRb2fireshield_IC"
@@ -43,13 +43,14 @@ FROST_FIELD_HIT_IMAGE = b"XR30frost_fld_hit"
 PHANTOM_ICE_LANCE_HIT_IMAGE = b"PHo3Ice Lance Hit"
 HERO_PORTRAIT_TILE = 6293
 HERO_ICON_TILE = 6299
-BUILDING_PROFILE_TILE = 1760
-BUILDING_ICON_TILE = 1761
+BUILDING_PROFILE_TILE = 1509
+BUILDING_ICON_TILE = 1510
 HERO_INTERFACE_PANEL_TILE = 4793
 BUILDING_DIALOG_BACKING_TILE = 466
 BUILDING_SPRITE_PALETTE_INDEX = 560
 PHANTOM_HERO_ICON_PALETTE_INDEX = BUILDING_SPRITE_PALETTE_INDEX
 PHANTOM_HERO_PORTRAIT_PALETTE_INDEX = BUILDING_SPRITE_PALETTE_INDEX
+BUILDING_ACTIVE_SET_ID = 192
 ICE_LANCE_ICON_TILE = 202
 ICE_LANCE_PROJECTILE_TILES = tuple(range(202, 214))
 ICE_LANCE_DIRECTIONAL_PROJECTILE_TILES = tuple(range(8368, 8496))
@@ -993,6 +994,7 @@ def write_maindata_cam(
         if 4586 <= index <= 4793
     )
     building_sprite_rgb_paths = building_sprite_replacement_paths(building_sprite_rgb_dir)
+    building_active_frame_paths = building_active_replacement_paths(building_sprite_rgb_dir)
     hero_sprite_png_paths = hero_sprite_replacement_paths(hero_sprite_png_dir)
     building_sprite_tile_indices = sorted(
         referenced_low16_tile_indices(building_imag, len(tiles)) & set(building_sprite_rgb_paths)
@@ -1019,16 +1021,6 @@ def write_maindata_cam(
             palettes,
             hero_icon_rgb.read_bytes() if hero_icon_rgb else None,
         ),
-        BUILDING_PROFILE_TILE: tile_from_rgb(
-            tiles[BUILDING_PROFILE_TILE].data,
-            palettes,
-            building_profile_rgb.read_bytes() if building_profile_rgb else None,
-        ),
-        BUILDING_ICON_TILE: tile_from_rgb(
-            remap_tile_palette_index(tiles[BUILDING_ICON_TILE].data, BUILDING_SPRITE_PALETTE_INDEX),
-            palettes,
-            building_icon_rgb.read_bytes() if building_icon_rgb else None,
-        ),
     }
     for frame_index, tile_index in enumerate(ICE_LANCE_PROJECTILE_TILES):
         replacement_tiles[tile_index] = generated_ice_lance_projectile_tile(
@@ -1046,6 +1038,36 @@ def write_maindata_cam(
         for index in referenced_tile_indices(ice_lance_projectile, len(tiles))
         if index in ICE_LANCE_DIRECTIONAL_PROJECTILE_TILES
     )
+    building_art_tile_replacements: dict[int, int] = {}
+    if building_profile_rgb:
+        custom_tile_index = max_tile_index + len(extra_tiles) + 1
+        building_art_tile_replacements[BUILDING_PROFILE_TILE] = custom_tile_index
+        extra_tiles.append(
+            CamEntry(
+                name=pad_name(b"PHG1Profile"),
+                data=tile_from_rgb(
+                    tiles[BUILDING_PROFILE_TILE].data,
+                    palettes,
+                    building_profile_rgb.read_bytes(),
+                ),
+            )
+        )
+    if building_icon_rgb:
+        custom_tile_index = max_tile_index + len(extra_tiles) + 1
+        building_art_tile_replacements[BUILDING_ICON_TILE] = custom_tile_index
+        extra_tiles.append(
+            CamEntry(
+                name=pad_name(b"PHG1BuildIcon"),
+                data=tile_from_rgb(
+                    remap_tile_palette_index(tiles[BUILDING_ICON_TILE].data, BUILDING_SPRITE_PALETTE_INDEX),
+                    palettes,
+                    building_icon_rgb.read_bytes(),
+                ),
+            )
+        )
+    if building_art_tile_replacements:
+        building_imag = remap_imag_low16_tile_indices(building_imag, building_art_tile_replacements)
+
     if building_sprite_tile_indices:
         first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
         building_tile_replacements: dict[int, int] = {}
@@ -1055,14 +1077,35 @@ def write_maindata_cam(
             extra_tiles.append(
                 CamEntry(
                     name=pad_name(f"PHG1Bld{offset:04d}".encode("ascii")),
-                    data=tile_from_rgb(
+                    data=tile_from_png_native_size(
                         remap_tile_palette_index(tiles[source_tile_index].data, BUILDING_SPRITE_PALETTE_INDEX),
                         palettes,
-                        building_sprite_rgb_paths[source_tile_index].read_bytes(),
+                        building_sprite_rgb_paths[source_tile_index],
                     ),
                 )
             )
         building_imag = remap_imag_low16_tile_indices(building_imag, building_tile_replacements)
+
+    if building_active_frame_paths:
+        active_frame_indices: list[int] = []
+        for frame_index, path in enumerate(building_active_frame_paths):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            active_frame_indices.append(custom_tile_index)
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHG1Act{frame_index:02d}".encode("ascii")),
+                    data=tile_from_png_native_size(
+                        remap_tile_palette_index(tiles[1506].data, BUILDING_SPRITE_PALETTE_INDEX),
+                        palettes,
+                        path,
+                    ),
+                )
+            )
+        building_imag = replace_building_state_animation_tiles(
+            building_imag,
+            BUILDING_ACTIVE_SET_ID,
+            active_frame_indices,
+        )
 
     if directional_projectile_tile_indices:
         first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
@@ -1633,6 +1676,28 @@ def tile_from_png_source(original_tile: bytes, palettes: list[CamEntry], png_pat
     return tile_from_rgb(original_tile, palettes, bytes(rgb))
 
 
+def tile_from_png_native_size(original_tile: bytes, palettes: list[CamEntry], png_path: Path) -> bytes:
+    from PIL import Image
+
+    colors = tile_palette_colors(original_tile, palettes)
+    if colors is None:
+        return original_tile
+
+    image = Image.open(png_path).convert("RGBA")
+    pixels: list[list[int]] = []
+    for y in range(image.height):
+        row: list[int] = []
+        for x in range(image.width):
+            red, green, blue, alpha = image.getpixel((x, y))
+            if alpha < 16 or is_transparent_rgb(red, green, blue):
+                row.append(0)
+            else:
+                row.append(nearest_visible_palette_index(red, green, blue, colors))
+        pixels.append(row)
+
+    return encode_indexed_v3_tile_like_original(original_tile, pixels)
+
+
 def remove_small_detached_alpha_components(image: "Image.Image") -> "Image.Image":
     from PIL import Image
 
@@ -1861,6 +1926,58 @@ def remap_imag_low16_tile_indices(imag: bytes, replacements: dict[int, int]) -> 
                 offset,
                 (value & 0xFFFF0000) | replacements[low_tile_index],
             )
+    return bytes(patched)
+
+
+def replace_building_state_animation_tiles(imag: bytes, set_id: int, tile_indices: list[int]) -> bytes:
+    if len(imag) < 28 or not tile_indices:
+        return imag
+
+    entry_count = u32(imag, 20)
+    table_start = 24
+    table_end = table_start + entry_count * 8
+    if entry_count <= 0 or table_end > len(imag):
+        return imag
+
+    entries: list[tuple[int, int]] = []
+    target_position: int | None = None
+    for index in range(entry_count):
+        entry_offset = table_start + index * 8
+        current_set_id = u32(imag, entry_offset)
+        rel_offset = u32(imag, entry_offset + 4)
+        entries.append((current_set_id, rel_offset))
+        if current_set_id == set_id:
+            target_position = index
+
+    if target_position is None:
+        return imag
+
+    target_rel = entries[target_position][1]
+    next_rel = entries[target_position + 1][1] if target_position + 1 < len(entries) else len(imag)
+    if target_rel < table_end or next_rel <= target_rel or next_rel > len(imag):
+        return imag
+
+    old_chunk = imag[target_rel:next_rel]
+    if len(old_chunk) < 116:
+        return imag
+
+    new_chunk = bytearray(old_chunk[:112])
+    struct.pack_into("<H", new_chunk, 74, len(tile_indices))
+    for frame_index, tile_index in enumerate(tile_indices):
+        if frame_index > 0:
+            new_chunk += b"\x00\x00\x00\x00"
+        new_chunk += struct.pack("<I", tile_index)
+
+    delta = len(new_chunk) - len(old_chunk)
+    patched = bytearray()
+    patched += imag[:target_rel]
+    patched += new_chunk
+    patched += imag[next_rel:]
+
+    for index, (_current_set_id, rel_offset) in enumerate(entries):
+        if rel_offset > target_rel:
+            struct.pack_into("<I", patched, table_start + index * 8 + 4, rel_offset + delta)
+
     return bytes(patched)
 
 
@@ -2774,13 +2891,28 @@ def building_sprite_replacement_paths(building_sprite_rgb_dir: Path | None) -> d
 
     prefix = "building_tile_"
     paths: dict[int, Path] = {}
-    for path in sorted(building_sprite_rgb_dir.glob(f"{prefix}*.rgb")):
+    for path in sorted(building_sprite_rgb_dir.glob(f"{prefix}*.png")):
         try:
             tile_index = int(path.stem[len(prefix) :])
         except ValueError:
             continue
         paths[tile_index] = path
     return paths
+
+
+def building_active_replacement_paths(building_sprite_rgb_dir: Path | None) -> list[Path]:
+    if building_sprite_rgb_dir is None or not building_sprite_rgb_dir.exists():
+        return []
+
+    prefix = "building_active_frame_"
+    paths: dict[int, Path] = {}
+    for path in sorted(building_sprite_rgb_dir.glob(f"{prefix}*.png")):
+        try:
+            frame_index = int(path.stem[len(prefix) :])
+        except ValueError:
+            continue
+        paths[frame_index] = path
+    return [paths[index] for index in sorted(paths)]
 
 
 def hero_sprite_replacement_paths(hero_sprite_png_dir: Path | None) -> dict[int, Path]:

@@ -3,7 +3,8 @@ param(
     [string]$OutputRoot = ".\dist\PhantomGuildPoc",
     [string]$PortraitImage = ".\assets\source\phantom-portrait.png",
     [string]$BuildingProfileImage = ".\assets\source\phantom-guild-profile.png",
-    [string]$BuildingSpriteSheet = ".\assets\source\phantom-guild-sprite-sheet.png",
+    [string]$BuildingSpriteSheet = ".\assets\source\phantom-guild-sprite-sheet-smooth.png",
+    [string]$ConstructionSpriteSheet = ".\assets\source\phantom-guild-construction-proof-v1.png",
     [string]$HeroSpriteSheet = ".\assets\source\phantom-hero-sprite-source-sheet.png",
     [string]$GravestoneImage = ".\assets\source\phantom-gravestone-source.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
@@ -113,6 +114,9 @@ if (Test-Path $outputRootPath) {
 }
 
 $tempDir = Join-Path $repoRoot "dist\temp"
+if (Test-Path $tempDir) {
+    Remove-Item -LiteralPath $tempDir -Recurse -Force
+}
 New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
 $portraitRgb = Join-Path $tempDir "phantom_portrait_100.rgb"
@@ -141,7 +145,7 @@ if (-not (Test-Path $toolsPython)) {
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom icon generator failed with exit code $LASTEXITCODE"
 }
-& $toolsPython $buildingSpriteGenerator --sheet (Resolve-RepoPath $BuildingSpriteSheet) --out-dir $buildingSpriteDir
+& $toolsPython $buildingSpriteGenerator --sheet (Resolve-RepoPath $BuildingSpriteSheet) --construction-sheet (Resolve-RepoPath $ConstructionSpriteSheet) --out-dir $buildingSpriteDir
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom building sprite generator failed with exit code $LASTEXITCODE"
 }

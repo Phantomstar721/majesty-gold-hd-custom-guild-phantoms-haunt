@@ -8,48 +8,79 @@ from PIL import Image, ImageEnhance, ImageFilter
 
 
 MAGENTA = (255, 0, 255)
+ACTIVE_FRAME_COUNT = 8
 
 TILE_SPECS: dict[int, tuple[str, int, int]] = {
-    1751: ("build_0", 255, 160),
-    1752: ("build_1", 255, 163),
-    1753: ("build_2", 255, 180),
-    1754: ("inactive", 255, 177),
-    1755: ("active_0", 255, 179),
-    1756: ("damaged", 255, 177),
-    1757: ("destroyed", 255, 146),
-    1758: ("destroyed", 255, 157),
-    1759: ("damaged", 255, 174),
+    1502: ("build_0", 301, 229),
+    1503: ("build_1", 301, 229),
+    1504: ("build_2", 301, 229),
+    1505: ("inactive", 301, 229),
+    1506: ("active_0", 301, 229),
+    1508: ("destroyed", 283, 158),
+    1529: ("damaged", 301, 229),
+    1530: ("damaged", 301, 225),
+    1531: ("destroyed", 301, 207),
 }
 
 BUILD_FRAME_DIMS: list[tuple[int, int, int]] = []
+
+EMPTY_TILE_DIMS: dict[int, tuple[int, int]] = {
+    **{tile_index: (115, 106) for tile_index in range(1511, 1517)},
+}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sheet", required=True, type=Path)
+    parser.add_argument("--construction-sheet", type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
     args = parser.parse_args()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     sheet = Image.open(args.sheet).convert("RGBA")
     variants = split_variants(sheet)
+    construction_variants = (
+        split_construction_variants(Image.open(args.construction_sheet).convert("RGBA"))
+        if args.construction_sheet
+        else {}
+    )
 
     specs = dict(TILE_SPECS)
     for position, (tile_index, width, height) in enumerate(BUILD_FRAME_DIMS):
         progress = position / max(1, len(BUILD_FRAME_DIMS) - 1)
         if progress < 0.25:
-            variant = "destroyed"
+            variant = "build_0"
         elif progress < 0.65:
-            variant = "damaged"
+            variant = "build_1"
         else:
-            variant = "inactive"
+            variant = "build_2"
         specs[tile_index] = (variant, width, height)
 
     for tile_index, (variant_name, width, height) in specs.items():
-        image = render_variant(variants, variant_name, width, height)
+        image = render_variant(variants, variant_name, width, height, construction_variants)
         path_base = args.out_dir / f"building_tile_{tile_index:05d}"
         image.save(path_base.with_suffix(".png"))
         path_base.with_suffix(".rgb").write_bytes(image.convert("RGB").tobytes())
+
+    active_width = TILE_SPECS[1506][1]
+    active_height = TILE_SPECS[1506][2]
+    for frame_index in range(ACTIVE_FRAME_COUNT):
+        image = render_variant(
+            variants,
+            f"active_{frame_index}",
+            active_width,
+            active_height,
+            construction_variants,
+        )
+        path_base = args.out_dir / f"building_active_frame_{frame_index:02d}"
+        image.save(path_base.with_suffix(".png"))
+        path_base.with_suffix(".rgb").write_bytes(image.convert("RGB").tobytes())
+
+    for tile_index, (width, height) in EMPTY_TILE_DIMS.items():
+        image = Image.new("RGB", (width, height), (0, 0, 0))
+        path_base = args.out_dir / f"building_tile_{tile_index:05d}"
+        image.save(path_base.with_suffix(".png"))
+        path_base.with_suffix(".rgb").write_bytes(image.tobytes())
 
     return 0
 
@@ -63,6 +94,37 @@ def split_variants(sheet: Image.Image) -> dict[str, Image.Image]:
         "destroyed": (w // 2, h // 2, w, h),
     }
     return {name: crop_magenta(sheet.crop(box)) for name, box in cells.items()}
+
+
+def split_construction_variants(sheet: Image.Image) -> dict[int, Image.Image]:
+    w, h = sheet.size
+    cell_w = w // 3
+    variants: dict[int, Image.Image] = {}
+    for stage in range(3):
+        left = stage * cell_w
+        right = w if stage == 2 else (stage + 1) * cell_w
+        variants[stage] = crop_generated_magenta(sheet.crop((left, 0, right, h)))
+    return variants
+
+
+def crop_generated_magenta(image: Image.Image) -> Image.Image:
+    """Remove the soft magenta background used by generated proof sheets."""
+    pixels = image.load()
+    bbox: tuple[int, int, int, int] | None = None
+    for y in range(image.height):
+        for x in range(image.width):
+            red, green, blue, alpha = pixels[x, y]
+            if alpha == 0 or is_generated_magenta(red, green, blue):
+                pixels[x, y] = (0, 0, 0, 0)
+                continue
+            if bbox is None:
+                bbox = (x, y, x + 1, y + 1)
+            else:
+                left, top, right, bottom = bbox
+                bbox = (min(left, x), min(top, y), max(right, x + 1), max(bottom, y + 1))
+    if bbox is None:
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    return image.crop(bbox)
 
 
 def crop_magenta(image: Image.Image) -> Image.Image:
@@ -84,9 +146,17 @@ def crop_magenta(image: Image.Image) -> Image.Image:
     return image.crop(bbox)
 
 
-def render_variant(variants: dict[str, Image.Image], variant_name: str, width: int, height: int) -> Image.Image:
+def render_variant(
+    variants: dict[str, Image.Image],
+    variant_name: str,
+    width: int,
+    height: int,
+    construction_variants: dict[int, Image.Image],
+) -> Image.Image:
     if variant_name.startswith("build_"):
         stage = int(variant_name.rsplit("_", 1)[1])
+        if stage in construction_variants:
+            return render_construction_variant(construction_variants[stage], width, height)
         return render_build_stage(variants, stage, width, height)
 
     base_name = variant_name.split("_", 1)[0]
@@ -105,10 +175,35 @@ def render_variant(variants: dict[str, Image.Image], variant_name: str, width: i
     source = source.resize(scaled_size, Image.Resampling.LANCZOS).filter(ImageFilter.SHARPEN)
     source = lift_dark_visible_pixels(source)
     x = (width - source.width) // 2
+    x += state_x_offset(variant_name)
     y = height - source.height - margin_y
     target.alpha_composite(source, (x, y))
     scrub_purple_fringe(target)
     return target.convert("RGB")
+
+
+def render_construction_variant(source: Image.Image, width: int, height: int) -> Image.Image:
+    source = grade_for_ice_palette(source)
+    target = Image.new("RGBA", (width, height), (0, 0, 0, 255))
+    margin_x = 2
+    margin_y = 1
+    scale = min((width - margin_x * 2) / source.width, (height - margin_y * 2) / source.height)
+    scaled_size = (max(1, int(source.width * scale)), max(1, int(source.height * scale)))
+    source = source.resize(scaled_size, Image.Resampling.LANCZOS).filter(ImageFilter.SHARPEN)
+    source = lift_dark_visible_pixels(source)
+    x = (width - source.width) // 2
+    y = height - source.height - margin_y
+    target.alpha_composite(source, (x, y))
+    scrub_purple_fringe(target)
+    return target.convert("RGB")
+
+
+def state_x_offset(variant_name: str) -> int:
+    if variant_name == "inactive":
+        return -18
+    if variant_name.startswith("active_"):
+        return 29
+    return 0
 
 
 def render_build_stage(variants: dict[str, Image.Image], stage: int, width: int, height: int) -> Image.Image:
@@ -120,19 +215,12 @@ def render_build_stage(variants: dict[str, Image.Image], stage: int, width: int,
     composite_scaled(target, foundation, width, height, vertical_fill=0.76, y_offset=0)
 
     if stage > 0:
-        ghost = prepare_building_source(variants["inactive"], widen=1.22)
-        ghost = grade_for_ice_palette(ghost)
-        ghost = ImageEnhance.Brightness(ghost).enhance(0.58 if stage == 1 else 0.68)
-        ghost_alpha = 0.20 if stage == 1 else 0.32
-        ghost.putalpha(ghost.getchannel("A").point(lambda value: int(value * ghost_alpha)))
-        composite_scaled(target, ghost, width, height, vertical_fill=1.0, y_offset=0)
-
-        partial = prepare_building_source(variants["inactive"], widen=1.22)
+        partial = prepare_building_source(variants["damaged"], widen=1.18)
         partial = grade_for_ice_palette(partial)
-        partial = reveal_bottom(partial, 0.48 if stage == 1 else 0.72, feather=30 if stage == 1 else 42)
-        partial = ImageEnhance.Brightness(partial).enhance(0.82 if stage == 1 else 0.92)
-        partial.putalpha(partial.getchannel("A").point(lambda value: int(value * (0.68 if stage == 1 else 0.86))))
-        composite_scaled(target, partial, width, height, vertical_fill=0.88 if stage == 1 else 0.96, y_offset=0)
+        partial = reveal_bottom(partial, 0.34 if stage == 1 else 0.58, feather=18 if stage == 1 else 26)
+        partial = ImageEnhance.Brightness(partial).enhance(0.80 if stage == 1 else 0.90)
+        partial = ImageEnhance.Contrast(partial).enhance(0.92)
+        composite_scaled(target, partial, width, height, vertical_fill=0.82 if stage == 1 else 0.90, y_offset=0)
 
     add_construction_beams(target, stage)
     scrub_purple_fringe(target)
@@ -322,6 +410,10 @@ def scrub_purple_fringe(image: Image.Image) -> None:
 
 def is_magenta(red: int, green: int, blue: int) -> bool:
     return abs(red - MAGENTA[0]) < 20 and green < 35 and abs(blue - MAGENTA[2]) < 20
+
+
+def is_generated_magenta(red: int, green: int, blue: int) -> bool:
+    return red > 170 and blue > 140 and green < 115 and red > green * 2.2 and blue > green * 1.8
 
 
 if __name__ == "__main__":
