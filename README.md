@@ -8,6 +8,8 @@ This currently builds:
 - `Phantoms Guild`, building ID `MBPhantomGuild`, castle build-menu cost `1`.
 - `Phantom`, hero ID `PHM1`, recruit cost `1`.
 - Custom generated Phantom profile art, small hero icon, and small guild icon.
+- A custom blue Phantom Guild dialog look built by borrowing the stock Elf
+  recruit dialog.
 - Custom generated Phantom Guild world/building sprite frames, including
   inactive, active, damaged, destroyed, and build-progress variants.
 - Custom Phantom starter special items:
@@ -33,13 +35,15 @@ Confirmed working in-game:
 - `Phantoms Guild` is buildable from the castle menu and recruits `Phantom`
   heroes.
 - Phantom profile art, matching hero-list/guild member icons, custom guild
-  build-menu icon, Priestess-based in-map sprite recolor, starter special
-  items, and death cleanup all work.
+  build-menu icon, custom dialog panel art, generated in-map sprite art,
+  starter special items, and death cleanup all work.
 - `Ice Lance` is a Phantom-only custom spell with its own directional
   projectile art and Frost Field hit overlay, without modifying stock Wizard
   spell visuals.
 - `Phantoms Guild` now has a generated Phantom-only building sprite set wired
   through appended tile records, without modifying the stock Wizard Guild art.
+- `A Deal with the Demon` is patched for testing so it starts with both a
+  Phantom Guild and an Elven Bungalow.
 
 Next planned work:
 
@@ -125,6 +129,80 @@ The normal fast test cycle is:
 Keep the SDK/RGSeditor path available for updating the private Workshop item
 metadata, but day-to-day local testing should use the registered Workshop deploy
 script once the item exists.
+
+### Guild Dialog Path
+
+Majesty's recruit-panel behavior is keyed in `MajestyHD.exe` by stock AP dialog
+IDs. Mod files can replace menu data, strings, art, units, actions, and GPL, but
+they do not appear to register a brand-new recruiting AP handler.
+
+The current Workshop-only compromise is to borrow the stock Elf recruit dialog:
+
+```text
+AP07
+```
+
+The Phantom Guild uses `AP07` because that ID already has the right recruit
+behavior. The mod replaces the AP07 strings and redirects its raw texture
+reference from `INTIraw textures` to `PHTIraw textures`, which gives the Phantom
+Guild the blue custom panel background. The AP07 menu also references the Elf
+guild member/count icon through image token `AVd1`, so the generator rewrites:
+
+```text
+AVd1 -> PHM1
+INTI -> PHTI
+```
+
+This makes the Phantom Guild use the Phantom icon and custom background. Because
+AP07 is shared, the stock Elven Bungalow also inherits those AP07 visual
+overrides while this mod is active.
+
+Other stock recruit guild AP IDs can be used the same way, but the same rule
+applies: the chosen stock guild's panel is the thing being borrowed. Attempts to
+create unrelated custom AP IDs such as unused-looking alphanumeric IDs either
+fell back to non-recruit UI behavior, collided with unrelated stock panels, or
+crashed when selected. That strongly suggests the recruit UI class dispatch is
+not data-driven by the mod CAM files alone.
+
+A truly isolated Phantom-only recruit panel likely needs an external exe patch
+or hook so Majesty dispatches a new AP ID to a recruit-capable panel class.
+
+### Guild Panel Background Art
+
+The guild panel background was not controlled by the obvious-looking
+`INBgbuilding dialog` image record. Replacing or cloning that record either did
+nothing useful, painted only frame fragments, or caused `Attempt to do 816 blit
+without a palette` crashes when the panel opened.
+
+The working background path is:
+
+- Clone the stock recruit dialog `SMNU` entry from `AP07`.
+- Rewrite its raw texture image token from `INTI` to `PHTI`.
+- Clone the stock `INTIraw textures` image record as `PHTIraw textures`.
+- In the cloned `PHTI` image, remap raw-texture backing tile `466` to a newly
+  appended tile.
+- Encode the appended tile from the generated Phantom panel source art.
+- Emit only `PHTIraw textures` and the appended backing tile in
+  `phantom_interfacedata.cam`; leave the stock `INTI` and `INBg` records alone.
+
+The generated source panel is:
+
+```text
+assets\source\phantom-interface-panel-source.png
+```
+
+The build script converts it to raw RGB at `200x245`, matching the tile backing
+size the current encoder expects. `assets\source\phantom-interface-panel-202x245.png`
+is kept as a human reference for the slightly wider panel framing we observed
+during testing, but the build path uses the resampled raw RGB output.
+
+The useful implementation anchors are:
+
+```text
+BUILDING_DIALOG_BACKING_TILE = 466
+RAW_TEXTURES_IMAGE = INTIraw textures
+PHANTOM_RAW_TEXTURES_IMAGE = PHTIraw textures
+```
 
 ### Custom Building Sprite Art
 
@@ -228,23 +306,57 @@ make custom art look corrupted even when the CAM structure is otherwise valid.
 
 ### Custom Hero Sprite
 
-The current Phantom in-map sprite is based on the Priestess of Krypta sprite
-set, not the Black Phantom monster. The Black Phantom source rendered as a
-smoky translucent blob after recoloring. The Priestess sprite gave a more
-readable cloaked caster silhouette.
+The Phantom in-map sprite uses `AVG1Priestess` as the animation and image-record
+scaffold, but the visible sprite art should come from generated high-resolution
+source art. Direct low-resolution pixel drawing produced poor results and should
+not be used for future character, monster, building, or projectile sprite work.
 
-The working path is:
+The working art path is:
 
-- Clone `AVG1Priestess`.
-- Recolor red cloak pixels toward cyan/blue.
-- Recolor bright staff pixels toward black.
-- Append recolored custom tiles.
-- Remap the cloned Phantom `IMAG` entry to the appended tiles.
+- Generate a high-resolution source sprite sheet first.
+- Chroma-key or otherwise isolate each frame from the source sheet.
+- Downscale each source frame into the exact dimensions of the stock tile it
+  replaces, keeping the whole sprite in frame.
+- Convert transparent pixels to black before TILE v3 encoding, because black is
+  treated as transparent by the current RGB-to-tile conversion path.
+- Append generated custom tiles under new names.
+- Remap only the cloned Phantom `IMAG` entry to the appended tiles.
 - Do not alter the stock Priestess image or tiles.
+
+Current build input:
+
+```text
+assets\source\phantom-hero-sprite-source-sheet.png
+assets\source\phantom-gravestone-source.png
+assets\source\phantom-interface-panel-source.png
+```
+
+`scripts\generate_phantom_hero_sprites.py` slices the hero source sheet, uses
+the gravestone source for the late death and persistent dead/grave tiles, and
+writes files named like `hero_tile_04650.png` into `dist\temp\hero_sprites`.
+The CAM builder then scales those PNGs into the exact original tile dimensions
+before appending them to `phantom_maindata.cam`.
+
+The first generated sheet only has one facing, so the generator mirrors that
+source for rough opposite directions. A final-quality hero sprite should use a
+true directional source sheet, but the generated-source/downscale path is the
+right workflow.
+
+Do not bake normal ground shadows into hero sprite frames. Stock hero frames do
+not appear to carry their own painted shadows; shadows should be treated as a
+separate engine/rendering concern unless later testing proves a specific unit
+needs an explicit custom shadow.
+
+Tile `4793` in the Priestess scaffold is retained as a useful character/guild
+interface-panel reference. The active guild panel background path currently
+comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
 
 ## Current Limitations
 
 - `Frost Armor` and `Blizzard` still need a dedicated stability pass.
+- The Phantom Guild borrows the stock Elf recruit dialog. This keeps the mod
+  Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
+  while the mod is active.
 - The Phantom Guild is still a proof of concept rather than a balanced finished
   content mod.
 

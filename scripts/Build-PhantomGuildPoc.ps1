@@ -4,6 +4,9 @@ param(
     [string]$PortraitImage = ".\assets\source\phantom-portrait.png",
     [string]$BuildingProfileImage = ".\assets\source\phantom-guild-profile.png",
     [string]$BuildingSpriteSheet = ".\assets\source\phantom-guild-sprite-sheet.png",
+    [string]$HeroSpriteSheet = ".\assets\source\phantom-hero-sprite-source-sheet.png",
+    [string]$GravestoneImage = ".\assets\source\phantom-gravestone-source.png",
+    [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
     [string]$GplCompiler = ""
 )
 
@@ -102,6 +105,7 @@ $toolsPython = Join-Path $workspaceRoot ".tools\python.cmd"
 $builder = Join-Path $repoRoot "src\build_phantom_guild.py"
 $iconGenerator = Join-Path $repoRoot "scripts\generate_phantom_icons.py"
 $buildingSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_building_sprites.py"
+$heroSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_hero_sprites.py"
 $outputRootPath = Join-Path $repoRoot $OutputRoot
 
 if (Test-Path $outputRootPath) {
@@ -123,10 +127,13 @@ $phantomCowlIconRgb = Join-Path $tempDir "phantom_cowl_icon_23.rgb"
 $darkStaffSmallIconRgb = Join-Path $tempDir "dark_staff_icon_16.rgb"
 $darkStaffMxIconRgb = Join-Path $tempDir "dark_staff_icon_23.rgb"
 $darkStaffIconRgb = Join-Path $tempDir "dark_staff_icon_50x19.rgb"
+$interfacePanelRgb = Join-Path $tempDir "phantom_interface_panel_200x245.rgb"
 $buildingSpriteDir = Join-Path $tempDir "building_sprites"
+$heroSpriteDir = Join-Path $tempDir "hero_sprites"
 
 Convert-ImageToRawRgb -InputPath (Resolve-RepoPath $PortraitImage) -OutputPath $portraitRgb -Width 100 -Height 100
 Convert-ImageToRawRgb -InputPath (Resolve-RepoPath $BuildingProfileImage) -OutputPath $buildingProfileRgb -Width 100 -Height 100
+Convert-ImageToRawRgb -InputPath (Resolve-RepoPath $InterfacePanelImage) -OutputPath $interfacePanelRgb -Width 200 -Height 245
 if (-not (Test-Path $toolsPython)) {
     throw "Shared tools Python does not exist: $toolsPython"
 }
@@ -138,6 +145,10 @@ if ($LASTEXITCODE -ne 0) {
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom building sprite generator failed with exit code $LASTEXITCODE"
 }
+& $toolsPython $heroSpriteGenerator --sheet (Resolve-RepoPath $HeroSpriteSheet) --gravestone-source (Resolve-RepoPath $GravestoneImage) --out-dir $heroSpriteDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Phantom hero sprite generator failed with exit code $LASTEXITCODE"
+}
 
 & $toolsPython $builder `
     --game-path $GamePath `
@@ -147,6 +158,9 @@ if ($LASTEXITCODE -ne 0) {
     --building-profile-rgb $buildingProfileRgb `
     --building-icon-rgb $buildingIconRgb `
     --building-sprite-rgb-dir $buildingSpriteDir `
+    --hero-sprite-png-dir $heroSpriteDir `
+    --interface-panel-rgb $interfacePanelRgb `
+    --building-dialog-panel-rgb $interfacePanelRgb `
     --ice-lance-icon-rgb $iceLanceIconRgb `
     --ice-lance-spell-icon-rgb $iceLanceSpellIconRgb `
     --frost-armor-spell-icon-rgb $frostArmorSpellIconRgb `

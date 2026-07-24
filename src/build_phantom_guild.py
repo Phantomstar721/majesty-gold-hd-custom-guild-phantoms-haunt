@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,10 @@ MOD_ID = uuid.UUID("8c48289e-7c70-4426-8913-133f3544a182")
 HERO_ID = "PHM1"
 BUILDING_ID = "MBPhantomGuild"
 BUILDING_TEXT_ID = "PHG1"
+# Majesty keys recruit-panel behavior in the exe by AP dialog id. AP07 is the
+# stock Elf recruit panel, so borrowing it keeps this mod Workshop-only.
+PHANTOM_GUILD_DIALOG_ID = b"AP07"
+SOURCE_RECRUIT_GUILD_DIALOG_ID = PHANTOM_GUILD_DIALOG_ID
 SOURCE_HERO_IMAGE = b"AVN1Wizard"
 SOURCE_PHANTOM_SPRITE_IMAGE = b"AVG1Priestess"
 SOURCE_BUILDING_IMAGE = b"ABX1Rogue Guild1"
@@ -26,9 +31,10 @@ SOURCE_ICE_LANCE_ICON = b"XL15PowerShock"
 SOURCE_ICE_LANCE_PROJECTILE = b"WPc2fire_blast_M"
 SOURCE_FROST_ARMOR_ICON = b"WRb2fireshield_IC"
 SOURCE_BLIZZARD_ICON = b"WRg2meteor_blast"
-ROGUE_HERO_IMAGE = b"AVJ1Rogue"
 PHANTOM_HERO_IMAGE = b"PHM1Phantom"
 PHANTOM_BUILDING_IMAGE = b"PHG1Phantom Guild"
+RAW_TEXTURES_IMAGE = b"INTIraw textures"
+PHANTOM_RAW_TEXTURES_IMAGE = b"PHTIraw textures"
 PHANTOM_ICE_LANCE_ICON = b"WRa2Ice Lance"
 PHANTOM_ICE_LANCE_PROJECTILE = b"PHp1fire_blast_M"
 PHANTOM_FROST_ARMOR_ICON = b"WRa3Frost Armor"
@@ -37,9 +43,10 @@ FROST_FIELD_HIT_IMAGE = b"XR30frost_fld_hit"
 PHANTOM_ICE_LANCE_HIT_IMAGE = b"PHo3Ice Lance Hit"
 HERO_PORTRAIT_TILE = 6293
 HERO_ICON_TILE = 6299
-ROGUE_HERO_ICON_TILE = 4996
 BUILDING_PROFILE_TILE = 1760
 BUILDING_ICON_TILE = 1761
+HERO_INTERFACE_PANEL_TILE = 4793
+BUILDING_DIALOG_BACKING_TILE = 466
 BUILDING_SPRITE_PALETTE_INDEX = 560
 PHANTOM_HERO_ICON_PALETTE_INDEX = BUILDING_SPRITE_PALETTE_INDEX
 PHANTOM_HERO_PORTRAIT_PALETTE_INDEX = BUILDING_SPRITE_PALETTE_INDEX
@@ -83,6 +90,9 @@ def main() -> int:
     parser.add_argument("--building-profile-rgb", type=Path)
     parser.add_argument("--building-icon-rgb", type=Path)
     parser.add_argument("--building-sprite-rgb-dir", type=Path)
+    parser.add_argument("--hero-sprite-png-dir", type=Path)
+    parser.add_argument("--interface-panel-rgb", type=Path)
+    parser.add_argument("--building-dialog-panel-rgb", type=Path)
     parser.add_argument("--ice-lance-icon-rgb", type=Path)
     parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
     parser.add_argument("--frost-armor-spell-icon-rgb", type=Path)
@@ -127,6 +137,8 @@ def main() -> int:
         args.building_profile_rgb,
         args.building_icon_rgb,
         args.building_sprite_rgb_dir,
+        args.hero_sprite_png_dir,
+        args.interface_panel_rgb,
         args.ice_lance_icon_rgb,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
     )
@@ -139,6 +151,7 @@ def main() -> int:
         args.phantom_cowl_icon_rgb,
         args.dark_staff_small_icon_rgb,
         args.dark_staff_icon_rgb,
+        args.building_dialog_panel_rgb,
     )
     if source_mx_interfacedata.exists():
         write_mx_interfacedata_cam(
@@ -163,7 +176,7 @@ def main() -> int:
 
 
 def phantom_units_xml() -> str:
-    return """<Majesty>
+    return f"""<Majesty>
 \t<Description type="Unit" subType="Character" ID="PHM1" Name="Phantom" Description="Phantom">
 \t\t<Engine version="1">
 \t\t\t<Info value="BlockGround"/>
@@ -263,7 +276,7 @@ def phantom_units_xml() -> str:
 \t\t\t<DefaultSound value="Phantom_Guild"/>
 \t\t</Engine>
 \t\t<Game version="1">
-\t\t\t<DialogID value="AP48"/>
+\t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
 \t\t\t<Cost value="1"/>
 \t\t\t<Multiplier value="1.0"/>
 \t\t\t<IncomeType value="2"/>
@@ -274,7 +287,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Flags value="IsGuild"/>
 \t\t\t<Flags value="HasHPBar"/>
 \t\t\t<Flags value="HasGoldToolTip"/>
-\t\t\t<HelpID value="h034"/>
+\t\t\t<HelpID value="hP34"/>
 \t\t\t<Produces>
 \t\t\t\t<Unit ID="Phantom"/>
 \t\t\t</Produces>
@@ -534,6 +547,59 @@ def phantom_gpl() -> str:
     return """expression #Phantom_Item_FrozenCowl 80
 expression #Phantom_Item_BlackIcerod 81
 
+function DEAL_DEMON()
+
+declare
+\tagent AIRootAgent,palace,guild,lair,phantom_guild,elf_guild;
+\tlist guilds,palaces,lairs;
+
+begin
+\tAIRootAgent = $RetrieveAgent ("GplAIRoot");
+\tAIRootAgent's "Quest_Number" = #QNumber_Deal_Demon;
+
+\tpalaces = $ListPalaces();
+\tpalace = $listmember(palaces,1);
+
+\t$Setup_Quest_Music (AiRootAgent);
+
+\t$ListObjects (Palace, "Building", -1, Guilds, #NotMyPlayer, #NoHiddenMap);
+\tGuilds = $ListSubtypes (Guilds, "Guild");
+
+\t$setup_random_treasure(30, #default_spawn_treasure_dist);
+
+\tForeach Guild in Guilds do
+\t\tbegin
+\t\t\tGuild's "SpecialScript" = $Hero_Generator;
+\t\t\t$NewThread( Guild's "SpecialScript", 60000 + $randomnumber(60000), Guild );
+\t\tend
+
+\tphantom_guild = $SpawnUnit(palace, "Phantoms_Guild", $RandomCoord(palace, 275, 475), "MaxHP");
+\tIf (phantom_guild != $NullAgent())
+\t\tbegin
+\t\t\tphantom_guild's "SpecialScript" = $Hero_Generator;
+\t\t\t$NewThread( phantom_guild's "SpecialScript", 60000 + $randomnumber(60000), phantom_guild );
+\t\tend
+
+\telf_guild = $SpawnUnit(palace, "Elven_Bungalow", $RandomCoord(palace, 275, 475), "MaxHP");
+\tIf (elf_guild != $NullAgent())
+\t\tbegin
+\t\t\telf_guild's "SpecialScript" = $Hero_Generator;
+\t\t\t$NewThread( elf_guild's "SpecialScript", 60000 + $randomnumber(60000), elf_guild );
+\t\tend
+
+\t$listobjects(palace,"lair",-1,lairs,#NoHiddenMap);
+\tforeach lair in lairs do
+\t\tbegin
+\t\t\tif (lair's "special_spawn_type" == "vampire")
+\t\t\t\tlair's "special_spawn_type" = "werewolf";
+\t\tend
+
+\tAIRootAgent's "VictoryCondition" = $Demon_victory;
+\t$NewThread( AIRootAgent's "VictoryCondition", #VictoryCondition_callback_frequency );
+\tAIRootAgent's "VictoryCondition2" = $Demon_victory2;
+\t$newThread( AIRootAgent's "VictoryCondition2", 1200000);
+end
+
 function Phantom_tree (agent thisagent)
 
 declare
@@ -690,17 +756,17 @@ source="Phantom.gpl"
 
 def mod_xml() -> str:
     load_block = """\t\t\t\t<Load>
-\t\t\t\t\t<Descriptions>Data\\phantom_units.xml</Descriptions>
-\t\t\t\t\t<Descriptions>Data\\phantom_actions.xml</Descriptions>
-\t\t\t\t\t<Descriptions>Data\\phantom_projectiles.xml</Descriptions>
-\t\t\t\t\t<Descriptions>Data\\phantom_overlays.xml</Descriptions>
-\t\t\t\t\t<Descriptions>Data\\phantom_sounds.xml</Descriptions>
 \t\t\t\t\t<CAM>Data\\phantom_textdata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_gpltext.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_maindata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_interfacedata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_mx_interfacedata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_voices.cam</CAM>
+\t\t\t\t\t<Descriptions>Data\\phantom_units.xml</Descriptions>
+\t\t\t\t\t<Descriptions>Data\\phantom_actions.xml</Descriptions>
+\t\t\t\t\t<Descriptions>Data\\phantom_projectiles.xml</Descriptions>
+\t\t\t\t\t<Descriptions>Data\\phantom_overlays.xml</Descriptions>
+\t\t\t\t\t<Descriptions>Data\\phantom_sounds.xml</Descriptions>
 \t\t\t\t\t<GPL>
 \t\t\t\t\t\t<Target>Data\\Phantom.bcd</Target>
 \t\t\t\t\t\t<Source>GPL\\Phantom_Building_Data.dat</Source>
@@ -733,6 +799,8 @@ def mod_xml() -> str:
 def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
     unit_names = read_cam_entry(source_textdata, b"STRT", b"UNTN")
     action_names = read_cam_entry(source_textdata, b"STRT", b"ACTN")
+    source_guild_menu = read_cam_entry(source_textdata, b"SMNU", SOURCE_RECRUIT_GUILD_DIALOG_ID)
+    source_guild_strings = read_cam_entry(source_textdata, b"STRT", SOURCE_RECRUIT_GUILD_DIALOG_ID)
     patched_unit_names = patch_strt_strings(
         unit_names.data,
         {
@@ -748,14 +816,41 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
             fourcc_id("WRa2"): "Ice Lance",
         },
     )
+    cloned_guild_menu = (
+        source_guild_menu.data
+        # AP07 uses AVd1 for the Elf guild member/count icon. The INTI token is
+        # the broad panel texture source; INBg is mostly frame/control pieces.
+        .replace(b"AVd1", b"PHM1")
+        .replace(b"AVE1", b"PHM1")
+        .replace(b"AVG1", b"PHM1")
+        .replace(b"INTI", b"PHTI")
+    )
+    cloned_guild_strings = patch_indexed_strt_strings(
+        source_guild_strings.data,
+        {
+            0: "PHANTOMS GUILD",
+            1: "RECRUIT Phantom         ",
+            2: "Recruit a Phantom ",
+            3: "Destroy this Phantoms Guild.",
+        },
+    )
+
     write_cam(
         (
+            CamSection(
+                extension=b"SMNU",
+                padding=b"\x00\x00\x00\x00",
+                entries=(
+                    CamEntry(name=pad_name(PHANTOM_GUILD_DIALOG_ID), data=cloned_guild_menu),
+                ),
+            ),
             CamSection(
                 extension=b"STRT",
                 padding=b"\x00\x00\x00\x00",
                 entries=(
                     CamEntry(name=pad_name(b"UNTN"), data=patched_unit_names),
                     CamEntry(name=pad_name(b"ACTN"), data=patched_action_names),
+                    CamEntry(name=pad_name(PHANTOM_GUILD_DIALOG_ID), data=cloned_guild_strings),
                 ),
             ),
         ),
@@ -765,11 +860,23 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
 
 def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
     quest_item_names = read_cam_entry(source_gpltext, b"STRT", b"QITM")
+    help_text = read_cam_entry(source_gpltext, b"STRT", b"HPTX")
     patched_quest_item_names = patch_indexed_strt_strings(
         quest_item_names.data,
         {
             80: "Frozen Cowl\n\x01FFDDAA(+1 armor)",
             81: "Black Icerod\n\x01FFDDAA(+8 damage)",
+        },
+    )
+    patched_help_text = patch_strt_strings(
+        help_text.data,
+        {
+            fourcc_id("hP34"): (
+                "- Recruits Phantoms\n\n"
+                "- Phantoms are ghostly ice casters with custom class gear\n\n"
+                "\x01BCBCFFThe Phantoms Guild gathers cold, restless spirits into service as arcane heroes. "
+                "Its members fight like fragile spellcasters, striking from range with Ice Lance and other frost magic."
+            ),
         },
     )
     write_cam(
@@ -779,6 +886,7 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
                 padding=b"\x00\x00\x00\x00",
                 entries=(
                     CamEntry(name=pad_name(b"QITM"), data=patched_quest_item_names),
+                    CamEntry(name=pad_name(b"HPTX"), data=patched_help_text),
                 ),
             ),
         ),
@@ -836,11 +944,12 @@ def write_maindata_cam(
     building_profile_rgb: Path | None,
     building_icon_rgb: Path | None,
     building_sprite_rgb_dir: Path | None,
+    hero_sprite_png_dir: Path | None,
+    interface_panel_rgb: Path | None,
     ice_lance_icon_rgb: Path | None,
     ice_effect_maindata: Path | None,
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
-    rogue_hero_imag = read_cam_entry(source_maindata, b"IMAG", ROGUE_HERO_IMAGE).data
     building_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_BUILDING_IMAGE).data
     ice_lance_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICE_LANCE_ICON).data
     ice_lance_projectile = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICE_LANCE_PROJECTILE).data
@@ -884,12 +993,12 @@ def write_maindata_cam(
         if 4586 <= index <= 4793
     )
     building_sprite_rgb_paths = building_sprite_replacement_paths(building_sprite_rgb_dir)
+    hero_sprite_png_paths = hero_sprite_replacement_paths(hero_sprite_png_dir)
     building_sprite_tile_indices = sorted(
         referenced_low16_tile_indices(building_imag, len(tiles)) & set(building_sprite_rgb_paths)
     )
 
     tile_indices: set[int] = set()
-    tile_indices.update(referenced_tile_indices(rogue_hero_imag, len(tiles)))
     tile_indices.update(referenced_tile_indices(building_imag, len(tiles)))
     tile_indices.update(building_sprite_tile_indices)
     tile_indices.update(referenced_tile_indices(ice_lance_icon, len(tiles)))
@@ -900,11 +1009,6 @@ def write_maindata_cam(
     max_tile_index = max(tile_indices)
 
     replacement_tiles = {
-        ROGUE_HERO_ICON_TILE: tile_from_rgb(
-            remap_tile_palette_index(tiles[ROGUE_HERO_ICON_TILE].data, PHANTOM_HERO_ICON_PALETTE_INDEX),
-            palettes,
-            hero_icon_rgb.read_bytes() if hero_icon_rgb else None,
-        ),
         HERO_PORTRAIT_TILE: tile_from_rgb(
             remap_tile_palette_index(tiles[HERO_PORTRAIT_TILE].data, PHANTOM_HERO_PORTRAIT_PALETTE_INDEX),
             palettes,
@@ -1000,8 +1104,20 @@ def write_maindata_cam(
                     palettes,
                     hero_icon_rgb.read_bytes(),
                 )
+            elif source_tile_index == HERO_INTERFACE_PANEL_TILE and interface_panel_rgb:
+                tile = tile_from_rgb(
+                    remap_tile_palette_index(source_tile, 32),
+                    palettes,
+                    interface_panel_rgb.read_bytes(),
+                )
+            elif source_tile_index in hero_sprite_png_paths:
+                tile = tile_from_png_source(
+                    remap_tile_palette_index(source_tile, 32),
+                    palettes,
+                    hero_sprite_png_paths[source_tile_index],
+                )
             else:
-                tile = recolored_priestess_phantom_sprite_tile(source_tile, palettes)
+                tile = recolored_priestess_phantom_sprite_tile(source_tile, palettes, source_tile_index)
             extra_tiles.append(
                 CamEntry(
                     name=pad_name(f"PHM1PhantomTile{offset}".encode("ascii")),
@@ -1046,7 +1162,6 @@ def write_maindata_cam(
         for index in range(max_palette_index + 1)
     )
     image_entries = [
-        CamEntry(name=pad_name(ROGUE_HERO_IMAGE), data=rogue_hero_imag),
         CamEntry(name=pad_name(PHANTOM_HERO_IMAGE), data=hero_imag),
         CamEntry(name=pad_name(PHANTOM_BUILDING_IMAGE), data=building_imag),
         CamEntry(name=pad_name(PHANTOM_ICE_LANCE_ICON), data=ice_lance_icon),
@@ -1113,12 +1228,15 @@ def write_interfacedata_cam(
     phantom_cowl_icon_rgb: Path | None,
     dark_staff_small_icon_rgb: Path | None,
     dark_staff_icon_rgb: Path | None,
+    control_panel_rgb: Path | None,
 ) -> None:
     icon_images = {
         SPELL_LIST_ICON_IMAGE: read_cam_entry(source_interfacedata, b"IMAG", SPELL_LIST_ICON_IMAGE).data,
         WEAPON_ICON_IMAGE: read_cam_entry(source_interfacedata, b"IMAG", WEAPON_ICON_IMAGE).data,
         ARMOR_ICON_IMAGE: read_cam_entry(source_interfacedata, b"IMAG", ARMOR_ICON_IMAGE).data,
     }
+    raw_texture_image = read_cam_entry(source_interfacedata, b"IMAG", RAW_TEXTURES_IMAGE).data
+    phantom_raw_texture_image = raw_texture_image
     tiles = read_cam_entries(source_interfacedata, b"TILE")
 
     replacement_tiles: dict[int, bytes] = {}
@@ -1140,25 +1258,48 @@ def write_interfacedata_cam(
     for tile_index in STAFF_SMALL_ICON_TILES:
         if dark_staff_small_icon_rgb:
             replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], dark_staff_small_icon_rgb.read_bytes())
-
-    tile_indices: set[int] = set(replacement_tiles)
+    base_tile_indices: set[int] = set(replacement_tiles)
     for image in icon_images.values():
-        tile_indices.update(referenced_tile_indices(image, len(tiles)))
+        base_tile_indices.update(referenced_tile_indices(image, len(tiles)))
+    base_tile_indices.update(referenced_tile_indices(raw_texture_image, len(tiles)))
+    base_max_tile_index = max(base_tile_indices)
 
-    max_tile_index = max(tile_indices)
-    tile_entries = tuple(
+    extra_tiles: list[CamEntry] = []
+    if control_panel_rgb:
+        custom_tile_index = base_max_tile_index + len(extra_tiles) + 1
+        # The recruit panel backing is an INTI raw-textures tile, not the
+        # tempting INBgbuilding dialog image record.
+        phantom_raw_texture_image = remap_imag_tile_indices(
+            raw_texture_image,
+            {BUILDING_DIALOG_BACKING_TILE: custom_tile_index},
+        )
+        extra_tiles.append(
+            CamEntry(
+                name=pad_name(b"PHTIPanel0001"),
+                data=tile_v1_embedded_from_rgb(
+                    tiles[BUILDING_DIALOG_BACKING_TILE].data,
+                    control_panel_rgb.read_bytes(),
+                ),
+            )
+        )
+
+    tile_entries = list(
         CamEntry(name=tiles[tile_index].name, data=replacement_tiles.get(tile_index, tiles[tile_index].data))
-        for tile_index in range(max_tile_index + 1)
+        for tile_index in range(base_max_tile_index + 1)
     )
+    tile_entries.extend(extra_tiles)
 
     write_cam(
         (
             CamSection(
                 extension=b"IMAG",
                 padding=b"\x00\x00\x00\x00",
-                entries=tuple(CamEntry(name=pad_name(name), data=data) for name, data in icon_images.items()),
+                entries=(
+                    *tuple(CamEntry(name=pad_name(name), data=data) for name, data in icon_images.items()),
+                    CamEntry(name=pad_name(PHANTOM_RAW_TEXTURES_IMAGE), data=phantom_raw_texture_image),
+                ),
             ),
-            CamSection(extension=b"TILE", padding=b"\x01\x00\x00\x00", entries=tile_entries),
+            CamSection(extension=b"TILE", padding=b"\x01\x00\x00\x00", entries=tuple(tile_entries)),
         ),
         output_path,
     )
@@ -1216,6 +1357,399 @@ def tile_from_rgb(original_tile: bytes, palettes: list[CamEntry], rgb: bytes | N
         output += original_tile[26 + image_plane_size :]
 
     return bytes(output)
+
+
+def tile_v1_embedded_from_rgb(original_tile: bytes, rgb: bytes) -> bytes:
+    if len(original_tile) < 26 or struct.unpack_from("<H", original_tile, 0)[0] != 1:
+        return original_tile
+
+    height = struct.unpack_from("<H", original_tile, 2)[0]
+    width = struct.unpack_from("<H", original_tile, 4)[0]
+    row_stride = struct.unpack_from("<H", original_tile, 6)[0]
+    if len(rgb) != width * height * 3 or row_stride < width or row_stride == width * 2:
+        return original_tile
+
+    from PIL import Image
+
+    source = Image.frombytes("RGB", (width, height), rgb)
+    quantized = source.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
+    raw_palette = quantized.getpalette() or []
+
+    output = bytearray(original_tile[:26])
+    for y in range(height):
+        for x in range(width):
+            output.append(min(255, int(quantized.getpixel((x, y))) + 1))
+        for _ in range(max(0, row_stride - width)):
+            output.append(0)
+
+    original_palette_offset = struct.unpack_from("<I", original_tile, 22)[0]
+    original_palette_tail = (
+        original_tile[original_palette_offset:]
+        if 0 <= original_palette_offset < len(original_tile)
+        else b""
+    )
+    palette_prefix = original_palette_tail[:8]
+    palette_suffix = original_palette_tail[8 + 256 * 4 :]
+    new_palette_offset = len(output)
+    struct.pack_into("<H", output, 20, 1)
+    struct.pack_into("<I", output, 22, new_palette_offset)
+    output += palette_prefix or b"\x00\x00\x00\x01\x00\x00\x00\x00"
+    output += b"\x00\x00\x00\x00"
+    for index in range(255):
+        offset = index * 3
+        if offset + 2 < len(raw_palette):
+            red, green, blue = raw_palette[offset], raw_palette[offset + 1], raw_palette[offset + 2]
+        else:
+            red, green, blue = (0, 0, 0)
+        output += bytes((red, green, blue, 0))
+    output += palette_suffix
+    return bytes(output)
+
+
+def fit_rgb_to_size(
+    rgb: bytes,
+    source_width: int,
+    source_height: int,
+    target_width: int,
+    target_height: int,
+) -> bytes:
+    if len(rgb) == target_width * target_height * 3:
+        return rgb
+    if len(rgb) != source_width * source_height * 3:
+        raise ValueError(
+            f"Expected {source_width * source_height * 3} RGB bytes for source image, got {len(rgb)}"
+        )
+
+    from PIL import Image
+
+    source = Image.frombytes("RGB", (source_width, source_height), rgb)
+    target = Image.new("RGB", (target_width, target_height), (0, 0, 0))
+    x = (target_width - source_width) // 2
+    y = (target_height - source_height) // 2
+    target.paste(source, (x, y))
+    return target.tobytes()
+
+
+def phantom_building_dialog_frame_tile(original_tile: bytes, panel_rgb: bytes) -> bytes:
+    decoded = decode_indexed_v3_tile(original_tile)
+    if decoded is None:
+        return original_tile
+
+    height, width, pixels = decoded
+    if len(panel_rgb) != width * height * 3:
+        return original_tile
+
+    remapped, palette = quantize_phantom_building_dialog_pixels(
+        original_tile,
+        panel_rgb,
+        width,
+        height,
+        pixels,
+    )
+    return encode_indexed_v3_tile_with_embedded_palette(original_tile, remapped, palette)
+
+
+def quantize_phantom_building_dialog_pixels(
+    original_tile: bytes,
+    rgb: bytes,
+    width: int,
+    height: int,
+    source_pixels: list[list[int]],
+) -> tuple[list[list[int]], list[tuple[int, int, int]]]:
+    from PIL import Image
+
+    source_colors = tile_palette_colors(original_tile, [])
+    if source_colors is None:
+        source_colors = [(index, index, index) for index in range(256)]
+
+    source = Image.frombytes("RGB", (width, height), rgb)
+    fill_mask = [[False for _ in range(width)] for _ in range(height)]
+    used_indices = {0}
+    for y in range(height):
+        for x in range(width):
+            value = source_pixels[y][x]
+            if value != 0 and is_building_dialog_key_index(value, source_colors):
+                fill_mask[y][x] = False
+                continue
+            if value != 0 and is_building_dialog_repaintable_background_pixel(x, y, value, source_colors):
+                fill_mask[y][x] = True
+            elif value != 0:
+                used_indices.add(value)
+            else:
+                fill_mask[y][x] = is_phantom_building_dialog_fill_pixel(x, y)
+
+    custom_indices = [
+        index
+        for index in range(1, 247)
+        if index not in used_indices and not is_building_dialog_key_index(index, source_colors)
+    ]
+    if not custom_indices:
+        return source_pixels, source_colors
+
+    fill_points: list[tuple[int, int]] = []
+    fill_colors: list[tuple[int, int, int]] = []
+    for y in range(height):
+        for x in range(width):
+            if fill_mask[y][x]:
+                fill_points.append((x, y))
+                fill_colors.append(source.getpixel((x, y)))
+
+    if not fill_colors:
+        return source_pixels, source_colors
+
+    fill_source = Image.new("RGB", (len(fill_colors), 1), (0, 0, 0))
+    fill_source.putdata(fill_colors)
+    quantized = fill_source.quantize(colors=min(255, len(custom_indices)), method=Image.Quantize.MEDIANCUT)
+    raw_palette = quantized.getpalette() or []
+    palette = list(source_colors)
+    for index, palette_index in enumerate(custom_indices):
+        offset = index * 3
+        if offset + 2 < len(raw_palette):
+            red = raw_palette[offset]
+            green = raw_palette[offset + 1]
+            blue = raw_palette[offset + 2]
+            if red > 100 and blue > 90 and green < 100:
+                red = min(red, 70)
+                green = max(green, 55)
+                blue = max(blue, 125)
+            palette[palette_index] = (
+                red,
+                green,
+                blue,
+            )
+
+    remapped = [
+        [
+            0 if is_building_dialog_key_index(value, source_colors) else value
+            for value in row
+        ]
+        for row in source_pixels
+    ]
+    for source_index, (x, y) in enumerate(fill_points):
+        quantized_index = min(int(quantized.getpixel((source_index, 0))), len(custom_indices) - 1)
+        remapped[y][x] = custom_indices[quantized_index]
+
+    return remapped, palette
+
+
+def is_phantom_building_dialog_fill_pixel(x: int, y: int) -> bool:
+    # The stock frame tile has transparent holes where other UI pieces are
+    # drawn. Fill the general backing area, but keep the building portrait
+    # window and outer transparent gutters clear.
+    if x < 3 or x >= 199 or y < 3 or y >= 242:
+        return False
+    if 48 <= x < 154 and 25 <= y < 131:
+        return False
+    return True
+
+
+def is_building_dialog_repaintable_background_pixel(
+    x: int,
+    y: int,
+    index: int,
+    colors: list[tuple[int, int, int]],
+) -> bool:
+    if not is_phantom_building_dialog_fill_pixel(x, y):
+        return False
+    if index <= 0 or index >= len(colors):
+        return False
+
+    red, green, blue = colors[index]
+    luminance = 0.299 * red + 0.587 * green + 0.114 * blue
+    parchment = red > 135 and green > 110 and blue > 70
+    gold_or_bronze_trim = red > 90 and green > 55 and red >= blue * 1.45 and green >= blue * 1.10
+    bright_trim = luminance > 150
+    if parchment or gold_or_bronze_trim or bright_trim:
+        return False
+
+    return True
+
+
+def is_building_dialog_key_index(index: int, colors: list[tuple[int, int, int]]) -> bool:
+    if index == 0 or index >= len(colors):
+        return index == 0
+    red, green, blue = colors[index]
+    return index >= 247 or (red > 100 and blue > 90 and green < 100)
+
+
+def tile_from_png_source(original_tile: bytes, palettes: list[CamEntry], png_path: Path) -> bytes:
+    dims = tile_dimensions(original_tile)
+    if dims is None:
+        return original_tile
+
+    height, width = dims
+
+    from PIL import Image, ImageEnhance, ImageFilter
+
+    source = Image.open(png_path).convert("RGBA")
+    source = remove_small_detached_alpha_components(source)
+    bbox = source.getbbox()
+    if bbox is None:
+        rgb = bytes(width * height * 3)
+        return tile_from_rgb(original_tile, palettes, rgb)
+
+    source = source.crop(bbox)
+    anchor_bbox = tile_visible_bbox(original_tile)
+    max_width = max(1, width)
+    max_height = max(1, height)
+    if anchor_bbox:
+        anchor_left, anchor_top, anchor_right, anchor_bottom = anchor_bbox
+        anchor_width = max(1, anchor_right - anchor_left)
+        anchor_height = max(1, anchor_bottom - anchor_top)
+        scale = min(anchor_width / source.width, anchor_height / source.height)
+    else:
+        scale = min(max_width / source.width, max_height / source.height)
+    scaled_size = (
+        max(1, int(source.width * scale)),
+        max(1, int(source.height * scale)),
+    )
+    source = source.resize(scaled_size, Image.Resampling.LANCZOS)
+    source = ImageEnhance.Contrast(source).enhance(1.08).filter(ImageFilter.SHARPEN)
+
+    target = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    if anchor_bbox:
+        anchor_left, _anchor_top, anchor_right, anchor_bottom = anchor_bbox
+        anchor_x = (anchor_left + anchor_right) // 2
+        x = anchor_x - source.width // 2
+        y = anchor_bottom - source.height
+    else:
+        x = (width - source.width) // 2
+        y = height - source.height - 1
+    x = max(0, min(width - source.width, x))
+    y = max(0, min(height - source.height, y))
+    target.alpha_composite(source, (x, y))
+
+    rgb = bytearray()
+    for red, green, blue, alpha in target.getdata():
+        if alpha < 18:
+            rgb += b"\x00\x00\x00"
+        else:
+            # TILE v3 conversion treats near-black RGB as transparent. Keep
+            # intentionally dark cloak and shadow pixels just above that key.
+            rgb.append(max(12, red))
+            rgb.append(max(13, green))
+            rgb.append(max(18, blue))
+
+    return tile_from_rgb(original_tile, palettes, bytes(rgb))
+
+
+def remove_small_detached_alpha_components(image: "Image.Image") -> "Image.Image":
+    from PIL import Image
+
+    cleaned = image.copy()
+    alpha = cleaned.getchannel("A")
+    pixels = cleaned.load()
+    mask = alpha.load()
+    width, height = cleaned.size
+    seen: set[tuple[int, int]] = set()
+    components: list[tuple[int, tuple[int, int, int, int], list[tuple[int, int]]]] = []
+
+    for y in range(height):
+        for x in range(width):
+            if mask[x, y] == 0 or (x, y) in seen:
+                continue
+
+            queue = deque([(x, y)])
+            seen.add((x, y))
+            points: list[tuple[int, int]] = []
+            while queue:
+                cx, cy = queue.popleft()
+                points.append((cx, cy))
+                for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                    if (
+                        nx < 0
+                        or ny < 0
+                        or nx >= width
+                        or ny >= height
+                        or (nx, ny) in seen
+                        or mask[nx, ny] == 0
+                    ):
+                        continue
+                    seen.add((nx, ny))
+                    queue.append((nx, ny))
+
+            xs = [point[0] for point in points]
+            ys = [point[1] for point in points]
+            components.append((len(points), (min(xs), min(ys), max(xs) + 1, max(ys) + 1), points))
+
+    if not components:
+        return cleaned
+
+    largest_size, largest_bbox, _largest_points = max(components, key=lambda component: component[0])
+    largest_left, largest_top, largest_right, largest_bottom = largest_bbox
+    keep: set[tuple[int, int]] = set()
+    for size, bbox, points in components:
+        left, top, right, bottom = bbox
+        close_to_body = (
+            left <= largest_right + 18
+            and right >= largest_left - 18
+            and top <= largest_bottom + 18
+            and bottom >= largest_top - 18
+        )
+        meaningful_detail = size >= max(16, int(largest_size * 0.015))
+        if bbox == largest_bbox or close_to_body or meaningful_detail:
+            keep.update(points)
+
+    for y in range(height):
+        for x in range(width):
+            if mask[x, y] and (x, y) not in keep:
+                pixels[x, y] = (0, 0, 0, 0)
+
+    return cleaned
+
+
+def tile_visible_bbox(tile: bytes) -> tuple[int, int, int, int] | None:
+    version = struct.unpack_from("<H", tile, 0)[0] if len(tile) >= 2 else 0
+    if version == 3:
+        decoded = decode_indexed_v3_tile(tile)
+        if decoded is None:
+            return None
+        height, width, pixels = decoded
+        xs: list[int] = []
+        ys: list[int] = []
+        for y in range(height):
+            for x in range(width):
+                if pixels[y][x] != 0:
+                    xs.append(x)
+                    ys.append(y)
+        if not xs:
+            return None
+        return min(xs), min(ys), max(xs) + 1, max(ys) + 1
+
+    if version == 1 and len(tile) >= 26:
+        height = struct.unpack_from("<H", tile, 2)[0]
+        width = struct.unpack_from("<H", tile, 4)[0]
+        row_stride = struct.unpack_from("<H", tile, 6)[0]
+        if row_stride == width * 2:
+            return 0, 0, width, height
+        plane = tile[26 : 26 + row_stride * height]
+        xs: list[int] = []
+        ys: list[int] = []
+        for y in range(height):
+            for x in range(min(width, row_stride)):
+                if plane[y * row_stride + x] != 0:
+                    xs.append(x)
+                    ys.append(y)
+        if xs:
+            return min(xs), min(ys), max(xs) + 1, max(ys) + 1
+
+    return None
+
+
+def tile_dimensions(tile: bytes) -> tuple[int, int] | None:
+    if len(tile) < 26:
+        return None
+
+    version = struct.unpack_from("<H", tile, 0)[0]
+    if version == 1:
+        height = struct.unpack_from("<H", tile, 2)[0]
+        width = struct.unpack_from("<H", tile, 4)[0]
+        return height, width
+    if version == 3:
+        height = struct.unpack_from("<H", tile, 2)[0]
+        width = struct.unpack_from("<H", tile, 4)[0]
+        return height, width
+    return None
 
 
 def tile_v3_from_rgb(
@@ -1740,6 +2274,97 @@ def encode_indexed_v3_tile(
     return bytes(output)
 
 
+def encode_indexed_v3_tile_like_original(
+    original_tile: bytes,
+    pixels: list[list[int]],
+) -> bytes:
+    if len(original_tile) < 26 or struct.unpack_from("<H", original_tile, 0)[0] != 3:
+        return original_tile
+
+    height = len(pixels)
+    width = len(pixels[0]) if pixels else 0
+    header = bytearray(original_tile[:26])
+    struct.pack_into("<H", header, 2, height)
+    struct.pack_into("<H", header, 4, width)
+
+    rows: list[bytes] = []
+    for row_pixels in pixels:
+        row = bytearray()
+        x = 0
+        row_width = len(row_pixels)
+        while x < row_width:
+            if row_pixels[x] == 0:
+                x += 1
+                continue
+
+            start = x
+            values: list[int] = []
+            while x < row_width and row_pixels[x] != 0 and len(values) < 80:
+                values.append(row_pixels[x])
+                x += 1
+
+            next_x = x
+            while next_x < row_width and row_pixels[next_x] == 0:
+                next_x += 1
+            flags = 0 if next_x < row_width else 0x80
+            row += struct.pack("<HBB", start + len(values), len(values), flags)
+            row += bytes(values)
+
+        if not row:
+            row += struct.pack("<HBB", 0, 0, 0x80)
+        rows.append(bytes(row))
+
+    output = bytearray(header)
+    cursor = height * 4
+    for row in rows:
+        output += struct.pack("<I", cursor)
+        cursor += len(row)
+    for row in rows:
+        output += row
+
+    palette_mode = struct.unpack_from("<H", original_tile, 20)[0]
+    original_palette_offset = struct.unpack_from("<I", original_tile, 22)[0]
+    if palette_mode == 1 and 0 <= original_palette_offset < len(original_tile):
+        new_palette_offset = len(output)
+        struct.pack_into("<I", output, 22, new_palette_offset)
+        output += original_tile[original_palette_offset:]
+
+    return bytes(output)
+
+
+def encode_indexed_v3_tile_with_embedded_palette(
+    original_tile: bytes,
+    pixels: list[list[int]],
+    palette: list[tuple[int, int, int]],
+) -> bytes:
+    output = bytearray(encode_indexed_v3_tile_like_original(original_tile, pixels))
+    palette_mode = struct.unpack_from("<H", output, 20)[0]
+    palette_offset = struct.unpack_from("<I", output, 22)[0]
+    if palette_mode != 1 or palette_offset > len(output):
+        return bytes(output)
+
+    original_palette_offset = struct.unpack_from("<I", original_tile, 22)[0]
+    original_palette_tail = (
+        original_tile[original_palette_offset:]
+        if 0 <= original_palette_offset < len(original_tile)
+        else b""
+    )
+    palette_prefix = original_palette_tail[:8]
+    palette_suffix = original_palette_tail[8 + 256 * 4 :]
+
+    output = output[:palette_offset]
+    output += palette_prefix
+    for index in range(256):
+        if index < len(palette):
+            red, green, blue = palette[index]
+        else:
+            red, green, blue = (0, 0, 0)
+        output += bytes((red, green, blue, 0))
+    output += palette_suffix
+
+    return bytes(output)
+
+
 def line_intensity(
     point: tuple[float, float],
     start: tuple[float, float],
@@ -1812,7 +2437,11 @@ def generated_phantom_tile(original_tile: bytes, palettes: list[CamEntry]) -> by
     return bytes(output)
 
 
-def recolored_priestess_phantom_sprite_tile(original_tile: bytes, palettes: list[CamEntry]) -> bytes:
+def recolored_priestess_phantom_sprite_tile(
+    original_tile: bytes,
+    palettes: list[CamEntry],
+    source_tile_index: int | None = None,
+) -> bytes:
     decoded = decode_indexed_v3_tile(original_tile)
     if decoded is None:
         return original_tile
@@ -1840,6 +2469,9 @@ def recolored_priestess_phantom_sprite_tile(original_tile: bytes, palettes: list
                 )
             remapped_pixels[y][x] = color_cache[source_index]
 
+    if source_tile_index is not None and is_priestess_walk_tile(source_tile_index):
+        apply_phantom_float_walk_adjustment(remapped_pixels, pixels, source_tile_index)
+
     return encode_indexed_v3_tile(
         remapped_pixels,
         32,
@@ -1853,33 +2485,116 @@ def phantom_priestess_recolor(color: tuple[int, int, int]) -> tuple[int, int, in
         return (0, 0, 0)
 
     luminance = 0.299 * red + 0.587 * green + 0.114 * blue
-    saturation = max(red, green, blue) - min(red, green, blue)
-    red_cloak = red > 55 and red > green * 1.22 and red > blue * 1.12
-    bright_staff = luminance > 145 and saturation < 58
+    max_channel = max(red, green, blue)
+    min_channel = min(red, green, blue)
+    saturation = 0 if max_channel == 0 else (max_channel - min_channel) / max_channel
+    red_cloak = (
+        (red > 35 and red > green * 1.16 and red > blue * 0.86 and saturation > 0.20)
+        or (red > 64 and green < 74 and blue < 96 and red > green + 16)
+        or (red > 50 and blue > 34 and green < 62 and red >= blue * 0.90)
+    )
+    skin = red > 105 and green > 58 and blue > 35 and red > blue * 1.08 and green > blue * 0.68
+    gold_or_staff = (
+        (red > 112 and green > 78 and blue < 84)
+        or (luminance > 128 and (max_channel - min_channel) < 82)
+    )
 
     if red_cloak:
-        if luminance < 55:
-            return (4, 22, 30)
-        if luminance < 95:
-            return (14, 74, 96)
-        if luminance < 150:
-            return (30, 145, 180)
-        return (150, 245, 255)
+        if luminance > 153:
+            return (60, 205, 230)
+        if luminance > 87:
+            return (30, 95, 125)
+        if luminance > 38:
+            return (18, 52, 78)
+        return (5, 14, 32)
 
-    if bright_staff:
-        if luminance > 215:
-            return (7, 9, 11)
-        return (18, 22, 25)
+    if skin:
+        return (
+            min(255, int(42 + luminance * 0.30)),
+            min(255, int(80 + luminance * 0.37)),
+            min(255, int(95 + luminance * 0.44)),
+        )
+
+    if gold_or_staff:
+        if luminance > 190:
+            return (184, 188, 198)
+        if luminance > 122:
+            return (108, 118, 132)
+        return (35, 48, 62)
+
+    if red > green + 14 and red > blue + 6:
+        return (
+            min(255, int(red * 0.32 + 6)),
+            min(255, int(green * 0.56 + 18)),
+            min(255, int(blue * 0.82 + 38)),
+        )
 
     if luminance < 45:
-        return (4, 9, 12)
+        return (4, 9, 16)
     if luminance < 95:
-        return (28, 38, 44)
+        return (24, 38, 52)
     if luminance < 150:
-        return (74, 96, 105)
+        return (68, 92, 112)
     if luminance < 205:
-        return (134, 168, 176)
-    return (210, 238, 240)
+        return (122, 158, 174)
+    return (204, 235, 240)
+
+
+PRIESTESS_WALK_TILE_RANGES = (
+    range(4587, 4594),
+    range(4595, 4602),
+    range(4603, 4610),
+    range(4611, 4618),
+    range(4619, 4626),
+    range(4627, 4634),
+)
+
+
+def is_priestess_walk_tile(tile_index: int) -> bool:
+    return any(tile_index in tile_range for tile_range in PRIESTESS_WALK_TILE_RANGES)
+
+
+def priestess_walk_frame_number(tile_index: int) -> int:
+    for tile_range in PRIESTESS_WALK_TILE_RANGES:
+        if tile_index in tile_range:
+            return tile_index - tile_range.start
+    return 0
+
+
+def apply_phantom_float_walk_adjustment(
+    remapped_pixels: list[list[int]],
+    source_pixels: list[list[int]],
+    source_tile_index: int,
+) -> None:
+    height = len(remapped_pixels)
+    if height == 0:
+        return
+
+    width = len(remapped_pixels[0])
+    frame = priestess_walk_frame_number(source_tile_index)
+    start_y = int(height * 0.72)
+
+    for y in range(start_y, height):
+        row_factor = (y - start_y) / max(1, height - start_y)
+        for x in range(width):
+            if source_pixels[y][x] == 0:
+                continue
+
+            # The lower body is where the Priestess reads most like walking legs.
+            # Poke a few stable transparent gaps near the hem so the same source
+            # frames feel like a drifting robe instead of planted feet.
+            hem_gap = y > int(height * 0.88) and ((x * 3 + y + frame * 5) % 11 == 0)
+            deep_hem_gap = y > int(height * 0.94) and ((x + frame) % 4 == 0)
+            if hem_gap or deep_hem_gap:
+                remapped_pixels[y][x] = 0
+
+        if row_factor > 0.55 and frame in (1, 2, 5, 6):
+            # Dampen side-to-side stride flicker by trimming a little of the outer
+            # lower silhouette on the most leg-forward frames.
+            visible = [x for x in range(width) if remapped_pixels[y][x] != 0]
+            if len(visible) > 7:
+                remapped_pixels[y][visible[0]] = 0
+                remapped_pixels[y][visible[-1]] = 0
 
 
 def write_voices_cam(output_path: Path) -> None:
@@ -2068,6 +2783,21 @@ def building_sprite_replacement_paths(building_sprite_rgb_dir: Path | None) -> d
     return paths
 
 
+def hero_sprite_replacement_paths(hero_sprite_png_dir: Path | None) -> dict[int, Path]:
+    if hero_sprite_png_dir is None or not hero_sprite_png_dir.exists():
+        return {}
+
+    prefix = "hero_tile_"
+    paths: dict[int, Path] = {}
+    for path in sorted(hero_sprite_png_dir.glob(f"{prefix}*.png")):
+        try:
+            tile_index = int(path.stem[len(prefix) :])
+        except ValueError:
+            continue
+        paths[tile_index] = path
+    return paths
+
+
 def splt_palette_colors(palette: bytes) -> list[tuple[int, int, int]]:
     if len(palette) < 8 + 256 * 4:
         raise ValueError("Expected a 256-color SPLT palette")
@@ -2080,7 +2810,14 @@ def splt_palette_colors(palette: bytes) -> list[tuple[int, int, int]]:
 
 
 def embedded_palette_colors(tile: bytes, palette_offset: int) -> list[tuple[int, int, int]] | None:
-    if palette_offset < 0 or len(tile) < palette_offset + 256 * 4:
+    if palette_offset < 0:
+        return None
+    if (
+        len(tile) >= palette_offset + 8 + 256 * 4
+        and tile[palette_offset : palette_offset + 8] == b"\x00\x00\x00\x01\x00\x00\x00\x00"
+    ):
+        palette_offset += 8
+    if len(tile) < palette_offset + 256 * 4:
         return None
 
     colors: list[tuple[int, int, int]] = []
