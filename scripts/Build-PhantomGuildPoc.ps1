@@ -5,7 +5,12 @@ param(
     [string]$BuildingProfileImage = ".\assets\source\phantom-guild-profile.png",
     [string]$BuildingSpriteSheet = ".\assets\source\phantom-guild-sprite-sheet-smooth.png",
     [string]$ConstructionSpriteSheet = ".\assets\source\phantom-guild-construction-proof-v1.png",
-    [string]$HeroSpriteSheet = ".\assets\source\phantom-hero-sprite-source-sheet.png",
+    [string]$DamagedBSample = ".\assets\source\phantom-guild-damaged-b-sample-v1.png",
+    [string]$CollapsedIntermediateSample = ".\assets\source\phantom-guild-collapsed-intermediate-sample-v1.png",
+    [string]$HeroSpriteSheet = ".\assets\source\phantom-hero-major-actions-preview-v3.png",
+    [string]$HeroDirection03 = ".\assets\source\phantom-hero-direction-03.png",
+    [string]$HeroDirection04 = ".\assets\source\phantom-hero-direction-04.png",
+    [string]$HeroDirection05 = ".\assets\source\phantom-hero-direction-05.png",
     [string]$GravestoneImage = ".\assets\source\phantom-gravestone-source.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
     [string]$GplCompiler = ""
@@ -104,6 +109,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $workspaceRoot = Split-Path -Parent $repoRoot
 $toolsPython = Join-Path $workspaceRoot ".tools\python.cmd"
 $builder = Join-Path $repoRoot "src\build_phantom_guild.py"
+$validator = Join-Path $repoRoot "src\validate_phantom_build.py"
 $iconGenerator = Join-Path $repoRoot "scripts\generate_phantom_icons.py"
 $buildingSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_building_sprites.py"
 $heroSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_hero_sprites.py"
@@ -145,11 +151,22 @@ if (-not (Test-Path $toolsPython)) {
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom icon generator failed with exit code $LASTEXITCODE"
 }
-& $toolsPython $buildingSpriteGenerator --sheet (Resolve-RepoPath $BuildingSpriteSheet) --construction-sheet (Resolve-RepoPath $ConstructionSpriteSheet) --out-dir $buildingSpriteDir
+& $toolsPython $buildingSpriteGenerator `
+    --sheet (Resolve-RepoPath $BuildingSpriteSheet) `
+    --construction-sheet (Resolve-RepoPath $ConstructionSpriteSheet) `
+    --damaged-b-sample (Resolve-RepoPath $DamagedBSample) `
+    --collapsed-intermediate-sample (Resolve-RepoPath $CollapsedIntermediateSample) `
+    --out-dir $buildingSpriteDir
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom building sprite generator failed with exit code $LASTEXITCODE"
 }
-& $toolsPython $heroSpriteGenerator --sheet (Resolve-RepoPath $HeroSpriteSheet) --gravestone-source (Resolve-RepoPath $GravestoneImage) --out-dir $heroSpriteDir
+& $toolsPython $heroSpriteGenerator `
+    --sheet (Resolve-RepoPath $HeroSpriteSheet) `
+    --direction-03 (Resolve-RepoPath $HeroDirection03) `
+    --direction-04 (Resolve-RepoPath $HeroDirection04) `
+    --direction-05 (Resolve-RepoPath $HeroDirection05) `
+    --gravestone-source (Resolve-RepoPath $GravestoneImage) `
+    --out-dir $heroSpriteDir
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom hero sprite generator failed with exit code $LASTEXITCODE"
 }
@@ -202,6 +219,11 @@ if (-not (Test-Path $compiledPath)) {
     throw "GPL compiler did not produce: $compiledPath"
 }
 Copy-Item -Path $compiledPath -Destination (Join-Path $dataDir "Phantom.bcd") -Force
+
+& $toolsPython $validator --output-root $outputRootPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Phantom package verification failed with exit code $LASTEXITCODE"
+}
 
 Write-Host "Built local mod package:"
 Write-Host $outputRootPath

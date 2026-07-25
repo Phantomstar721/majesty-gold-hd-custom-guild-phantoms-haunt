@@ -48,9 +48,20 @@ BUILDING_ICON_TILE = 1510
 HERO_INTERFACE_PANEL_TILE = 4793
 BUILDING_DIALOG_BACKING_TILE = 466
 BUILDING_SPRITE_PALETTE_INDEX = 560
-PHANTOM_HERO_ICON_PALETTE_INDEX = BUILDING_SPRITE_PALETTE_INDEX
-PHANTOM_HERO_PORTRAIT_PALETTE_INDEX = BUILDING_SPRITE_PALETTE_INDEX
+PHANTOM_HERO_ICON_PALETTE_INDEX = 560
+PHANTOM_HERO_PORTRAIT_PALETTE_INDEX = 560
 BUILDING_ACTIVE_SET_ID = 192
+# The inherited Fervus destruction animation places its third fire layer well
+# beyond the upper-right edge of the Phantom Guild's custom damaged and rubble
+# frames. Keep the effect, but anchor it on the building across every collapse
+# state in which that layer appears.
+BUILDING_DESTRUCTION_ATTACHMENT_REMAPS = {
+    0x03000063: (35, 25),  # Die-4 / damaged A, fire layer 3
+    0x03000064: (35, 25),  # Die-5 / damaged B, fire layer 3
+    0x03000065: (35, 25),  # Die-6 / damaged B, fire layer 3
+    0x03000066: (35, 25),  # Die-7 / destroyed alternate, fire layer 3
+    0x03000067: (35, 25),  # Die-8 / destroyed alternate, fire layer 3
+}
 ICE_LANCE_ICON_TILE = 202
 ICE_LANCE_PROJECTILE_TILES = tuple(range(202, 214))
 ICE_LANCE_DIRECTIONAL_PROJECTILE_TILES = tuple(range(8368, 8496))
@@ -193,7 +204,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Experience value="2000"/>
 \t\t\t<MaxHP value="18"/>
 \t\t\t<SightRange value="240"/>
-\t\t\t<Speed value="2"/>
+\t\t\t<Speed value="4"/>
 \t\t\t<AttackRange min="1" max="240"/>
 \t\t\t<Vitality value="6"/>
 \t\t\t<Artifice value="8"/>
@@ -481,11 +492,11 @@ def phantom_hero_data() -> str:
 \t\t(Friend\txx)
 \t\t(attacktype 1)
 \t\t(castingrange 240)
-\t\t(PercentageHPRetreat 50)
+\t\t(PercentageHPRetreat 40)
 \t\t(enemy_estimation 1.1)
-\t\t(self_estimation 1.0)
+\t\t(self_estimation 1.2)
 \t\t(Loyalty 55)
-\t\t(Greed 8)
+\t\t(Greed 12)
 \t\t(Luck 12)
 \t\t(Upgrade_Armor_Chance\t0)
 \t\t(Upgrade_Weapon_Chance\t0)
@@ -999,6 +1010,12 @@ def write_maindata_cam(
     building_sprite_tile_indices = sorted(
         referenced_low16_tile_indices(building_imag, len(tiles)) & set(building_sprite_rgb_paths)
     )
+    if building_active_frame_paths:
+        # The full eight-frame Active animation below replaces the stock
+        # single-frame Active tile. Do not append an immediately orphaned copy.
+        building_sprite_tile_indices = [
+            tile_index for tile_index in building_sprite_tile_indices if tile_index != 1506
+        ]
 
     tile_indices: set[int] = set()
     tile_indices.update(referenced_tile_indices(building_imag, len(tiles)))
@@ -1107,6 +1124,11 @@ def write_maindata_cam(
             active_frame_indices,
         )
 
+    building_imag = remap_building_attachment_points(
+        building_imag,
+        BUILDING_DESTRUCTION_ATTACHMENT_REMAPS,
+    )
+
     if directional_projectile_tile_indices:
         first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
         projectile_tile_replacements: dict[int, int] = {}
@@ -1154,10 +1176,22 @@ def write_maindata_cam(
                     interface_panel_rgb.read_bytes(),
                 )
             elif source_tile_index in hero_sprite_png_paths:
+                hero_direction = hero_sprite_direction_index(source_tile_index)
+                shadow_source_path = (
+                    None
+                    if source_tile_index == 4787
+                    else hero_sprite_png_paths.get(4586 + hero_direction * 8)
+                )
                 tile = tile_from_png_source(
                     remap_tile_palette_index(source_tile, 32),
                     palettes,
                     hero_sprite_png_paths[source_tile_index],
+                    scale_multiplier=hero_sprite_scale_multiplier(source_tile_index),
+                    max_anchor_height=hero_sprite_max_anchor_height(source_tile_index),
+                    vertical_offset=hero_sprite_vertical_offset(source_tile_index),
+                    shadow_strength=hero_sprite_shadow_strength(source_tile_index),
+                    horizontal_alignment=hero_sprite_horizontal_alignment(source_tile_index),
+                    shadow_png_path=shadow_source_path,
                 )
             else:
                 tile = recolored_priestess_phantom_sprite_tile(source_tile, palettes, source_tile_index)
@@ -1201,7 +1235,22 @@ def write_maindata_cam(
 
     max_palette_index = max(palette_indices)
     palette_entries = tuple(
-        CamEntry(name=palettes[index].name, data=palettes[index].data)
+        CamEntry(
+            name=palettes[index].name,
+            data=(
+                splt_with_color_replacements(
+                    palettes[index].data,
+                    {
+                        247: (156, 33, 24),
+                        248: (178, 0, 178),
+                        249: (204, 0, 204),
+                        250: (229, 0, 229),
+                    },
+                )
+                if index == BUILDING_SPRITE_PALETTE_INDEX
+                else palettes[index].data
+            ),
+        )
         for index in range(max_palette_index + 1)
     )
     image_entries = [
@@ -1615,12 +1664,78 @@ def is_building_dialog_key_index(index: int, colors: list[tuple[int, int, int]])
     return index >= 247 or (red > 100 and blue > 90 and green < 100)
 
 
-def tile_from_png_source(original_tile: bytes, palettes: list[CamEntry], png_path: Path) -> bytes:
-    dims = tile_dimensions(original_tile)
-    if dims is None:
+def hero_sprite_scale_multiplier(source_tile_index: int) -> float:
+    # Cast TILEs are taller to accommodate the stock overhead magic effect.
+    # Do not let that extra canvas height enlarge the Phantom's body relative
+    # to stand/walk; reserve it for the approved hand vortex instead.
+    if 4746 <= source_tile_index <= 4777:
+        return 0.96
+    return 1.12
+
+
+def hero_sprite_max_anchor_height(source_tile_index: int) -> int | None:
+    # The stock shared dissolve records use progressively enormous canvases for
+    # effects. Scaling replacement character art to those per-frame bounds
+    # makes the Phantom balloon several times before becoming a gravestone.
+    if 4778 <= source_tile_index <= 4785:
+        return 45
+    return None
+
+
+def hero_sprite_vertical_offset(source_tile_index: int) -> int:
+    # These two shared dissolve canvases place the stock effect roughly 52
+    # pixels below the neighboring death frames. Keep their replacement body
+    # and projected shadow at the same world-space baseline as tiles 4782/4785.
+    if source_tile_index in (4783, 4784):
+        return -52
+    return 0
+
+
+def hero_sprite_shadow_strength(source_tile_index: int) -> float:
+    if 4778 <= source_tile_index <= 4785:
+        return max(0.12, 1.0 - (source_tile_index - 4778) / 7.0)
+    return 1.0
+
+
+def hero_sprite_horizontal_alignment(source_tile_index: int) -> str:
+    return "right" if hero_sprite_direction_index(source_tile_index) >= 4 else "left"
+
+
+def hero_sprite_direction_index(source_tile_index: int) -> int:
+    direction = 0
+    if 4586 <= source_tile_index <= 4649:
+        direction = min(5, (source_tile_index - 4586) // 8)
+    elif 4650 <= source_tile_index <= 4658:
+        direction = min(5, source_tile_index - 4650)
+    elif 4659 <= source_tile_index <= 4689:
+        direction = min(5, (source_tile_index - 4659) // 4)
+    elif 4690 <= source_tile_index <= 4722:
+        direction = min(5, (source_tile_index - 4690) // 4)
+    elif 4723 <= source_tile_index <= 4745:
+        direction = min(5, (source_tile_index - 4723) // 3)
+    elif 4746 <= source_tile_index <= 4777:
+        direction = min(5, (source_tile_index - 4746) // 4)
+    return direction
+
+
+def tile_from_png_source(
+    original_tile: bytes,
+    palettes: list[CamEntry],
+    png_path: Path,
+    *,
+    scale_multiplier: float = 1.0,
+    max_anchor_height: int | None = None,
+    vertical_offset: int = 0,
+    shadow_strength: float = 1.0,
+    horizontal_alignment: str = "left",
+    shadow_png_path: Path | None = None,
+) -> bytes:
+    decoded = decode_indexed_v3_tile(original_tile)
+    colors = tile_palette_colors(original_tile, palettes)
+    if decoded is None or colors is None:
         return original_tile
 
-    height, width = dims
+    height, width, original_pixels = decoded
 
     from PIL import Image, ImageEnhance, ImageFilter
 
@@ -1628,20 +1743,31 @@ def tile_from_png_source(original_tile: bytes, palettes: list[CamEntry], png_pat
     source = remove_small_detached_alpha_components(source)
     bbox = source.getbbox()
     if bbox is None:
-        rgb = bytes(width * height * 3)
-        return tile_from_rgb(original_tile, palettes, rgb)
+        return original_tile
 
     source = source.crop(bbox)
-    anchor_bbox = tile_visible_bbox(original_tile)
-    max_width = max(1, width)
-    max_height = max(1, height)
-    if anchor_bbox:
-        anchor_left, anchor_top, anchor_right, anchor_bottom = anchor_bbox
-        anchor_width = max(1, anchor_right - anchor_left)
-        anchor_height = max(1, anchor_bottom - anchor_top)
-        scale = min(anchor_width / source.width, anchor_height / source.height)
+    art_points = [
+        (x, y)
+        for y, row in enumerate(original_pixels)
+        for x, value in enumerate(row)
+        if value != 0 and not 247 <= value <= 250
+    ]
+    if art_points:
+        anchor_left = min(point[0] for point in art_points)
+        anchor_top = min(point[1] for point in art_points)
+        anchor_right = max(point[0] for point in art_points) + 1
+        anchor_bottom = max(point[1] for point in art_points) + 1
     else:
-        scale = min(max_width / source.width, max_height / source.height)
+        anchor_left, anchor_top, anchor_right, anchor_bottom = 0, 0, width, height
+
+    anchor_height = max(1, anchor_bottom - anchor_top)
+    if max_anchor_height is not None:
+        anchor_height = min(anchor_height, max_anchor_height)
+    # Size the Phantom body by the stock character height, while allowing
+    # action effects to use the rest of the native TILE canvas. Constraining
+    # the whole attack/cast image to the narrow Priestess body bbox would make
+    # the character tiny merely because an ice lance or vortex extends aside.
+    scale = min(width / source.width, anchor_height / source.height) * scale_multiplier
     scaled_size = (
         max(1, int(source.width * scale)),
         max(1, int(source.height * scale)),
@@ -1650,30 +1776,225 @@ def tile_from_png_source(original_tile: bytes, palettes: list[CamEntry], png_pat
     source = ImageEnhance.Contrast(source).enhance(1.08).filter(ImageFilter.SHARPEN)
 
     target = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    if anchor_bbox:
-        anchor_left, _anchor_top, anchor_right, anchor_bottom = anchor_bbox
-        anchor_x = (anchor_left + anchor_right) // 2
-        x = anchor_x - source.width // 2
-        y = anchor_bottom - source.height
+    anchor_x = (anchor_left + anchor_right) // 2
+    x = anchor_x - source.width // 2
+    y = anchor_bottom - source.height + vertical_offset
+    if source.width > width:
+        x = width - source.width if horizontal_alignment == "right" else 0
     else:
-        x = (width - source.width) // 2
-        y = height - source.height - 1
-    x = max(0, min(width - source.width, x))
+        x = max(0, min(width - source.width, x))
     y = max(0, min(height - source.height, y))
     target.alpha_composite(source, (x, y))
 
-    rgb = bytearray()
-    for red, green, blue, alpha in target.getdata():
-        if alpha < 18:
-            rgb += b"\x00\x00\x00"
-        else:
-            # TILE v3 conversion treats near-black RGB as transparent. Keep
-            # intentionally dark cloak and shadow pixels just above that key.
-            rgb.append(max(12, red))
-            rgb.append(max(13, green))
-            rgb.append(max(18, blue))
+    # Project the Phantom's own dark silhouette toward the upper-left Majesty
+    # light direction. A small displacement at the robe base keeps the shadow
+    # detached so the character still reads as hovering.
+    shadow_target = target
+    if shadow_png_path is not None:
+        shadow_source = Image.open(shadow_png_path).convert("RGBA")
+        shadow_source = remove_small_detached_alpha_components(shadow_source)
+        shadow_bbox = shadow_source.getbbox()
+        if shadow_bbox is not None:
+            shadow_source = shadow_source.crop(shadow_bbox)
+            # The visible Phantom is intentionally 112% of the stock body.
+            # Its flattened ground projection must remain within the original
+            # Priestess TILE's much narrower shadow margin, so use a compact
+            # caster rather than shrinking the visible hero again.
+            shadow_scale = min(
+                width / shadow_source.width,
+                anchor_height / shadow_source.height,
+            ) * 0.90
+            shadow_source = shadow_source.resize(
+                (
+                    max(1, int(shadow_source.width * shadow_scale)),
+                    max(1, int(shadow_source.height * shadow_scale)),
+                ),
+                Image.Resampling.LANCZOS,
+            )
+            shadow_target = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+            shadow_x = anchor_x - shadow_source.width // 2
+            shadow_y = anchor_bottom - shadow_source.height + vertical_offset
+            if shadow_source.width > width:
+                shadow_x = width - shadow_source.width if horizontal_alignment == "right" else 0
+            else:
+                shadow_x = max(0, min(width - shadow_source.width, shadow_x))
+            shadow_y = max(0, min(height - shadow_source.height, shadow_y))
+            shadow_target.alpha_composite(shadow_source, (shadow_x, shadow_y))
 
-    return tile_from_rgb(original_tile, palettes, bytes(rgb))
+    output_pixels = projected_floating_hero_shadow(shadow_target, shadow_strength)
+    for target_y in range(height):
+        for target_x in range(width):
+            red, green, blue, alpha = target.getpixel((target_x, target_y))
+            if alpha < 18:
+                continue
+            output_pixels[target_y][target_x] = nearest_visible_palette_index(
+                max(12, red),
+                max(13, green),
+                max(18, blue),
+                colors,
+            )
+
+    return encode_indexed_v3_tile_like_original(
+        original_tile,
+        output_pixels,
+        split_shadow_controls=True,
+    )
+
+
+def projected_floating_hero_shadow(
+    target: "Image.Image",
+    strength: float,
+) -> list[list[int]]:
+    width, height = target.size
+    pixels = [[0 for _ in range(width)] for _ in range(height)]
+    if strength <= 0:
+        return pixels
+
+    body_mask = [[False for _ in range(width)] for _ in range(height)]
+    body_points: list[tuple[int, int]] = []
+    for y in range(height):
+        for x in range(width):
+            red, green, blue, alpha = target.getpixel((x, y))
+            if alpha < 32:
+                continue
+            luminance = 0.299 * red + 0.587 * green + 0.114 * blue
+            bright_cyan_effect = (
+                blue > red + 34
+                and green > red + 28
+                and luminance > 105
+            )
+            near_white_effect = luminance > 205
+            if bright_cyan_effect or near_white_effect:
+                continue
+            body_mask[y][x] = True
+            body_points.append((x, y))
+
+    if not body_points:
+        return pixels
+
+    # Keep the central hood/torso/robe mass as the shadow caster. Long dark
+    # weapons and outstretched arms remain valid body occluders, but must not
+    # turn the projected shadow into a horizontal bar.
+    points_by_row: dict[int, list[int]] = {}
+    for x, y in body_points:
+        points_by_row.setdefault(y, []).append(x)
+    caster_points: list[tuple[int, int]] = []
+    for y, row_xs in points_by_row.items():
+        row_xs.sort()
+        row_center = row_xs[len(row_xs) // 2]
+        row_span = row_xs[-1] - row_xs[0] + 1
+        half_width = max(3, min(12, round(row_span * 0.38)))
+        caster_points.extend(
+            (x, y)
+            for x in row_xs
+            if abs(x - row_center) <= half_width
+        )
+
+    base_y = max(y for _x, y in caster_points)
+    raw_projection: list[tuple[float, float]] = []
+    for x, y in caster_points:
+        vertical_height = base_y - y
+        raw_projection.append(
+            (
+                x - 3.0 - vertical_height * 0.44,
+                base_y - 3.0 - vertical_height * 0.36,
+            )
+        )
+
+    hits: dict[tuple[int, int], int] = {}
+    for raw_x, raw_y in raw_projection:
+        shadow_x = round(raw_x)
+        shadow_y = round(raw_y)
+        if 0 <= shadow_x < width and 0 <= shadow_y < height:
+            point = (shadow_x, shadow_y)
+            hits[point] = hits.get(point, 0) + 1
+
+    core = set(hits)
+    feather: dict[tuple[int, int], int] = {}
+    for x, y in core:
+        for dx, dy in (
+            (-1, 0),
+            (1, 0),
+            (0, -1),
+            (0, 1),
+            (-1, -1),
+            (1, -1),
+            (-1, 1),
+            (1, 1),
+        ):
+            point = (x + dx, y + dy)
+            if (
+                0 <= point[0] < width
+                and 0 <= point[1] < height
+                and point not in core
+            ):
+                feather[point] = min(
+                    feather.get(point, 250),
+                    249 if dx == 0 or dy == 0 else 250,
+                )
+
+    if strength >= 0.72:
+        core_dark = 247
+    elif strength >= 0.38:
+        core_dark = 248
+    else:
+        core_dark = 249
+
+    for (x, y), hit_count in hits.items():
+        pixels[y][x] = core_dark if hit_count >= 2 else min(250, core_dark + 1)
+    for (x, y), value in feather.items():
+        pixels[y][x] = value
+
+    # Shadow control pixels must remain visibly detached from the floating art.
+    # Remove any projected or feather pixel that touches the body mask.
+    for y in range(height):
+        for x in range(width):
+            if pixels[y][x] == 0:
+                continue
+            touches_body = False
+            for neighbor_y in range(max(0, y - 1), min(height, y + 2)):
+                for neighbor_x in range(max(0, x - 1), min(width, x + 2)):
+                    if body_mask[neighbor_y][neighbor_x]:
+                        touches_body = True
+                        break
+                if touches_body:
+                    break
+            if touches_body:
+                pixels[y][x] = 0
+
+    # Quantization and detached-body clearance can strand the projected hood
+    # as an isolated upper-left island. Retain only the connected primary
+    # ground silhouette instead of emitting a visibly floating fragment.
+    shadow_points = {
+        (x, y)
+        for y, row in enumerate(pixels)
+        for x, value in enumerate(row)
+        if value != 0
+    }
+    components: list[set[tuple[int, int]]] = []
+    while shadow_points:
+        component: set[tuple[int, int]] = set()
+        pending = [shadow_points.pop()]
+        while pending:
+            point_x, point_y = pending.pop()
+            component.add((point_x, point_y))
+            for neighbor_y in range(max(0, point_y - 1), min(height, point_y + 2)):
+                for neighbor_x in range(max(0, point_x - 1), min(width, point_x + 2)):
+                    neighbor = (neighbor_x, neighbor_y)
+                    if neighbor in shadow_points:
+                        shadow_points.remove(neighbor)
+                        pending.append(neighbor)
+        components.append(component)
+
+    if components:
+        primary = max(components, key=len)
+        for component in components:
+            if component is primary:
+                continue
+            for x, y in component:
+                pixels[y][x] = 0
+
+    return pixels
 
 
 def tile_from_png_native_size(original_tile: bytes, palettes: list[CamEntry], png_path: Path) -> bytes:
@@ -1683,6 +2004,12 @@ def tile_from_png_native_size(original_tile: bytes, palettes: list[CamEntry], pn
     if colors is None:
         return original_tile
 
+    shadow_marker_indices = {
+        (156, 33, 24): 247,
+        (178, 0, 178): 248,
+        (204, 0, 204): 249,
+        (229, 0, 229): 250,
+    }
     image = Image.open(png_path).convert("RGBA")
     pixels: list[list[int]] = []
     for y in range(image.height):
@@ -1691,11 +2018,17 @@ def tile_from_png_native_size(original_tile: bytes, palettes: list[CamEntry], pn
             red, green, blue, alpha = image.getpixel((x, y))
             if alpha < 16 or is_transparent_rgb(red, green, blue):
                 row.append(0)
+            elif (red, green, blue) in shadow_marker_indices:
+                row.append(shadow_marker_indices[(red, green, blue)])
             else:
                 row.append(nearest_visible_palette_index(red, green, blue, colors))
         pixels.append(row)
 
-    return encode_indexed_v3_tile_like_original(original_tile, pixels)
+    return encode_indexed_v3_tile_like_original(
+        original_tile,
+        pixels,
+        split_shadow_controls=True,
+    )
 
 
 def remove_small_detached_alpha_components(image: "Image.Image") -> "Image.Image":
@@ -1978,6 +2311,45 @@ def replace_building_state_animation_tiles(imag: bytes, set_id: int, tile_indice
         if rel_offset > target_rel:
             struct.pack_into("<I", patched, table_start + index * 8 + 4, rel_offset + delta)
 
+    return bytes(patched)
+
+
+def remap_building_attachment_points(
+    imag: bytes,
+    replacements: dict[int, tuple[int, int]],
+) -> bytes:
+    if len(imag) < 24 or not replacements:
+        return imag
+
+    entry_count = u32(imag, 20)
+    table_start = 24
+    table_end = table_start + entry_count * 8
+    if entry_count <= 0 or table_end > len(imag):
+        raise ValueError("Building IMAG has an invalid animation-set table")
+
+    patched = bytearray(imag)
+    remaining = set(replacements)
+    for index in range(entry_count):
+        entry_offset = table_start + index * 8
+        set_id = u32(imag, entry_offset)
+        if set_id not in replacements:
+            continue
+
+        set_offset = u32(imag, entry_offset + 4)
+        if set_offset < table_end or set_offset + 68 > len(imag):
+            raise ValueError(f"Building IMAG set {set_id:#010x} has an invalid offset")
+        direction_offset = set_offset + u32(imag, set_offset + 64)
+        coordinate_offset = direction_offset
+        if coordinate_offset + 4 > len(imag):
+            raise ValueError(f"Building IMAG set {set_id:#010x} has invalid attachment data")
+
+        x, y = replacements[set_id]
+        struct.pack_into("<hh", patched, coordinate_offset, x, y)
+        remaining.remove(set_id)
+
+    if remaining:
+        missing = ", ".join(f"{set_id:#010x}" for set_id in sorted(remaining))
+        raise ValueError(f"Building IMAG is missing attachment sets: {missing}")
     return bytes(patched)
 
 
@@ -2394,6 +2766,8 @@ def encode_indexed_v3_tile(
 def encode_indexed_v3_tile_like_original(
     original_tile: bytes,
     pixels: list[list[int]],
+    *,
+    split_shadow_controls: bool = False,
 ) -> bytes:
     if len(original_tile) < 26 or struct.unpack_from("<H", original_tile, 0)[0] != 3:
         return original_tile
@@ -2416,7 +2790,11 @@ def encode_indexed_v3_tile_like_original(
 
             start = x
             values: list[int] = []
+            segment_is_shadow = 247 <= row_pixels[x] <= 250
             while x < row_width and row_pixels[x] != 0 and len(values) < 80:
+                value_is_shadow = 247 <= row_pixels[x] <= 250
+                if split_shadow_controls and values and value_is_shadow != segment_is_shadow:
+                    break
                 values.append(row_pixels[x])
                 x += 1
 
@@ -2939,6 +3317,19 @@ def splt_palette_colors(palette: bytes) -> list[tuple[int, int, int]]:
         offset = 8 + index * 4
         colors.append((palette[offset], palette[offset + 1], palette[offset + 2]))
     return colors
+
+
+def splt_with_color_replacements(
+    palette: bytes,
+    replacements: dict[int, tuple[int, int, int]],
+) -> bytes:
+    if len(palette) < 8 + 256 * 4:
+        raise ValueError("Expected a 256-color SPLT palette")
+    patched = bytearray(palette)
+    for index, (red, green, blue) in replacements.items():
+        offset = 8 + index * 4
+        patched[offset : offset + 3] = bytes((red, green, blue))
+    return bytes(patched)
 
 
 def embedded_palette_colors(tile: bytes, palette_offset: int) -> list[tuple[int, int, int]] | None:

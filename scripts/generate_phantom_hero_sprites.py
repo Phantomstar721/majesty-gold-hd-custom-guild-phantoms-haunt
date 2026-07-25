@@ -9,7 +9,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 
 LABEL_BY_TILE: dict[int, str] = {}
 
-for tile_index in range(4587, 4650):
+for tile_index in range(4586, 4650):
     LABEL_BY_TILE[tile_index] = "hover"
 
 for tile_index in range(4650, 4659):
@@ -30,8 +30,9 @@ for tile_index in range(4746, 4778):
 for tile_index in range(4778, 4786):
     LABEL_BY_TILE[tile_index] = "dissolve"
 LABEL_BY_TILE[4787] = "gravestone"
-for tile_index in range(4788, 4792):
-    LABEL_BY_TILE[tile_index] = "cast"
+# Tiles 4788-4791 are shared, detached Priestess casting-effect frames rather
+# than character poses. Leave them on the existing recolor path during this
+# body/action proof instead of stamping a second full Phantom into the effect.
 
 FRAME_ORDER = ("stand", "hover", "attack", "cast", "special", "dissolve")
 
@@ -39,21 +40,45 @@ FRAME_ORDER = ("stand", "hover", "attack", "cast", "special", "dissolve")
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sheet", required=True, type=Path)
+    parser.add_argument("--direction-03", required=True, type=Path)
+    parser.add_argument("--direction-04", required=True, type=Path)
+    parser.add_argument("--direction-05", required=True, type=Path)
     parser.add_argument("--gravestone-source", type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
     args = parser.parse_args()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    sheet = Image.open(args.sheet).convert("RGBA")
-    keyed = chroma_key(sheet)
-    frames = extract_frames(keyed)
-    if len(frames) < len(FRAME_ORDER):
-        raise ValueError(f"Expected at least {len(FRAME_ORDER)} generated sprite frames, got {len(frames)}")
+    direction_paths = (args.sheet, args.direction_03, args.direction_04, args.direction_05)
+    frames_by_direction: list[dict[str, Image.Image]] = []
+    for path in direction_paths:
+        frames = extract_frames(chroma_key(Image.open(path).convert("RGBA")))
+        if len(frames) < len(FRAME_ORDER):
+            raise ValueError(f"Expected six generated sprite frames in {path}, got {len(frames)}")
+        frames_by_direction.append(
+            {
+                label: prepare_frame(frames[index], label)
+                for index, label in enumerate(FRAME_ORDER)
+            }
+        )
 
-    frame_by_label = {
-        label: prepare_frame(frames[index], label)
-        for index, label in enumerate(FRAME_ORDER)
-    }
+    # The last two Majesty view slots are the exact opposite-side counterparts
+    # of the generated front-adjacent and rear-three-quarter views.
+    frames_by_direction.append(mirror_direction(frames_by_direction[2]))
+    frames_by_direction.append(mirror_direction(frames_by_direction[1]))
+
+    # Majesty's populated unit slots are not stored front-to-back. Stock
+    # Peasant/Warrior frames establish the compass turn as:
+    #   slot 2 back/north, 3 rear-side, 4 front-side, 5 front/south,
+    #   6 opposite front-side, 7 opposite rear-side.
+    # Generated sheets are held in the opposite, art-production order:
+    #   front, front-side, rear-side, back, mirrored rear-side,
+    #   mirrored front-side.
+    frames_by_direction = [
+        frames_by_direction[index]
+        for index in (3, 2, 1, 0, 5, 4)
+    ]
+
+    frame_by_label = frames_by_direction[0]
     if args.gravestone_source:
         frame_by_label["gravestone"] = prepare_frame(
             chroma_key(Image.open(args.gravestone_source).convert("RGBA")),
@@ -63,14 +88,114 @@ def main() -> int:
         frame_by_label["gravestone"] = frame_by_label["dissolve"]
 
     for tile_index, label in sorted(LABEL_BY_TILE.items()):
-        image = frame_by_label[label]
-        if should_flip_tile(tile_index):
-            image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        direction, stage, stage_count = animation_position(tile_index, label)
+        image = animated_frame(
+            frames_by_direction[direction],
+            label,
+            stage,
+            stage_count,
+        )
         image.save(args.out_dir / f"hero_tile_{tile_index:05d}.png")
 
     preview = make_preview(frame_by_label)
     preview.save(args.out_dir / "phantom_generated_hero_sprite_preview.png")
     return 0
+
+
+def mirror_direction(frames: dict[str, Image.Image]) -> dict[str, Image.Image]:
+    return {
+        label: image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        for label, image in frames.items()
+    }
+
+
+def animation_position(tile_index: int, label: str) -> tuple[int, int, int]:
+    if label == "hover":
+        direction = min(5, max(0, (tile_index - 4586) // 8))
+        position = (tile_index - 4586) % 8
+        # Each direction block begins with a header/base pose, followed by
+        # seven ordinary Walk frames. The engine periodically displays that
+        # base pose, so it must belong to this direction—not the preceding one.
+        stage = 3 if position == 0 else position - 1
+        return direction, stage, 7
+    if label == "stand":
+        return min(5, max(0, tile_index - 4650)), 0, 1
+    if label == "special":
+        direction = min(5, max(0, (tile_index - 4659) // 4))
+        return direction, min(2, (tile_index - 4659) % 4), 3
+    if label == "attack":
+        direction = min(5, max(0, (tile_index - 4690) // 4))
+        return direction, min(3, (tile_index - 4690) % 4), 4
+    if label == "dissolve" and tile_index < 4778:
+        direction = min(5, max(0, (tile_index - 4723) // 3))
+        return direction, min(1, (tile_index - 4723) % 3), 2
+    if label == "cast":
+        direction = min(5, max(0, (tile_index - 4746) // 4))
+        return direction, min(3, (tile_index - 4746) % 4), 4
+    if label == "dissolve":
+        return 0, min(7, max(0, tile_index - 4778)), 8
+    return 0, 0, 1
+
+
+def animated_frame(
+    direction_frames: dict[str, Image.Image],
+    label: str,
+    stage: int,
+    stage_count: int,
+) -> Image.Image:
+    if label == "dissolve" and stage_count == 2:
+        if stage == 0:
+            return transform_action(direction_frames["stand"], rotate=-2.0, scale=1.0)
+        return direction_frames["dissolve"].copy()
+
+    image = direction_frames[label].copy()
+    if label == "hover":
+        cycle = (-1.8, -0.8, 0.8, 1.8, 0.8, -0.8, -1.4)
+        return transform_action(image, rotate=cycle[stage], scale=1.0 + (0.01 if stage in (2, 3) else 0.0))
+    if label == "attack":
+        rotations = (-4.0, -1.5, 1.0, 2.5)
+        scales = (0.91, 0.96, 1.0, 1.03)
+        return transform_action(image, rotate=rotations[stage], scale=scales[stage])
+    if label == "cast":
+        scales = (0.90, 0.95, 1.0, 1.04)
+        brightness = (0.72, 0.84, 0.94, 1.08)
+        return ImageEnhance.Brightness(
+            transform_action(image, rotate=(-1.5, -0.5, 0.5, 1.0)[stage], scale=scales[stage])
+        ).enhance(brightness[stage])
+    if label == "special":
+        return ImageEnhance.Brightness(
+            transform_action(image, rotate=(-1.0, 0.0, 1.0)[stage], scale=(0.93, 1.0, 1.04)[stage])
+        ).enhance((0.78, 0.95, 1.08)[stage])
+    if label == "dissolve":
+        return progressive_dissolve(image, stage, stage_count)
+    return image
+
+
+def transform_action(image: Image.Image, *, rotate: float, scale: float) -> Image.Image:
+    resized = image.resize(
+        (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+        Image.Resampling.LANCZOS,
+    )
+    rotated = resized.rotate(rotate, resample=Image.Resampling.BICUBIC, expand=True)
+    return crop_alpha(rotated, pad=8)
+
+
+def progressive_dissolve(image: Image.Image, stage: int, stage_count: int) -> Image.Image:
+    image = image.copy()
+    pixels = image.load()
+    progress = stage / max(1, stage_count - 1)
+    cutoff = image.height * (0.98 - progress * 0.78)
+    for y in range(image.height):
+        for x in range(image.width):
+            red, green, blue, alpha = pixels[x, y]
+            if alpha == 0:
+                continue
+            noise = ((x * 37 + y * 19 + stage * 23) % 101) / 100.0
+            if y > cutoff and noise < progress * 0.92:
+                pixels[x, y] = (red, green, blue, 0)
+            elif progress > 0.55:
+                pixels[x, y] = (red, green, blue, round(alpha * (1.0 - (progress - 0.55) * 1.7)))
+    return crop_alpha(image, pad=8)
 
 
 def chroma_key(image: Image.Image) -> Image.Image:
@@ -79,18 +204,27 @@ def chroma_key(image: Image.Image) -> Image.Image:
     for y in range(image.height):
         for x in range(image.width):
             red, green, blue, alpha = pixels[x, y]
+            if red > 175 and blue > 155 and green < 115 and red > green * 1.8:
+                pixels[x, y] = (0, 0, 0, 0)
+                continue
             if green > 165 and red < 95 and blue < 95 and green > red * 1.7 and green > blue * 1.7:
                 pixels[x, y] = (0, 0, 0, 0)
                 continue
 
             if green > red and green > blue:
                 green = min(green, max(red, blue) + 18)
+            if red > green * 1.5 and blue > green * 1.4:
+                red = min(red, green + 28)
+                blue = min(blue, green + 34)
             pixels[x, y] = (red, green, blue, alpha)
     return image
 
 
 def extract_frames(sheet: Image.Image) -> list[Image.Image]:
     width, height = sheet.size
+    if width >= height and width < height * 2:
+        return extract_three_by_two_frames(sheet)
+
     frames: list[Image.Image] = []
     cell_width = width / len(FRAME_ORDER)
     for index in range(len(FRAME_ORDER)):
@@ -99,6 +233,42 @@ def extract_frames(sheet: Image.Image) -> list[Image.Image]:
         cell = sheet.crop((left, 0, right, height))
         remove_detached_ground_shadow(cell)
         frames.append(crop_alpha(cell, pad=18))
+    return frames
+
+
+def extract_three_by_two_frames(sheet: Image.Image) -> list[Image.Image]:
+    cell_width = sheet.width // 3
+    cell_height = sheet.height // 2
+    frames: list[Image.Image] = []
+
+    for index in range(len(FRAME_ORDER)):
+        column = index % 3
+        row = index // 3
+        left = column * cell_width
+        top = row * cell_height
+        right = sheet.width if column == 2 else (column + 1) * cell_width
+        bottom = sheet.height if row == 1 else (row + 1) * cell_height
+        cell = sheet.crop((left, top, right, bottom))
+
+        # The approved special pose's raised staff crosses the nominal row
+        # boundary. Restore only that isolated upper fragment; the adjacent
+        # movement pose is deliberately excluded.
+        if index == 4:
+            overlap_top = max(0, cell_height - 80)
+            staff_left = left + 145
+            staff_right = min(right, left + 250)
+            staff = sheet.crop((staff_left, overlap_top, staff_right, cell_height))
+            expanded = Image.new(
+                "RGBA",
+                (cell.width, cell.height + (cell_height - overlap_top)),
+                (0, 0, 0, 0),
+            )
+            expanded.alpha_composite(staff, (staff_left - left, 0))
+            expanded.alpha_composite(cell, (0, cell_height - overlap_top))
+            cell = expanded
+
+        frames.append(crop_alpha(cell, pad=8))
+
     return frames
 
 
@@ -235,20 +405,6 @@ def crop_alpha(image: Image.Image, pad: int = 0) -> Image.Image:
             min(image.width, right + pad),
             min(image.height, bottom + pad),
         )
-    )
-
-
-def should_flip_tile(tile_index: int) -> bool:
-    # Priestess directions 2-4 are mirrored-ish relative to the generated
-    # down-right source pose. This is only a first-pass proof; true final art
-    # should use generated directional source frames instead.
-    return (
-        4587 <= tile_index <= 4609
-        or 4650 <= tile_index <= 4652
-        or 4659 <= tile_index <= 4669
-        or 4690 <= tile_index <= 4701
-        or tile_index in {4723, 4724, 4726, 4727, 4729, 4730}
-        or 4746 <= tile_index <= 4757
     )
 
 

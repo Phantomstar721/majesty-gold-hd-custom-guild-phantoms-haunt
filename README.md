@@ -226,6 +226,14 @@ The working custom guild sprite path is:
   `assets\source\phantom-guild-construction-proof-v1.png`. This is a
   high-resolution generated interpretation of normal construction stages,
   downscaled into the stock Fervus build-state tile sizes.
+- Generate distinct destruction transitions from
+  `assets\source\phantom-guild-damaged-b-sample-v1.png` and
+  `assets\source\phantom-guild-collapsed-intermediate-sample-v1.png`.
+  The resulting Fervus-compatible progression is damaged A (`1529`), damaged B
+  (`1530`), collapsed intermediate (`1531`), and final rubble (`1508`).
+- Process every destruction source independently through palette grading and
+  geometry-derived upper-left shadow generation. Do not reuse the full-building
+  shadow mask on a lower collapse state.
 - Append those rendered tiles to `phantom_maindata.cam` under `PHG1Bld####`
   tile entries.
 - Remap only the cloned `PHG1Phantom Guild` image entry to the appended tile
@@ -254,6 +262,21 @@ behavior while keeping the Fervus construction scaffold:
   `building_active_frame_00.png` through `building_active_frame_07.png`.
 - These are full-building frames generated from the same smooth Phantom Guild
   source art, with only the cyan highlight intensity pulsed.
+- The generator also projects each clean building silhouette down and left,
+  painting a three-band cast shadow with Majesty's reserved palette indices
+  `248`, `249`, and `250`, with transition key `247` only where shadow meets
+  the outer building edge. The clean source sheets remain unchanged; the
+  magenta shadow-key pixels exist only in generated `dist\temp` frames and the
+  encoded custom TILE records.
+- Surface lighting and self-shadowing remain authored into the ordinary
+  building artwork. Do not project the ground-shadow mask across opaque
+  building pixels; it is not a valid self-shadow mask for isometric geometry.
+  Generate each construction state from its own visible silhouette so an
+  unfinished foundation does not cast the completed tower's shadow.
+- The custom world frames use registered palette `560`. Do not append a new
+  SPLT index for shadow colors: Majesty does not extend its runtime palette
+  registry from a mod CAM and will fail with an
+  `Attempt to do 816 blit without a palette` error.
 - `src\build_phantom_guild.py` appends those frames as `PHG1Act00` through
   `PHG1Act07`.
 - The cloned `PHG1Phantom Guild` image record has only its stock `Active`
@@ -262,6 +285,19 @@ behavior while keeping the Fervus construction scaffold:
 
 This gave the desired occupied-building pulse without reintroducing Wizard
 Guild construction effects or breaking normal peasant construction.
+
+Majesty does not derive these shadows from sprite alpha at runtime. Stock
+building TILE records contain authored pixels in reserved palette indices
+`247-250`, shown as red/magenta by raw asset viewers and interpreted as
+shadow/blend keys by the game. Clean extractor previews intentionally hide
+those indices, so replacement art must regenerate or explicitly preserve them.
+
+The palette keys alone are not sufficient. Majesty applies their special blit
+behavior at the TILE v3 RLE-segment level. A shadow-control run and ordinary
+building artwork must be encoded as separate, immediately touching segments;
+combining them makes the engine consume building pixels in horizontal bands.
+See [Majesty Building Shadow Encoding](docs/majesty-building-shadow-encoding.md)
+before creating or changing custom building sprites.
 
 ### Custom Icon Art
 
@@ -337,6 +373,9 @@ segment at:
 Treating `x_end` as a start position causes sheared or oversized frames and can
 make custom art look corrupted even when the CAM structure is otherwise valid.
 
+Shadowed building TILEs have an additional segment-boundary requirement; see
+[Majesty Building Shadow Encoding](docs/majesty-building-shadow-encoding.md).
+
 ### Custom Hero Sprite
 
 The Phantom in-map sprite uses `AVG1Priestess` as the animation and image-record
@@ -361,7 +400,7 @@ Current build input:
 ```text
 assets\source\phantom-guild-sprite-sheet-smooth.png
 assets\source\phantom-guild-construction-proof-v1.png
-assets\source\phantom-hero-sprite-source-sheet.png
+assets\source\phantom-hero-major-actions-preview-v3.png
 assets\source\phantom-gravestone-source.png
 assets\source\phantom-interface-panel-source.png
 ```
@@ -377,10 +416,52 @@ source for rough opposite directions. A final-quality hero sprite should use a
 true directional source sheet, but the generated-source/downscale path is the
 right workflow.
 
-Do not bake normal ground shadows into hero sprite frames. Stock hero frames do
-not appear to carry their own painted shadows; shadows should be treated as a
-separate engine/rendering concern unless later testing proves a specific unit
-needs an explicit custom shadow.
+Stock hero TILEs carry engine shadow controls at reserved palette indices
+247-250. The Phantom does not reuse the Priestess's walking foot-and-robe
+silhouettes. Instead, the builder derives a dark-body mask from each rendered
+direction's neutral hover frame, excludes bright cyan/white spell effects,
+flattens and projects that canonical body mask toward the upper-left, and
+offsets the lowest projected pixels from the robe so the shadow remains
+detached and the hero reads as floating. Reusing the directional hover caster
+keeps attacks, spells, and weapons from changing or deleting the ground
+silhouette. The projection length is deliberately constrained to fit the
+narrowest native Priestess direction TILE: the visible hero remains enlarged,
+while the flattened shadow caster is scaled independently to preserve the
+stock canvas margin rather than clipping the projected silhouette at its edge.
+It fades through the shared dissolve sequence and emits body/control runs as
+separate RLE segments. The purple colors visible in raw review PNGs are
+control-key visualization, not painted ground shadow.
+
+After body clearance, keep only the largest connected shadow-control component.
+Projection quantization can otherwise strand the hood/head as a small
+upper-left island that the engine renders as an implausible detached shadow.
+
+The production hero source now uses six direction slots. Directions 2-5 have
+dedicated approved/generated 3x2 major-action sheets; directions 6-7 are exact
+opposite-side mirrors of directions 4-3 for costume consistency. The generator
+maps them into the real Priestess animation topology: seven floating movement
+frames, four-stage attacks, four-stage casts, three-stage specials,
+direction-specific death starts, and the shared eight-frame dissolve.
+
+Majesty's populated unit slots rotate from back/north to front/south rather
+than following art-generation order: slot 2 is back/north, 3 rear-side,
+4 front-side, 5 front/south, 6 opposite front-side, and 7 opposite rear-side.
+The generator therefore applies the explicit source permutation
+`back, rear-side, front-side, front, mirrored front-side, mirrored rear-side`.
+
+Walk directions occupy eight-TILE blocks beginning at tile 4586. The first
+TILE in each block is a header/base pose that the engine periodically displays;
+the following seven are the normal Walk sequence. Direction assignment must
+therefore use `(tile - 4586) // 8`, including base tiles 4586, 4594, 4602,
+4610, 4618, and 4626. Starting at 4587 assigns every later base pose to the
+previous direction and causes a recurring one-frame facing flip in-game.
+
+Shared dissolve TILEs `4778-4785` use increasingly large stock effect canvases.
+Replacement art must cap their character anchor height instead of fitting each
+frame independently, or the dying Phantom grows to several times normal size
+before the gravestone appears. Shared frames `4783` and `4784` additionally
+require a `-52` pixel vertical correction because their stock effect anchors
+sit well below the surrounding death frames.
 
 Tile `4793` in the Priestess scaffold is retained as a useful character/guild
 interface-panel reference. The active guild panel background path currently
@@ -388,6 +469,12 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
 
 ## Current Limitations
 
+- The Phantom death sequence is not final. Its shared middle dissolve frames
+  still look spatially inconsistent in game even after their gross scale and
+  vertical-anchor corrections. Review the actual engine sequence again before
+  changing more offsets.
+- The current Phantom gravestone is a temporary first pass and is next in line
+  for a complete visual redesign.
 - `Frost Armor` and `Blizzard` still need a dedicated stability pass.
 - The Phantom Guild borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
@@ -395,11 +482,36 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
 - The Phantom Guild is still a proof of concept rather than a balanced finished
   content mod.
 
+## Next Session
+
+Checkpoint recorded July 25, 2026:
+
+- The building, construction progression, destruction progression, cast
+  shadows, shadow seams, and construction pit cleanup are working in game.
+- The generated and decoded-CAM validators now reject mixed shadow/body RLE
+  runs, missing seams, bounded transparent construction pits, and transparent
+  islands enclosed entirely by shadow controls.
+- The directional Phantom hero, floating movement, action frames, corrected
+  direction mapping, projected detached shadows, movement speed, bravery
+  behavior, and reward responsiveness are working well enough to retain.
+- Remaining hero-art issue: clean up the death sequence, especially the
+  visually strange middle frames. Do this first and validate the complete
+  in-game transition from living sprite through dissolve to gravestone.
+- After death frames are approved, redesign and replace the Phantom gravestone.
+- After the hero and gravestone are locked, move on to the spell pass: review
+  and finish Ice Lance, Frost Armor, and Blizzard behavior, effects, stability,
+  and final presentation.
+
 ## Build
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-PhantomGuildPoc.ps1
 ```
+
+The build automatically performs a fast structural verification after GPL
+compilation. A successful build prints `Verification passed.`; a malformed or
+incomplete package stops with the specific archive, entry, size, or reference
+that failed verification.
 
 Build output goes to:
 
