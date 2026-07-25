@@ -16,7 +16,8 @@ This currently builds:
   - `Frozen Cowl`, item ID `80`, grants `+1` armor.
   - `Black Icerod`, item ID `81`, grants `+8` weapon damage.
   - Phantom starter items are removed by `Phantom_death` before normal
-    gravestone handling, so they do not drop as loot.
+    gravestone handling, and are marked non-droppable so leaving the realm
+    through the palace deletes them instead of spawning them as ground loot.
 - Generated placeholder voice/soundbite WAVs.
 - Wizard-style hero stats and Wizard decision-tree behavior through
   `Phantom_tree`.
@@ -107,6 +108,15 @@ logic runs. The current build does that with `Phantom_death`, which deletes only
 `gravestone` flow so other legitimate inventory items still behave normally.
 Add any future Phantom-only starter or class gear to
 `Phantom_remove_starter_items` at the same time it is granted.
+
+Class gear that must never become loot also needs
+`<Attribute ID="CanDropItem" Value="0"/>` in its unit description. Majesty's
+stock `flee_map` path calls `Hero_Drop_Quest_Items` after a departing hero
+enters the palace. `CanDropItem=1` makes that function delete the inventory
+entry and spawn its world-item agent beside the palace; `0` makes it delete the
+entry without spawning anything. This covers palace realm exit and other stock
+inventory-drain paths without replacing the global `flee_map` routine. Keep the
+explicit `Phantom_death` cleanup as a defensive, class-scoped death path.
 
 ## Implementation Notes
 

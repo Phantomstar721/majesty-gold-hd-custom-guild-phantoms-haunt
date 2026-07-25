@@ -252,7 +252,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Flags value="IsInventoryItem"/>
 \t\t\t<HelpID value="h020"/>
 \t\t\t<Attributes>
-\t\t\t\t<Attribute ID="CanDropItem" Value="1"/>
+\t\t\t\t<Attribute ID="CanDropItem" Value="0"/>
 \t\t\t\t<Attribute ID="Phantom_Item_FrozenCowl" Value="0"/>
 \t\t\t</Attributes>
 \t\t</Game>
@@ -276,7 +276,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Flags value="IsInventoryItem"/>
 \t\t\t<HelpID value="h020"/>
 \t\t\t<Attributes>
-\t\t\t\t<Attribute ID="CanDropItem" Value="1"/>
+\t\t\t\t<Attribute ID="CanDropItem" Value="0"/>
 \t\t\t\t<Attribute ID="Phantom_Item_BlackIcerod" Value="0"/>
 \t\t\t</Attributes>
 \t\t</Game>

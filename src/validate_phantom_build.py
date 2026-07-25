@@ -1180,6 +1180,37 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
             fail(f"{output_root}: generated text retains stale building name {stale_name!r}")
 
 
+def validate_phantom_item_cleanup(output_root: Path) -> None:
+    units_path = output_root / "Data" / "phantom_units.xml"
+    tree = parse_xml(units_path)
+    for item_id in ("FrozenCowl", "BlackIcerod"):
+        description = tree.find(f'.//Description[@ID="{item_id}"]')
+        if description is None:
+            fail(f"{units_path}: Phantom starter item {item_id} is missing")
+        can_drop = description.find('.//Attribute[@ID="CanDropItem"]')
+        if can_drop is None or can_drop.get("Value") != "0":
+            fail(
+                f"{units_path}: Phantom starter item {item_id} must set "
+                "CanDropItem=0 so realm exit deletes it instead of spawning loot"
+            )
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    cleanup_contract = (
+        "function Phantom_death(agent thisagent)",
+        "$Phantom_remove_starter_items(thisagent);",
+        "$gravestone(thisagent);",
+        "function Phantom_remove_starter_items(agent thisagent)",
+        "While ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent))",
+        "$DeleteInventoryItem(#Phantom_Item_FrozenCowl, thisagent);",
+        "While ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent))",
+        "$DeleteInventoryItem(#Phantom_Item_BlackIcerod, thisagent);",
+    )
+    missing = [value for value in cleanup_contract if value not in gpl]
+    if missing:
+        fail(f"{gpl_path}: Phantom starter-item cleanup is missing {missing}")
+
+
 def validate_ice_lance_contract(output_root: Path) -> None:
     actions_path = output_root / "Data" / "phantom_actions.xml"
     actions = actions_path.read_text(encoding="utf-8")
@@ -1253,6 +1284,7 @@ def validate(output_root: Path) -> None:
     validate_descriptions(output_root)
     validate_bcd_copy(output_root)
     validate_phantoms_haunt_identity(output_root)
+    validate_phantom_item_cleanup(output_root)
     validate_ice_lance_contract(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
