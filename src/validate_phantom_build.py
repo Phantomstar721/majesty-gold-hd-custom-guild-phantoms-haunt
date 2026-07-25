@@ -52,6 +52,7 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
             b"WRa3Frost Armor",
             b"WRa4Blizzard",
             b"PHo3Ice Lance Hit",
+            b"PHo4chill_icon",
         },
         b"TILE": set(),
         b"SPLT": set(),
@@ -91,6 +92,8 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHo1"),
         ("Unit", "PHo2"),
         ("Unit", "PHo3"),
+        ("Unit", "PHo4"),
+        ("Unit", "PHo5"),
     },
     "phantom_sounds.xml": {
         ("Sound", "PH01"),
@@ -107,6 +110,7 @@ CUSTOM_TILE_OWNERS = {
     b"PHM1PhantomTile": (b"PHM1Phantom", "low16"),
     b"PHM1CastGlow": (b"PHM1Phantom", "low16"),
     b"PHo3IceTile": (b"PHo3Ice Lance Hit", "u32"),
+    b"PHc1ChillTile": (b"PHo4chill_icon", "u32"),
 }
 
 EXPECTED_CUSTOM_TILE_COUNTS = {
@@ -118,6 +122,7 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHM1PhantomTile": 204,
     b"PHM1CastGlow": 32,
     b"PHo3IceTile": 6,
+    b"PHc1ChillTile": 29,
 }
 
 ALIGNED_PHANTOM_DISSOLVE_TILES = {
@@ -1175,6 +1180,72 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
             fail(f"{output_root}: generated text retains stale building name {stale_name!r}")
 
 
+def validate_ice_lance_contract(output_root: Path) -> None:
+    actions_path = output_root / "Data" / "phantom_actions.xml"
+    actions = actions_path.read_text(encoding="utf-8")
+    if '<EffectorDuration value="3000"/>' not in actions:
+        fail(f"{actions_path}: Ice Lance Chill duration is not 3000")
+
+    overlays_path = output_root / "Data" / "phantom_overlays.xml"
+    overlays = overlays_path.read_text(encoding="utf-8")
+    overlay_contract = (
+        'ID="PHo4" Name="ice_lance_chill_icon"',
+        '<Info value="NotVisibleInISOView"/>',
+        '<ImageIDBase value="PHo3"/>',
+        'GPLFunction="Ice_Lance_Chill_End"',
+    )
+    missing_overlay = [value for value in overlay_contract if value not in overlays]
+    if missing_overlay:
+        fail(f"{overlays_path}: Ice Lance Chill overlay is missing {missing_overlay}")
+    visual_overlay_contract = (
+        'ID="PHo5" Name="ice_lance_chill_visual"',
+        '<ImageIDBase value="PHo4"/>',
+    )
+    missing_visual_overlay = [value for value in visual_overlay_contract if value not in overlays]
+    if missing_visual_overlay:
+        fail(f"{overlays_path}: Ice Lance Chill visual is missing {missing_visual_overlay}")
+
+    hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
+    hero_data = hero_data_path.read_text(encoding="utf-8")
+    if "(castingrange 220)" not in hero_data:
+        fail(f"{hero_data_path}: Phantom casting range is not 220")
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    gpl_contract = (
+        "$spell_attack(thisagent, target, 8);",
+        '$createeffector(target, "ice_lance_hit_effector", 0);',
+        'If ($CheckEffector(target, "ice_lance_chill_icon"))',
+        '$DeleteEffector(target, "ice_lance_chill_icon");',
+        "#ATTRIB_MovementRateModifier, 50",
+        "#ATTRIB_ActionRateModifier, 500",
+        '$CreateEffector(target, "ice_lance_chill_icon", $GetSpellAttribute("ice_lance", "effector_duration"));',
+        'If ($CheckEffector(target, "ice_lance_chill_visual"))',
+        '$DeleteEffector(target, "ice_lance_chill_visual");',
+        '$CreateEffector(target, "ice_lance_chill_visual", $GetSpellAttribute("ice_lance", "effector_duration"));',
+        "function Ice_Lance_Chill_End(agent thisagent)",
+        "#ATTRIB_MovementRateModifier, -50",
+        "#ATTRIB_ActionRateModifier, -500",
+    )
+    missing_gpl = [value for value in gpl_contract if value not in gpl]
+    if missing_gpl:
+        fail(f"{gpl_path}: Ice Lance behavior contract is missing {missing_gpl}")
+    centered_unit_impact = gpl.index(
+        '$createeffector(target, "ice_lance_hit_effector", 0);'
+    )
+    building_branch = gpl.index(
+        'If (target\'s "Type" == "Building" || target\'s "Type" == "Lair")'
+    )
+    chill_application = gpl.index(
+        'If ($CheckEffector(target, "ice_lance_chill_icon"))'
+    )
+    if not centered_unit_impact < building_branch < chill_application:
+        fail(
+            f"{gpl_path}: native hit overlay must apply before the "
+            "building/lair Chill guard"
+        )
+
+
 def validate(output_root: Path) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
@@ -1182,6 +1253,7 @@ def validate(output_root: Path) -> None:
     validate_descriptions(output_root)
     validate_bcd_copy(output_root)
     validate_phantoms_haunt_identity(output_root)
+    validate_ice_lance_contract(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:

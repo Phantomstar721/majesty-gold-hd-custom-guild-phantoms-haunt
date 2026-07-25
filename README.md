@@ -20,8 +20,9 @@ This currently builds:
 - Generated placeholder voice/soundbite WAVs.
 - Wizard-style hero stats and Wizard decision-tree behavior through
   `Phantom_tree`.
-- A Phantom-only `Ice Lance` spell entry, custom directional projectile art,
-  and copied Frost Field hit overlay art.
+- A Phantom-only `Ice Lance` spell entry, generated-source directional
+  projectile and icon art, a copied Frost Field hit overlay, and a timed Chill
+  debuff.
 
 The in-map animated hero sprite is currently based on the Priestess of Krypta
 sprite set with a Phantom recolor.
@@ -332,10 +333,120 @@ The working custom directional projectile path is:
 This keeps Wizard spell visuals independent while still reusing the stock
 directional projectile image layout that Majesty already knows how to render.
 
+The projectile and both Ice Lance icons now derive from the generated,
+transparent high-resolution source:
+
+```text
+assets\source\ice-lance-projectile-source-v2.png
+```
+
+The CAM builder crops the source silhouette, rotates it into all 32 inherited
+Fire Blast directions, downscales it into each native projectile TILE, and
+nudges the visible art slightly forward along the travel vector so the first
+frame reads ahead of the caster anchor. `scripts\create_ice_lance_review.py`
+decodes all 32 packaged directions into the persistent
+`artifacts\reviews\ice-lance-directional-packaged-review.png` contact sheet.
+The approved `v2` source compresses the original value range into neutral
+arctic blues and pale cyan-white highlights; `v1` remains beside it as the
+higher-contrast rollback source.
+
 The generated Ice Lance projectile tiles use stock palette `161`. That palette
 has cyan, blue, and white entries that render correctly for icy art. Palette
 index `255` and magenta-like colors must be avoided when converting RGB pixels,
 or visible pixels can become transparent/keyed out in-game.
+
+Ice Lance deals `8` damage, compared with stock Energy Blast's `10`. The
+Phantom's casting range is `220`, slightly below the Wizard's `240`. Majesty
+stores casting range on the hero rather than the individual spell, so this
+technically applies to the Phantom's complete spell kit; Frost Armor is
+self-targeted and Blizzard is caster-centered, making Ice Lance the only
+current spell materially affected.
+
+On a non-building target, `Ice_Lance_Hit` creates the original invisible
+`ice_lance_chill_icon` timer for three seconds and adds `50` to
+`ATTRIB_MovementRateModifier` and `500` to `ATTRIB_ActionRateModifier`.
+These engine modifiers use different scales rather than percentages: the
+movement value provides a gentler slow, while the larger action value follows
+stock Majesty slow effects closely enough to make action delay observable.
+`Ice_Lance_Chill_End` reverses both values.
+On a repeated hit, the existing effector is deleted so its callback first
+reverses the old modifiers, then Chill is reapplied with a fresh three-second
+timer. This refreshes the duration without stacking the penalty. The mechanic
+otherwise retains the first working Chill implementation recovered from the
+original Codex session transcript.
+
+The mechanical timer remains an invisible `PHo4` overlay and is the sole owner
+of the cleanup callback. A separate visual-only `PHo5` overlay displays the
+custom cyan snowflake through the packaged `PHo4chill_icon` image. The image
+uses the larger stock animated-status canvas and contains 29 distinct frames:
+the snowflake spins around its vertical axis through horizontal perspective
+compression, with a subtle scale pulse and vertical bob. A cyan glint sweeps
+across its face to make the turn readable even though the snowflake itself is
+symmetrical. Its layered dark-blue, bright-cyan, and pale-cyan strokes are
+tuned for the stronger size and vibrancy of Majesty's Wither-style status
+effects. Every hit refreshes both overlays independently, so the symbol tracks
+the three-second Chill duration without participating in modifier application
+or cleanup.
+
+### Chill and status-effect implementation notes
+
+Majesty's rate modifiers are fixed engine offsets, not percentage inputs.
+`ATTRIB_MovementRateModifier` and `ATTRIB_ActionRateModifier` also use different
+numeric scales; assigning the same number to both does not produce the same
+slow and can make it appear that both modifiers affected movement. The working
+Ice Lance values are therefore intentionally different (`+50` movement and
+`+500` action). Positive values slow the corresponding rate, and the cleanup
+callback applies the exact negatives. Because units have different base
+movement classes and action timings, one fixed modifier can produce different
+effective percentage changes between units. No dependable GPL path was found
+for converting the live speed/action class into an exact percentage reduction,
+and stock effects such as Medusa-style slows likewise use fixed modifiers.
+Treat this as a mild Chill, not a guaranteed numeric-percent debuff.
+
+The safe non-stacking refresh sequence is:
+
+1. If the mechanical timer effector exists, delete it. Deletion runs its end
+   callback and reverses the previous modifiers.
+2. Apply the movement and action modifiers once.
+3. Recreate the mechanical effector for the full duration.
+4. Independently delete and recreate the visual effector for the same duration.
+
+Do not apply another set of modifiers before deleting the old mechanical
+effector. Do not give the visual overlay a cleanup callback: modifier ownership
+must stay centralized in one timer so multiple Phantoms refresh rather than
+stack. The three-second duration lives on the `ice_lance` action as
+`EffectorDuration`; both effectors read it through `$GetSpellAttribute`, so the
+timer and icon cannot silently drift apart.
+
+For floating buff/debuff symbols, cloning an existing animated status-image
+layout is more reliable than inventing overlay geometry. Chill clones the
+29-frame `XR25plague_icon` image record, appends custom remapped TILE records,
+and keeps the template's canvas, hotspot, and timing. The mechanical `PHo4`
+overlay uses `NotVisibleInISOView`; visible `PHo5` points at the generated
+`PHo4chill_icon` image. The snowflake needs stronger scale, line weight, and
+cyan contrast than an isolated review suggests because in-game terrain and
+sprites reduce legibility. Its approved animation simulates rotation around
+the vertical axis by compressing the horizontal dimension, plus a small bob,
+pulse, and sweeping glint. Rotating the entire snowflake in the image plane
+reads as a wheel and was rejected.
+
+Impact visuals and debuffs should remain separate. Ice Lance creates its native
+hit overlay before the building/lair guard, so every surviving target shows the
+six-frame impact, while only units continue into Chill. Attaching the overlay
+to a large building uses the building's engine anchor and can place late frames
+near its center, but it is the stable native behavior. A coordinate-spawned
+Character is unsafe because it becomes a real gameplay unit and can leave
+placeholder dots or disrupt AI. A coordinate-spawned particle system compiled
+but did not render the intended animated overlay in game, so that path was also
+removed.
+
+Buildings and lairs take Ice Lance damage and receive the same native animated
+Frost Field hit overlay as units, but do not receive Chill. Majesty attaches
+that overlay to the target's engine anchor, matching the standard projectile
+impact path even though the final frames may sit nearer a large building's
+center. Coordinate-spawned characters and particle-system impact anchors are
+not used; those experiments either disrupted gameplay logic or failed to
+render the intended animation.
 
 The copied hit effect uses the Frost Field hit overlay from `DataMX`:
 
@@ -500,8 +611,16 @@ Checkpoint recorded July 25, 2026:
   recovery direction, clipping, and frame-size drift.
 - Phantom retreat and combat estimates are temporarily set to a fearless
   testing profile so spell behavior can be exercised without frequent retreat.
-- Next: review and finish Ice Lance, Frost Armor, and Blizzard behavior,
-  effects, stability, and final presentation.
+- Ice Lance now has final-path generated-source projectile/icon art, 32 packaged
+  directions, `8` damage, `220` Phantom casting range, native impact animation,
+  and a centralized three-second non-stacking movement/action Chill with an
+  approved animated cyan snowflake indicator.
+- Ice Lance has passed the current in-game art, direction, impact, damage,
+  refresh, non-stacking, movement-slow, action-slow, duration, and status-icon
+  review. The fixed modifiers deliberately describe a mild Chill rather than
+  promising an exact percentage on every unit.
+- Next: continue with Frost Armor and Blizzard behavior, effects, stability,
+  and final presentation.
 
 ## Build
 

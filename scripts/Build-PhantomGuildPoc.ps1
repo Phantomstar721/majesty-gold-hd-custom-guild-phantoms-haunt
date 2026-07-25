@@ -14,6 +14,7 @@ param(
     [string]$HeroDeathConcept = ".\assets\source\phantom-hero-death-concept-v2.png",
     [string]$HeroDeathDirectionals = ".\assets\source\phantom-hero-death-directionals-v1.png",
     [string]$HeroCastGlow = ".\assets\source\phantom-cast-staff-glow-v2.png",
+    [string]$IceLanceProjectileSource = ".\assets\source\ice-lance-projectile-source-v2.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
     [string]$GplCompiler = ""
 )
@@ -187,6 +188,7 @@ if ($LASTEXITCODE -ne 0) {
     --interface-panel-rgb $interfacePanelRgb `
     --building-dialog-panel-rgb $interfacePanelRgb `
     --ice-lance-icon-rgb $iceLanceIconRgb `
+    --ice-lance-projectile-source-png (Resolve-RepoPath $IceLanceProjectileSource) `
     --ice-lance-spell-icon-rgb $iceLanceSpellIconRgb `
     --frost-armor-spell-icon-rgb $frostArmorSpellIconRgb `
     --blizzard-spell-icon-rgb $blizzardSpellIconRgb `

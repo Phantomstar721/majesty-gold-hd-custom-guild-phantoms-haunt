@@ -40,7 +40,9 @@ PHANTOM_ICE_LANCE_PROJECTILE = b"PHp1fire_blast_M"
 PHANTOM_FROST_ARMOR_ICON = b"WRa3Frost Armor"
 PHANTOM_BLIZZARD_ICON = b"WRa4Blizzard"
 FROST_FIELD_HIT_IMAGE = b"XR30frost_fld_hit"
+CHILL_ICON_TEMPLATE_IMAGE = b"XR25plague_icon"
 PHANTOM_ICE_LANCE_HIT_IMAGE = b"PHo3Ice Lance Hit"
+PHANTOM_CHILL_ICON_IMAGE = b"PHo4chill_icon"
 HERO_PORTRAIT_TILE = 6293
 HERO_ICON_TILE = 6299
 BUILDING_PROFILE_TILE = 1509
@@ -106,6 +108,7 @@ def main() -> int:
     parser.add_argument("--interface-panel-rgb", type=Path)
     parser.add_argument("--building-dialog-panel-rgb", type=Path)
     parser.add_argument("--ice-lance-icon-rgb", type=Path)
+    parser.add_argument("--ice-lance-projectile-source-png", type=Path)
     parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
     parser.add_argument("--frost-armor-spell-icon-rgb", type=Path)
     parser.add_argument("--blizzard-spell-icon-rgb", type=Path)
@@ -152,6 +155,7 @@ def main() -> int:
         args.hero_sprite_png_dir,
         args.interface_panel_rgb,
         args.ice_lance_icon_rgb,
+        args.ice_lance_projectile_source_png,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
     )
     write_interfacedata_cam(
@@ -321,6 +325,7 @@ def phantom_actions_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<Flags value="IsSpell"/>
+\t\t\t<EffectorDuration value="3000"/>
 \t\t\t<TimeoutDuration value="2500"/>
 \t\t\t<SpellType value="Attack"/>
 \t\t\t<CharacterLevel value="1"/>
@@ -427,6 +432,34 @@ def phantom_overlays_xml() -> str:
 \t\t\t<StackPriority value="1"/>
 \t\t</Game>
 \t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHo4" Name="ice_lance_chill_icon" Description="Chilled">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Info value="NotVisibleInISOView"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHo3"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Ice_Lance_Chill_End"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="1"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHo5" Name="ice_lance_chill_visual" Description="Chilled">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHo4"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="1"/>
+\t\t</Game>
+\t</Description>
 </Majesty>
 """
 
@@ -491,7 +524,7 @@ def phantom_hero_data() -> str:
 \t\t(PrimaryStat ATTRIB_Intelligence)
 \t\t(Friend\txx)
 \t\t(attacktype 1)
-\t\t(castingrange 240)
+\t\t(castingrange 220)
 \t\t(PercentageHPRetreat 0)
 \t\t(enemy_estimation 0.1)
 \t\t(self_estimation 10.0)
@@ -674,8 +707,38 @@ declare
 
 begin
 \t$PlaySound(target, "Energy_Blast", "Attack");
+\t$spell_attack(thisagent, target, 8);
+
+\tIf ($isdead(target))
+\t\treturn;
+
 \t$createeffector(target, "ice_lance_hit_effector", 0);
-\t$spell_attack(thisagent, target, 18);
+
+\tIf (target's "Type" == "Building" || target's "Type" == "Lair")
+\t\treturn;
+
+\tIf ($CheckEffector(target, "ice_lance_chill_icon"))
+\t\t$DeleteEffector(target, "ice_lance_chill_icon");
+
+\t$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
+\t$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
+\t$CreateEffector(target, "ice_lance_chill_icon", $GetSpellAttribute("ice_lance", "effector_duration"));
+
+\tIf ($CheckEffector(target, "ice_lance_chill_visual"))
+\t\t$DeleteEffector(target, "ice_lance_chill_visual");
+\t$CreateEffector(target, "ice_lance_chill_visual", $GetSpellAttribute("ice_lance", "effector_duration"));
+end
+
+function Ice_Lance_Chill_End(agent thisagent)
+
+declare
+
+begin
+\tIf ($isdead(thisagent))
+\t\treturn;
+
+\t$AdjustAttribute(thisagent, #ATTRIB_MovementRateModifier, -50);
+\t$AdjustAttribute(thisagent, #ATTRIB_ActionRateModifier, -500);
 end
 
 function Phantom_death(agent thisagent)
@@ -959,6 +1022,7 @@ def write_maindata_cam(
     hero_sprite_png_dir: Path | None,
     interface_panel_rgb: Path | None,
     ice_lance_icon_rgb: Path | None,
+    ice_lance_projectile_source_png: Path | None,
     ice_effect_maindata: Path | None,
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
@@ -973,6 +1037,9 @@ def write_maindata_cam(
     ice_lance_hit_effect: bytes | None = None
     ice_effect_tiles: list[bytes] = []
     source_ice_tile_indices: list[int] = []
+    chill_icon_image: bytes | None = None
+    chill_icon_template_tiles: list[bytes] = []
+    source_chill_icon_tile_indices: list[int] = []
     if ice_effect_maindata:
         source_ice_lance_hit_effect = read_cam_entry(
             ice_effect_maindata,
@@ -999,6 +1066,18 @@ def write_maindata_cam(
                     )
                     for index in source_ice_tile_indices
                 ]
+        chill_icon_image = read_cam_entry(
+            ice_effect_maindata,
+            b"IMAG",
+            CHILL_ICON_TEMPLATE_IMAGE,
+        ).data
+        source_chill_icon_tile_indices = sorted(
+            animation_tile_indices(chill_icon_image, len(source_ice_effect_tiles))
+        )
+        chill_icon_template_tiles = [
+            source_ice_effect_tiles[source_tile_index].data
+            for source_tile_index in source_chill_icon_tile_indices
+        ]
 
     phantom_sprite_tile_indices = sorted(
         index
@@ -1154,6 +1233,7 @@ def write_maindata_cam(
                         frame_index,
                         ICE_LANCE_PROJECTILE_FRAMES_PER_DIRECTION,
                         projectile_angle_for_direction(direction_index),
+                        ice_lance_projectile_source_png,
                     ),
                 )
             )
@@ -1281,6 +1361,31 @@ def write_maindata_cam(
             )
         ice_lance_hit_effect = remap_imag_animation_tiles(ice_lance_hit_effect, ice_tile_replacements)
 
+    if chill_icon_image and chill_icon_template_tiles and source_chill_icon_tile_indices:
+        first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
+        chill_tile_replacements: dict[int, int] = {}
+        frame_count = len(source_chill_icon_tile_indices)
+        for frame_index, (source_tile_index, template_tile) in enumerate(
+            zip(source_chill_icon_tile_indices, chill_icon_template_tiles)
+        ):
+            custom_tile_index = first_custom_tile_index + frame_index
+            chill_tile_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHc1ChillTile{frame_index}".encode("ascii")),
+                    data=generated_chill_snowflake_tile(
+                        template_tile,
+                        palettes,
+                        frame_index,
+                        frame_count,
+                    ),
+                )
+            )
+        chill_icon_image = remap_imag_animation_tiles(
+            chill_icon_image,
+            chill_tile_replacements,
+        )
+
     palette_indices: set[int] = set()
     tile_entries: list[CamEntry] = []
     for tile_index in range(max_tile_index + 1):
@@ -1327,6 +1432,8 @@ def write_maindata_cam(
     ]
     if ice_lance_hit_effect:
         image_entries.append(CamEntry(name=pad_name(PHANTOM_ICE_LANCE_HIT_IMAGE), data=ice_lance_hit_effect))
+    if chill_icon_image:
+        image_entries.append(CamEntry(name=pad_name(PHANTOM_CHILL_ICON_IMAGE), data=chill_icon_image))
     write_cam(
         (
             CamSection(
@@ -2721,6 +2828,7 @@ def generated_ice_lance_projectile_tile(
     frame_index: int,
     frame_count: int,
     angle: float | None = None,
+    source_png: Path | None = None,
 ) -> bytes:
     if len(original_tile) < 26:
         return original_tile
@@ -2733,6 +2841,16 @@ def generated_ice_lance_projectile_tile(
     width = struct.unpack_from("<H", original_tile, 4)[0]
     if width <= 0 or height <= 0:
         return original_tile
+
+    if source_png and source_png.is_file():
+        return generated_source_ice_lance_projectile_tile(
+            original_tile,
+            palettes,
+            source_png,
+            frame_index,
+            frame_count,
+            angle if angle is not None else -0.68,
+        )
 
     phase = frame_index / max(1, frame_count - 1)
     rgb = bytearray(b"\x00" * (width * height * 3))
@@ -2815,6 +2933,70 @@ def generated_ice_lance_projectile_tile(
 
     palette_tile = remap_tile_palette_index(original_tile, ICE_LANCE_PROJECTILE_PALETTE_INDEX)
     return tile_from_rgb(palette_tile, palettes, bytes(rgb))
+
+
+def generated_source_ice_lance_projectile_tile(
+    original_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+    angle: float,
+) -> bytes:
+    """Rotate and downscale the approved high-resolution lance source.
+
+    The projectile origin remains at the center of the inherited Fire Blast
+    TILE, but the visible shard is nudged forward along its travel direction.
+    That makes its first rendered frame read as leaving the Phantom's raised
+    casting hand instead of sitting directly over the hero's body.
+    """
+    from PIL import Image, ImageEnhance, ImageFilter
+
+    height = struct.unpack_from("<H", original_tile, 2)[0]
+    width = struct.unpack_from("<H", original_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+
+    alpha_bbox = source.getchannel("A").getbbox()
+    if alpha_bbox is None:
+        return original_tile
+    source = source.crop(alpha_bbox)
+
+    # Pillow's positive image rotation is counter-clockwise. Screen-space
+    # projectile angles use y-down coordinates, so invert the stored angle.
+    rotated = source.rotate(
+        -math.degrees(angle),
+        resample=Image.Resampling.BICUBIC,
+        expand=True,
+    )
+    rotated_bbox = rotated.getchannel("A").getbbox()
+    if rotated_bbox is not None:
+        rotated = rotated.crop(rotated_bbox)
+
+    phase = frame_index / max(1, frame_count - 1)
+    pulse = (0.86, 0.94, 1.0, 0.92)[frame_index % 4]
+    max_width = max(1, int(width * 0.78 * pulse))
+    max_height = max(1, int(height * 0.78 * pulse))
+    rotated.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+    rotated = ImageEnhance.Contrast(rotated).enhance(1.08 + phase * 0.05)
+    rotated = ImageEnhance.Color(rotated).enhance(1.08)
+    rotated = rotated.filter(ImageFilter.UnsharpMask(radius=0.7, percent=120, threshold=2))
+
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    ux = math.cos(angle)
+    uy = math.sin(angle)
+    forward = min(width, height) * 0.07
+    x = round((width - rotated.width) * 0.5 + ux * forward)
+    y = round((height - rotated.height) * 0.5 + uy * forward)
+    canvas.alpha_composite(rotated, (x, y))
+
+    rgb = Image.new("RGB", (width, height), (0, 0, 0))
+    rgb.paste(canvas.convert("RGB"), mask=canvas.getchannel("A"))
+    palette_tile = remap_tile_palette_index(
+        original_tile,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+    )
+    return tile_from_rgb(palette_tile, palettes, rgb.tobytes())
 
 
 def projectile_direction_frame_for_source_tile(tile_index: int) -> tuple[int, int]:
@@ -2918,6 +3100,103 @@ def generated_ice_lance_impact_tile(
     )
     _ = template_tile
     return tile
+
+
+def generated_chill_snowflake_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    frame_index: int,
+    frame_count: int,
+) -> bytes:
+    """Create one bright rotating frame for the floating Chill snowflake."""
+    from PIL import Image, ImageDraw
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    scale = 4
+    canvas = Image.new("RGB", (width * scale, height * scale), (0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    center_x = width * scale * 0.5
+    phase = frame_index / max(1, frame_count)
+    turn = phase * math.tau
+    center_y = height * scale * 0.5 + math.sin(turn) * scale * 0.6
+    pulse = 0.98 + 0.03 * math.sin(turn * 2.0)
+    radius = min(width, height) * scale * 0.34 * pulse
+    yaw = math.cos(turn)
+    yaw_scale = math.copysign(0.18 + 0.82 * abs(yaw), yaw)
+    dark = (24, 92, 146)
+    cyan = (70, 205, 236)
+    pale = (190, 240, 246)
+
+    def project(angle: float, distance: float) -> tuple[float, float]:
+        return (
+            center_x + math.cos(angle) * distance * yaw_scale,
+            center_y + math.sin(angle) * distance,
+        )
+
+    for arm_index in range(6):
+        angle = -math.pi / 2.0 + arm_index * math.pi / 3.0
+        end_x, end_y = project(angle, radius)
+        draw.line(
+            (center_x, center_y, end_x, end_y),
+            fill=dark,
+            width=3 * scale,
+        )
+        draw.line(
+            (center_x, center_y, end_x, end_y),
+            fill=cyan,
+            width=2 * scale,
+        )
+        draw.line(
+            (center_x, center_y, end_x, end_y),
+            fill=pale,
+            width=max(1, scale // 2),
+        )
+
+        branch_x, branch_y = project(angle, radius * 0.62)
+        for branch_angle in (angle - math.pi * 0.72, angle + math.pi * 0.72):
+            branch_end_x = branch_x + math.cos(branch_angle) * radius * 0.28 * yaw_scale
+            branch_end_y = branch_y + math.sin(branch_angle) * radius * 0.28
+            draw.line(
+                (branch_x, branch_y, branch_end_x, branch_end_y),
+                fill=dark,
+                width=2 * scale,
+            )
+            draw.line(
+                (branch_x, branch_y, branch_end_x, branch_end_y),
+                fill=cyan,
+                width=scale,
+            )
+
+    spark_radius = max(2, scale)
+    spark_x = center_x + math.sin(turn) * radius * 0.92
+    spark_y = center_y - radius * 0.22
+    draw.ellipse(
+        (
+            spark_x - spark_radius,
+            spark_y - spark_radius,
+            spark_x + spark_radius,
+            spark_y + spark_radius,
+        ),
+        fill=cyan,
+    )
+
+    core_radius = max(2, 3 * scale // 2)
+    draw.ellipse(
+        (
+            center_x - core_radius,
+            center_y - core_radius,
+            center_x + core_radius,
+            center_y + core_radius,
+        ),
+        fill=pale,
+    )
+    canvas = canvas.resize((width, height), Image.Resampling.LANCZOS)
+    palette_tile = remap_tile_palette_index(
+        template_tile,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+    )
+    return tile_from_rgb(palette_tile, palettes, canvas.tobytes())
 
 
 def remap_indexed_v3_tile_to_palette(

@@ -18,8 +18,15 @@ def main() -> int:
         render_hero_icon(repo_root / "assets" / "source" / "phantom-portrait.png"),
     )
     write_image_icon(args.out_dir / "phantom_guild_icon_25", render_guild_icon())
-    write_icon(args.out_dir / "ice_lance_icon_29", (29, 29), draw_ice_lance)
-    write_icon(args.out_dir / "ice_lance_spell_icon_24", (24, 24), draw_ice_lance)
+    ice_lance_source = repo_root / "assets" / "source" / "ice-lance-projectile-source-v2.png"
+    write_image_icon(
+        args.out_dir / "ice_lance_icon_29",
+        render_ice_lance_icon(ice_lance_source, (29, 29)),
+    )
+    write_image_icon(
+        args.out_dir / "ice_lance_spell_icon_24",
+        render_ice_lance_icon(ice_lance_source, (24, 24)),
+    )
     write_icon(args.out_dir / "frost_armor_spell_icon_24", (24, 24), draw_frost_armor)
     write_icon(args.out_dir / "blizzard_spell_icon_24", (24, 24), draw_blizzard)
     write_icon(args.out_dir / "phantom_cowl_icon_23", (23, 23), draw_cowl)
@@ -102,6 +109,30 @@ def render_guild_icon() -> Image.Image:
     draw.point((7, 5), fill=(205, 255, 255, 255))
     draw.point((17, 5), fill=(205, 255, 255, 255))
     draw.point((12, 3), fill=(230, 255, 255, 255))
+    return posterize_to_majesty_icon(canvas.convert("RGB"), levels=44)
+
+
+def render_ice_lance_icon(source_path: Path, size: tuple[int, int]) -> Image.Image:
+    width, height = size
+    canvas = Image.new("RGBA", size, (3, 4, 8, 255))
+    source = Image.open(source_path).convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    if bbox is None:
+        raise ValueError(f"Ice Lance source has no visible pixels: {source_path}")
+    source = source.crop(bbox)
+    source = source.rotate(42, resample=Image.Resampling.BICUBIC, expand=True)
+    rotated_bbox = source.getchannel("A").getbbox()
+    if rotated_bbox is not None:
+        source = source.crop(rotated_bbox)
+    source.thumbnail((width - 5, height - 5), Image.Resampling.LANCZOS)
+    source = ImageEnhance.Contrast(source).enhance(1.18)
+    source = ImageEnhance.Color(source).enhance(1.10)
+    source = source.filter(ImageFilter.UnsharpMask(radius=0.6, percent=140, threshold=2))
+    canvas.alpha_composite(
+        source,
+        ((width - source.width) // 2, (height - source.height) // 2),
+    )
+    draw_border(ImageDraw.Draw(canvas), size)
     return posterize_to_majesty_icon(canvas.convert("RGB"), levels=44)
 
 
