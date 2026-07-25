@@ -502,8 +502,12 @@ absorbed, but are not Frozen.
 The spent state is a separate invisible, infinite-duration overlay. Entering a
 home building replaces the stock rest activity with a thin wrapper around
 `Rest_At_Guild`; once the Phantom reaches full health, the wrapper deletes the
-spent marker and makes Frost Armor available again. Merely losing the active
-ward or leaving combat does not recharge it.
+spent marker. Inns and Gazebos share Majesty's `rest_at_inn` full-heal path, so
+the Phantom-owned watcher also recharges the armor when either finishes and
+switches to `Done_resting_inn` while the hero is still inside. Checking the
+completed rest script, full HP, and `InsideBuilding` together avoids recharging
+the armor during ordinary shop visits. Merely losing the active ward or
+leaving combat does not recharge it.
 
 Frost Armor's generated art sources are:
 
@@ -687,8 +691,9 @@ Checkpoint recorded July 25, 2026:
 - Frost Armor now auto-learns at level 3, casts at combat entry, persists until
   the first attack attempt, negates ordinary weapon damage, consumes against
   both units and buildings, Freezes unit attackers for three seconds, and only
-  recharges after a full-health building rest. Its animated octahedral ward
-  and three size-aware frozen casings are packaged from generated source art.
+  recharges after a completed full-health rest at the Phantoms Haunt, an Inn,
+  or a Gazebo. Its animated octahedral ward and three size-aware frozen casings
+  are packaged from generated source art.
 - Next: exercise Frost Armor's attack detection, building consumption, ranged
   retaliation, rest recharge, and effect placement in game, then continue to
   Blizzard.

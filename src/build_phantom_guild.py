@@ -936,6 +936,8 @@ begin
 \t\t\treturn;
 \t\tend
 
+\t$Phantom_Frost_Armor_Recharge_Check(thisagent);
+
 \tIf ($CheckEffector(thisagent, "frost_armor_icon") == False)
 \t\treturn;
 
@@ -955,6 +957,25 @@ begin
 \t\treturn;
 
 \t$Frost_Armor_Freeze(attacker);
+end
+
+function Phantom_Frost_Armor_Recharge_Check(agent thisagent)
+
+declare
+
+begin
+\tIf ($CheckEffector(thisagent, "frost_armor_spent") == False)
+\t\treturn;
+
+\tIf ($InsideBuilding(thisagent) == False)
+\t\treturn;
+
+\tIf ($GetAttribute(thisagent, #ATTRIB_HP) != $GetAttribute(thisagent, #ATTRIB_MaxHP))
+\t\treturn;
+
+\tIf (thisagent's "ActiveScript" == $Done_resting_inn ||
+\t\tthisagent's "ActiveScript" == $Done_resting_guild)
+\t\t$DeleteEffector(thisagent, "frost_armor_spent");
 end
 
 function Frost_Armor_Freeze(agent target)
