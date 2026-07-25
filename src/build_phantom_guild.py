@@ -351,7 +351,7 @@ def phantom_actions_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<Flags value="IsSpell"/>
-\t\t\t<EffectorDuration value="0"/>
+\t\t\t<EffectorDuration value="86400000"/>
 \t\t\t<TimeoutDuration value="1000"/>
 \t\t\t<SpellType value="CombatUtility"/>
 \t\t\t<CharacterLevel value="3"/>
@@ -868,9 +868,9 @@ begin
 \tIf ($CheckEffector(thisagent, "frost_armor_spent"))
 \t\treturn;
 
-\t$createeffector(thisagent, "frost_armor_effector", 0);
-\t$createeffector(thisagent, "frost_armor_icon", 0);
-\t$createeffector(thisagent, "frost_armor_spent", 0);
+\t$createeffector(thisagent, "frost_armor_effector", $GetSpellAttribute("frost_armor", "effector_duration"));
+\t$createeffector(thisagent, "frost_armor_icon", $GetSpellAttribute("frost_armor", "effector_duration"));
+\t$createeffector(thisagent, "frost_armor_spent", $GetSpellAttribute("frost_armor", "effector_duration"));
 \t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10000);
 \t$clearlist(thisagent's "Hostiles");
 end
@@ -1001,11 +1001,11 @@ begin
 
 \tmax_hp = $GetAttribute(target, #ATTRIB_MaxHP);
 \tIf (max_hp < 50)
-\t\t$CreateEffector(target, "frost_armor_frozen_small", 0);
+\t\t$CreateEffector(target, "frost_armor_frozen_small", 3000);
 \tElse If (max_hp < 150)
-\t\t$CreateEffector(target, "frost_armor_frozen_medium", 0);
+\t\t$CreateEffector(target, "frost_armor_frozen_medium", 3000);
 \tElse
-\t\t$CreateEffector(target, "frost_armor_frozen_large", 0);
+\t\t$CreateEffector(target, "frost_armor_frozen_large", 3000);
 
 \t$CreateEffector(target, "frost_armor_frozen_timer", 3000);
 end

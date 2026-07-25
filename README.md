@@ -479,9 +479,13 @@ The impact art must be palette-remapped into a palette included by
 
 Phantoms automatically learn Frost Armor at level 3. `Phantom_tree` checks for
 nearby enemies before entering the normal Wizard combat tree and casts the ward
-on itself whenever it is learned, unspent, and inactive. The active ward has
-infinite duration and displays a rotating octahedral ice crystal above the
-Phantom.
+on itself whenever it is learned, unspent, and inactive. The active ward has an
+effectively scenario-long duration (`86400000` milliseconds, or 24 real hours)
+and displays a rotating octahedral ice crystal above the Phantom. Majesty does
+not treat effector duration `0` as infinite: it lets the overlay expire with
+its natural animation, which also removes the active/spent state and causes the
+AI to cast repeatedly. Every persistent Frost Armor effector therefore uses
+the same explicit non-zero duration.
 
 Frost Armor adds `10000` basic-damage armor while active, making the first
 ordinary weapon attack deal zero damage. The Phantom's existing `Hostiles`
@@ -497,7 +501,9 @@ Unit attackers are Frozen for three seconds through Majesty's native
 path. The effect stops movement and actions rather than approximating another
 rate modifier. An attacker that is already petrified by some other effect is
 left alone. Buildings and lairs still consume the ward and have their damage
-absorbed, but are not Frozen.
+absorbed, but are not Frozen. Each size-specific casing is also explicitly
+given the same three-second lifetime as the controlling frozen timer; duration
+`0` is not used for persistent spell visuals.
 
 The spent state is a separate invisible, infinite-duration overlay. Entering a
 home building replaces the stock rest activity with a thin wrapper around
