@@ -53,6 +53,10 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
             b"WRa4Blizzard",
             b"PHo3Ice Lance Hit",
             b"PHo4chill_icon",
+            b"PHf1Frost Crystal",
+            b"PHf2Frozen Small",
+            b"PHf3Frozen Medium",
+            b"PHf4Frozen Large",
         },
         b"TILE": set(),
         b"SPLT": set(),
@@ -94,6 +98,11 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHo3"),
         ("Unit", "PHo4"),
         ("Unit", "PHo5"),
+        ("Unit", "PHo6"),
+        ("Unit", "PHo7"),
+        ("Unit", "PHo8"),
+        ("Unit", "PHo9"),
+        ("Unit", "PH10"),
     },
     "phantom_sounds.xml": {
         ("Sound", "PH01"),
@@ -111,6 +120,10 @@ CUSTOM_TILE_OWNERS = {
     b"PHM1CastGlow": (b"PHM1Phantom", "low16"),
     b"PHo3IceTile": (b"PHo3Ice Lance Hit", "u32"),
     b"PHc1ChillTile": (b"PHo4chill_icon", "u32"),
+    b"PHf1Crystal": (b"PHf1Frost Crystal", "u32"),
+    b"PHf2Frozen": (b"PHf2Frozen Small", "u32"),
+    b"PHf3Frozen": (b"PHf3Frozen Medium", "u32"),
+    b"PHf4Frozen": (b"PHf4Frozen Large", "u32"),
 }
 
 EXPECTED_CUSTOM_TILE_COUNTS = {
@@ -123,6 +136,10 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHM1CastGlow": 32,
     b"PHo3IceTile": 6,
     b"PHc1ChillTile": 29,
+    b"PHf1Crystal": 29,
+    b"PHf2Frozen": 29,
+    b"PHf3Frozen": 29,
+    b"PHf4Frozen": 29,
 }
 
 ALIGNED_PHANTOM_DISSOLVE_TILES = {
@@ -1277,6 +1294,88 @@ def validate_ice_lance_contract(output_root: Path) -> None:
         )
 
 
+def validate_frost_armor_contract(output_root: Path) -> None:
+    actions_path = output_root / "Data" / "phantom_actions.xml"
+    actions = actions_path.read_text(encoding="utf-8")
+    action_contract = (
+        'ID="WRa3" Name="frost_armor"',
+        '<EffectorDuration value="0"/>',
+        '<SpellType value="CombatUtility"/>',
+        '<CharacterLevel value="3"/>',
+        '<ValidationScript value="Frost_Armor_Check"/>',
+    )
+    missing_action = [value for value in action_contract if value not in actions]
+    if missing_action:
+        fail(f"{actions_path}: Frost Armor action is missing {missing_action}")
+
+    units_path = output_root / "Data" / "phantom_units.xml"
+    units = units_path.read_text(encoding="utf-8")
+    if '<Spell ID="1" Value="frost_armor"/>' not in units:
+        fail(f"{units_path}: Phantom does not list Frost Armor as an allowed spell")
+
+    overlays_path = output_root / "Data" / "phantom_overlays.xml"
+    overlays = overlays_path.read_text(encoding="utf-8")
+    overlay_contract = (
+        'ID="PHo1" Name="frost_armor_effector"',
+        '<ImageIDBase value="PHf1"/>',
+        'ID="PHo2" Name="frost_armor_icon"',
+        'GPLFunction="Frost_Armor_End"',
+        'ID="PHo6" Name="frost_armor_spent"',
+        'ID="PHo7" Name="frost_armor_frozen_timer"',
+        'GPLFunction="Frost_Armor_Frozen_End"',
+        'ID="PHo8" Name="frost_armor_frozen_small"',
+        '<ImageIDBase value="PHf2"/>',
+        'ID="PHo9" Name="frost_armor_frozen_medium"',
+        '<ImageIDBase value="PHf3"/>',
+        'ID="PH10" Name="frost_armor_frozen_large"',
+        '<ImageIDBase value="PHf4"/>',
+    )
+    missing_overlay = [value for value in overlay_contract if value not in overlays]
+    if missing_overlay:
+        fail(f"{overlays_path}: Frost Armor overlays are missing {missing_overlay}")
+
+    building_data_path = output_root / "GPL" / "Phantom_Building_Data.dat"
+    building_data = building_data_path.read_text(encoding="utf-8")
+    if "(Lived_In_Script Phantom_Lived_In)" not in building_data:
+        fail(f"{building_data_path}: full-health Frost Armor recharge wrapper is missing")
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    gpl_contract = (
+        "If ($Phantom_Try_Frost_Armor(thisagent) == False)",
+        "$Wizard_tree(thisagent);",
+        "function Frost_Armor_Begin(agent thisagent, agent target)",
+        '$createeffector(thisagent, "frost_armor_spent", 0);',
+        "#ATTRIB_Armor_Basic_Damage, 10000",
+        '$clearlist(thisagent\'s "Hostiles");',
+        "function Phantom_Frost_Armor_Watch(agent thisagent)",
+        'attacker = $ListMember(thisagent\'s "Hostiles", 1);',
+        '$DeleteEffector(thisagent, "frost_armor_icon");',
+        'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")',
+        "$Frost_Armor_Freeze(attacker);",
+        "$Freeze_Unit(target);",
+        '$CreateEffector(target, "frost_armor_frozen_timer", 3000);',
+        "$UnFreeze_Unit(thisagent);",
+        "function Phantom_Rest_At_Guild(agent thisagent)",
+        "$Rest_At_Guild(thisagent);",
+        '$DeleteEffector(thisagent, "frost_armor_spent");',
+    )
+    missing_gpl = [value for value in gpl_contract if value not in gpl]
+    if missing_gpl:
+        fail(f"{gpl_path}: Frost Armor behavior contract is missing {missing_gpl}")
+
+    consume = gpl.index('$DeleteEffector(thisagent, "frost_armor_icon");')
+    building_guard = gpl.index(
+        'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")'
+    )
+    freeze = gpl.index("$Frost_Armor_Freeze(attacker);")
+    if not consume < building_guard < freeze:
+        fail(
+            f"{gpl_path}: Frost Armor must be consumed before the building/lair "
+            "freeze exclusion"
+        )
+
+
 def validate(output_root: Path) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
@@ -1286,6 +1385,7 @@ def validate(output_root: Path) -> None:
     validate_phantoms_haunt_identity(output_root)
     validate_phantom_item_cleanup(output_root)
     validate_ice_lance_contract(output_root)
+    validate_frost_armor_contract(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:

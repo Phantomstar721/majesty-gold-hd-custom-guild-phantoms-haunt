@@ -43,6 +43,10 @@ FROST_FIELD_HIT_IMAGE = b"XR30frost_fld_hit"
 CHILL_ICON_TEMPLATE_IMAGE = b"XR25plague_icon"
 PHANTOM_ICE_LANCE_HIT_IMAGE = b"PHo3Ice Lance Hit"
 PHANTOM_CHILL_ICON_IMAGE = b"PHo4chill_icon"
+PHANTOM_FROST_ARMOR_CRYSTAL_IMAGE = b"PHf1Frost Crystal"
+PHANTOM_FROZEN_SMALL_IMAGE = b"PHf2Frozen Small"
+PHANTOM_FROZEN_MEDIUM_IMAGE = b"PHf3Frozen Medium"
+PHANTOM_FROZEN_LARGE_IMAGE = b"PHf4Frozen Large"
 HERO_PORTRAIT_TILE = 6293
 HERO_ICON_TILE = 6299
 BUILDING_PROFILE_TILE = 1509
@@ -109,6 +113,8 @@ def main() -> int:
     parser.add_argument("--building-dialog-panel-rgb", type=Path)
     parser.add_argument("--ice-lance-icon-rgb", type=Path)
     parser.add_argument("--ice-lance-projectile-source-png", type=Path)
+    parser.add_argument("--frost-armor-crystal-source-png", type=Path)
+    parser.add_argument("--frost-armor-frozen-casing-source-png", type=Path)
     parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
     parser.add_argument("--frost-armor-spell-icon-rgb", type=Path)
     parser.add_argument("--blizzard-spell-icon-rgb", type=Path)
@@ -156,6 +162,8 @@ def main() -> int:
         args.interface_panel_rgb,
         args.ice_lance_icon_rgb,
         args.ice_lance_projectile_source_png,
+        args.frost_armor_crystal_source_png,
+        args.frost_armor_frozen_casing_source_png,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
     )
     write_interfacedata_cam(
@@ -230,6 +238,7 @@ def phantom_units_xml() -> str:
 \t\t\t<HelpID value="h020"/>
 \t\t\t<AllowedSpells>
 \t\t\t\t<Spell ID="0" Value="ice_lance"/>
+\t\t\t\t<Spell ID="1" Value="frost_armor"/>
 \t\t\t</AllowedSpells>
 \t\t</Game>
 \t</Description>
@@ -342,11 +351,12 @@ def phantom_actions_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<Flags value="IsSpell"/>
-\t\t\t<EffectorDuration value="20000"/>
-\t\t\t<TimeoutDuration value="30000"/>
+\t\t\t<EffectorDuration value="0"/>
+\t\t\t<TimeoutDuration value="1000"/>
 \t\t\t<SpellType value="CombatUtility"/>
 \t\t\t<CharacterLevel value="3"/>
 \t\t\t<SpellRank value="3"/>
+\t\t\t<ValidationScript value="Frost_Armor_Check"/>
 \t\t</Game>
 \t</Description>
 \t<Description type="Action" subType="Standard" ID="WRa4" Name="blizzard" Description="Blizzard">
@@ -409,7 +419,7 @@ def phantom_overlays_xml() -> str:
 \t\t\t<Info value="Directionless"/>
 \t\t\t<Info value="DontBlock"/>
 \t\t\t<Menu value="11"/>
-\t\t\t<ImageIDBase value="WRb1"/>
+\t\t\t<ImageIDBase value="PHf1"/>
 \t\t\t<DefaultSound value="FireShield"/>
 \t\t</Engine>
 \t\t<Game version="1">
@@ -422,14 +432,89 @@ def phantom_overlays_xml() -> str:
 \t\t<Engine version="1">
 \t\t\t<Info value="Directionless"/>
 \t\t\t<Info value="DontBlock"/>
+\t\t\t<Info value="NotVisibleInISOView"/>
 \t\t\t<Menu value="11"/>
-\t\t\t<ImageIDBase value="WRb2"/>
+\t\t\t<ImageIDBase value="PHo3"/>
 \t\t\t<Script type="0" cProc="0" GPLFunction="Frost_Armor_End"/>
 \t\t\t<DefaultSound value="0"/>
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="0"/>
 \t\t\t<StackPriority value="1"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHo6" Name="frost_armor_spent" Description="Frost Armor Spent">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Info value="NotVisibleInISOView"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHo3"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="1"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHo7" Name="frost_armor_frozen_timer" Description="Frozen">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Info value="NotVisibleInISOView"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHo3"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Frost_Armor_Frozen_End"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="1"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHo8" Name="frost_armor_frozen_small" Description="Frozen">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHf2"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="0"/>
+\t\t\t<Flags value="TransparentToMouse"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHo9" Name="frost_armor_frozen_medium" Description="Frozen">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHf3"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="0"/>
+\t\t\t<Flags value="TransparentToMouse"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PH10" Name="frost_armor_frozen_large" Description="Frozen">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHf4"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="0"/>
+\t\t\t<Flags value="TransparentToMouse"/>
 \t\t</Game>
 \t</Description>
 \t<Description type="Unit" subType="Overlay" ID="PHo4" Name="ice_lance_chill_icon" Description="Chilled">
@@ -573,7 +658,7 @@ def phantom_building_data() -> str:
 \t\t(member_title Phantom)
 \t\t(member_basicscript Phantom_tree)
 \t\t(max_members 4)
-\t\t(Lived_In_Script Lived_In)
+\t\t(Lived_In_Script Phantom_Lived_In)
 \t\t(Sleep_for 30000)
 \t\t(birthscript basic_birth)
 \t\t(birthScript2 Guild_Birth)
@@ -652,7 +737,8 @@ declare
 begin
 \t$DebugOut("Phantom deciding");
 
-\t$Wizard_tree(thisagent);
+\tIf ($Phantom_Try_Frost_Armor(thisagent) == False)
+\t\t$Wizard_tree(thisagent);
 end
 
 function Phantom_birth (agent thisagent)
@@ -664,6 +750,8 @@ begin
 \t$hero_birth(thisagent);
 \t$Phantom_grant_starter_items(thisagent);
 \t$LearnSpell(thisagent, "ice_lance");
+\tthisagent's "QuestScript" = $Phantom_Frost_Armor_Watch;
+\t$NewThread(thisagent's "QuestScript", 100, thisagent);
 end
 
 function Phantom_grant_starter_items (agent thisagent)
@@ -771,10 +859,20 @@ function Frost_Armor_Begin(agent thisagent, agent target)
 declare
 
 begin
+\tIf ($isdead(thisagent))
+\t\treturn;
+
+\tIf ($CheckEffector(thisagent, "frost_armor_icon"))
+\t\treturn;
+
+\tIf ($CheckEffector(thisagent, "frost_armor_spent"))
+\t\treturn;
+
 \t$createeffector(thisagent, "frost_armor_effector", 0);
-\t$createeffector(thisagent, "frost_armor_icon", $GetSpellAttribute("frost_armor", "effector_duration"));
-\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 4);
-\t$MagicalAdjustAttribute(thisagent, #ATTRIB_Magicresistance, 20);
+\t$createeffector(thisagent, "frost_armor_icon", 0);
+\t$createeffector(thisagent, "frost_armor_spent", 0);
+\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10000);
+\t$clearlist(thisagent's "Hostiles");
 end
 
 function Frost_Armor_End(agent thisagent)
@@ -783,8 +881,149 @@ declare
 
 begin
 \t$DeleteEffector(thisagent, "frost_armor_effector");
-\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -4);
-\t$MagicalAdjustAttribute(thisagent, #ATTRIB_Magicresistance, -20);
+\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);
+end
+
+function Frost_Armor_Check(agent thisagent) is integer
+
+declare
+
+begin
+\tIf ($isdead(thisagent))
+\t\treturn 0;
+
+\tIf ($CheckEffector(thisagent, "frost_armor_icon"))
+\t\treturn 0;
+
+\tIf ($CheckEffector(thisagent, "frost_armor_spent"))
+\t\treturn 0;
+
+\treturn 1;
+end
+
+function Phantom_Try_Frost_Armor(agent thisagent) is boolean
+
+declare
+\tlist targets;
+
+begin
+\tIf ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
+\t\treturn False;
+
+\tIf ($IsSpellAvailable(thisagent, "frost_armor", 1) == False)
+\t\treturn False;
+
+\tIf ($Frost_Armor_Check(thisagent) == 0)
+\t\treturn False;
+
+\ttargets = $compile_enemies(thisagent, thisagent's "castingrange");
+\tIf ($ListSize(targets) == 0)
+\t\treturn False;
+
+\t$CastSpell(thisagent, "frost_armor", thisagent, "");
+\treturn True;
+end
+
+function Phantom_Frost_Armor_Watch(agent thisagent)
+
+declare
+\tagent attacker;
+
+begin
+\tIf ($isdead(thisagent))
+\t\tbegin
+\t\t\t$KillThread(thisagent's "QuestScript");
+\t\t\treturn;
+\t\tend
+
+\tIf ($CheckEffector(thisagent, "frost_armor_icon") == False)
+\t\treturn;
+
+\tIf ($ListSize(thisagent's "Hostiles") == 0)
+\t\treturn;
+
+\tattacker = $ListMember(thisagent's "Hostiles", 1);
+\t$ClearList(thisagent's "Hostiles");
+
+\tIf ($notvalid(attacker))
+\t\treturn;
+
+\t$DeleteEffector(thisagent, "frost_armor_icon");
+\t$CreateEffector(thisagent, "ice_lance_hit_effector", 0);
+
+\tIf (attacker's "Type" == "Building" || attacker's "Type" == "Lair")
+\t\treturn;
+
+\t$Frost_Armor_Freeze(attacker);
+end
+
+function Frost_Armor_Freeze(agent target)
+
+declare
+\tinteger max_hp;
+
+begin
+\tIf ($isdead(target))
+\t\treturn;
+
+\tIf (target's "Type" == "Building" || target's "Type" == "Lair")
+\t\treturn;
+
+\tIf ($CheckEffector(target, "frost_armor_frozen_timer"))
+\t\t$DeleteEffector(target, "frost_armor_frozen_timer");
+\tElse If ($GetAttribute(target, #ATTRIB_HasEffectPetrify) == 1)
+\t\treturn;
+
+\t$SetAttribute(target, #ATTRIB_HasEffectPetrify, 1);
+\t$GetProperUnitArt(target);
+\t$Freeze_Unit(target);
+
+\tmax_hp = $GetAttribute(target, #ATTRIB_MaxHP);
+\tIf (max_hp < 50)
+\t\t$CreateEffector(target, "frost_armor_frozen_small", 0);
+\tElse If (max_hp < 150)
+\t\t$CreateEffector(target, "frost_armor_frozen_medium", 0);
+\tElse
+\t\t$CreateEffector(target, "frost_armor_frozen_large", 0);
+
+\t$CreateEffector(target, "frost_armor_frozen_timer", 3000);
+end
+
+function Frost_Armor_Frozen_End(agent thisagent)
+
+declare
+
+begin
+\tIf ($isdead(thisagent))
+\t\treturn;
+
+\t$DeleteEffector(thisagent, "frost_armor_frozen_small");
+\t$DeleteEffector(thisagent, "frost_armor_frozen_medium");
+\t$DeleteEffector(thisagent, "frost_armor_frozen_large");
+\t$SetAttribute(thisagent, #ATTRIB_HasEffectPetrify, 0);
+\t$GetProperUnitArt(thisagent);
+\t$UnFreeze_Unit(thisagent);
+end
+
+function Phantom_Lived_In(agent thisagent)
+
+declare
+
+begin
+\t$Lived_In(thisagent);
+\tthisagent's "ActiveScript" = $Phantom_Rest_At_Guild;
+end
+
+function Phantom_Rest_At_Guild(agent thisagent)
+
+declare
+
+begin
+\t$Rest_At_Guild(thisagent);
+
+\tIf ($GetAttribute(thisagent, #ATTRIB_HP) == $GetAttribute(thisagent, #ATTRIB_MaxHP))
+\t\tIf ($CheckEffector(thisagent, "frost_armor_spent"))
+\t\t\t$DeleteEffector(thisagent, "frost_armor_spent");
 end
 
 function Blizzard_Check(agent thisagent) is integer
@@ -1023,6 +1262,8 @@ def write_maindata_cam(
     interface_panel_rgb: Path | None,
     ice_lance_icon_rgb: Path | None,
     ice_lance_projectile_source_png: Path | None,
+    frost_armor_crystal_source_png: Path | None,
+    frost_armor_frozen_casing_source_png: Path | None,
     ice_effect_maindata: Path | None,
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
@@ -1040,6 +1281,10 @@ def write_maindata_cam(
     chill_icon_image: bytes | None = None
     chill_icon_template_tiles: list[bytes] = []
     source_chill_icon_tile_indices: list[int] = []
+    frost_armor_crystal_image: bytes | None = None
+    frozen_small_image: bytes | None = None
+    frozen_medium_image: bytes | None = None
+    frozen_large_image: bytes | None = None
     if ice_effect_maindata:
         source_ice_lance_hit_effect = read_cam_entry(
             ice_effect_maindata,
@@ -1078,6 +1323,10 @@ def write_maindata_cam(
             source_ice_effect_tiles[source_tile_index].data
             for source_tile_index in source_chill_icon_tile_indices
         ]
+        frost_armor_crystal_image = chill_icon_image
+        frozen_small_image = chill_icon_image
+        frozen_medium_image = chill_icon_image
+        frozen_large_image = chill_icon_image
 
     phantom_sprite_tile_indices = sorted(
         index
@@ -1386,6 +1635,76 @@ def write_maindata_cam(
             chill_tile_replacements,
         )
 
+    if (
+        frost_armor_crystal_image
+        and chill_icon_template_tiles
+        and source_chill_icon_tile_indices
+        and frost_armor_crystal_source_png
+    ):
+        crystal_tile_replacements: dict[int, int] = {}
+        frame_count = len(source_chill_icon_tile_indices)
+        for frame_index, (source_tile_index, template_tile) in enumerate(
+            zip(source_chill_icon_tile_indices, chill_icon_template_tiles)
+        ):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            crystal_tile_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHf1Crystal{frame_index:02d}".encode("ascii")),
+                    data=generated_frost_armor_crystal_tile(
+                        template_tile,
+                        palettes,
+                        frost_armor_crystal_source_png,
+                        frame_index,
+                        frame_count,
+                    ),
+                )
+            )
+        frost_armor_crystal_image = remap_imag_animation_tiles(
+            frost_armor_crystal_image,
+            crystal_tile_replacements,
+        )
+
+    frozen_variants = (
+        ("PHf2Frozen", frozen_small_image, (58, 72)),
+        ("PHf3Frozen", frozen_medium_image, (82, 104)),
+        ("PHf4Frozen", frozen_large_image, (116, 144)),
+    )
+    remapped_frozen_images: list[bytes | None] = []
+    for tile_prefix, frozen_image, canvas_size in frozen_variants:
+        if (
+            frozen_image
+            and chill_icon_template_tiles
+            and source_chill_icon_tile_indices
+            and frost_armor_frozen_casing_source_png
+        ):
+            frozen_tile_replacements: dict[int, int] = {}
+            frame_count = len(source_chill_icon_tile_indices)
+            for frame_index, (source_tile_index, template_tile) in enumerate(
+                zip(source_chill_icon_tile_indices, chill_icon_template_tiles)
+            ):
+                custom_tile_index = max_tile_index + len(extra_tiles) + 1
+                frozen_tile_replacements[source_tile_index] = custom_tile_index
+                extra_tiles.append(
+                    CamEntry(
+                        name=pad_name(f"{tile_prefix}{frame_index:02d}".encode("ascii")),
+                        data=generated_frost_armor_casing_tile(
+                            template_tile,
+                            palettes,
+                            frost_armor_frozen_casing_source_png,
+                            frame_index,
+                            frame_count,
+                            canvas_size,
+                        ),
+                    )
+                )
+            frozen_image = remap_imag_animation_tiles(
+                frozen_image,
+                frozen_tile_replacements,
+            )
+        remapped_frozen_images.append(frozen_image)
+    frozen_small_image, frozen_medium_image, frozen_large_image = remapped_frozen_images
+
     palette_indices: set[int] = set()
     tile_entries: list[CamEntry] = []
     for tile_index in range(max_tile_index + 1):
@@ -1434,6 +1753,16 @@ def write_maindata_cam(
         image_entries.append(CamEntry(name=pad_name(PHANTOM_ICE_LANCE_HIT_IMAGE), data=ice_lance_hit_effect))
     if chill_icon_image:
         image_entries.append(CamEntry(name=pad_name(PHANTOM_CHILL_ICON_IMAGE), data=chill_icon_image))
+    if frost_armor_crystal_image:
+        image_entries.append(
+            CamEntry(name=pad_name(PHANTOM_FROST_ARMOR_CRYSTAL_IMAGE), data=frost_armor_crystal_image)
+        )
+    if frozen_small_image:
+        image_entries.append(CamEntry(name=pad_name(PHANTOM_FROZEN_SMALL_IMAGE), data=frozen_small_image))
+    if frozen_medium_image:
+        image_entries.append(CamEntry(name=pad_name(PHANTOM_FROZEN_MEDIUM_IMAGE), data=frozen_medium_image))
+    if frozen_large_image:
+        image_entries.append(CamEntry(name=pad_name(PHANTOM_FROZEN_LARGE_IMAGE), data=frozen_large_image))
     write_cam(
         (
             CamSection(
@@ -3197,6 +3526,121 @@ def generated_chill_snowflake_tile(
         ICE_LANCE_PROJECTILE_PALETTE_INDEX,
     )
     return tile_from_rgb(palette_tile, palettes, canvas.tobytes())
+
+
+def generated_frost_armor_crystal_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+) -> bytes:
+    """Render a hovering octahedral ward turning around its vertical axis."""
+    from PIL import Image, ImageEnhance
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    if bbox:
+        source = source.crop(bbox)
+
+    phase = frame_index / max(1, frame_count)
+    turn = phase * math.tau
+    pulse = 0.98 + 0.035 * math.sin(turn * 2.0)
+    target_height = max(8, round(height * 0.82 * pulse))
+    target_width = max(5, round(source.width * target_height / max(1, source.height)))
+    source = source.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    yaw = math.cos(turn)
+    yaw_width = max(3, round(target_width * (0.20 + 0.80 * abs(yaw))))
+    source = source.resize((yaw_width, target_height), Image.Resampling.LANCZOS)
+    if yaw < 0:
+        source = source.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    source = ImageEnhance.Brightness(source).enhance(0.96 + 0.08 * abs(yaw))
+
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    left = (width - source.width) // 2
+    top = (height - source.height) // 2 + round(math.sin(turn) * 1.2)
+    canvas.alpha_composite(source, (left, top))
+    return rgba_to_indexed_tile(
+        canvas,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (
+            3,
+            height,
+            width,
+            struct.unpack_from("<H", template_tile, 6)[0],
+            32,
+            struct.unpack_from("<H", template_tile, 10)[0],
+            struct.unpack_from("<H", template_tile, 12)[0],
+            struct.unpack_from("<H", template_tile, 14)[0],
+        ),
+    )
+
+
+def generated_frost_armor_casing_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+    canvas_size: tuple[int, int],
+) -> bytes:
+    """Render one size-aware ice casing frame around a frozen unit."""
+    from PIL import Image, ImageEnhance
+
+    width, height = canvas_size
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    if bbox:
+        source = source.crop(bbox)
+
+    phase = frame_index / max(1, frame_count)
+    turn = phase * math.tau
+    pulse = 0.965 + 0.035 * (0.5 + 0.5 * math.sin(turn * 2.0))
+    target_width = max(8, round(width * 0.96 * pulse))
+    target_height = max(8, round(height * 0.96 * pulse))
+    source.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
+    source = ImageEnhance.Brightness(source).enhance(0.94 + 0.08 * (0.5 + 0.5 * math.sin(turn)))
+
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    left = (width - source.width) // 2
+    top = height - source.height - 1
+    canvas.alpha_composite(source, (left, top))
+    _ = template_tile
+    return rgba_to_indexed_tile(
+        canvas,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (3, height, width, 0, 32, width // 2, height // 2, 1),
+    )
+
+
+def rgba_to_indexed_tile(
+    image: object,
+    palettes: list[CamEntry],
+    palette_index: int,
+    header_words: tuple[int, int, int, int, int, int, int, int],
+) -> bytes:
+    """Quantize visible RGBA pixels while preserving index zero as transparency."""
+    width, height = image.size
+    colors = splt_palette_colors(palettes[palette_index].data)
+    pixels = [[0 for _ in range(width)] for _ in range(height)]
+    color_cache: dict[tuple[int, int, int], int] = {}
+    source_pixels = image.load()
+    for y in range(height):
+        for x in range(width):
+            red, green, blue, alpha = source_pixels[x, y]
+            if alpha < 48:
+                continue
+            key = (red, green, blue)
+            if key not in color_cache:
+                color_cache[key] = nearest_visible_palette_index(red, green, blue, colors)
+            pixels[y][x] = color_cache[key]
+    return encode_indexed_v3_tile(pixels, palette_index, header_words=header_words)
 
 
 def remap_indexed_v3_tile_to_palette(

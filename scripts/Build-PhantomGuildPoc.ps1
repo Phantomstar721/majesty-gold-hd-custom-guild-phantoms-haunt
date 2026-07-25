@@ -15,6 +15,8 @@ param(
     [string]$HeroDeathDirectionals = ".\assets\source\phantom-hero-death-directionals-v1.png",
     [string]$HeroCastGlow = ".\assets\source\phantom-cast-staff-glow-v2.png",
     [string]$IceLanceProjectileSource = ".\assets\source\ice-lance-projectile-source-v2.png",
+    [string]$FrostArmorCrystalSource = ".\assets\source\frost-armor-crystal-source-v1.png",
+    [string]$FrostArmorFrozenCasingSource = ".\assets\source\frost-armor-frozen-casing-source-v1.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
     [string]$GplCompiler = ""
 )
@@ -189,6 +191,8 @@ if ($LASTEXITCODE -ne 0) {
     --building-dialog-panel-rgb $interfacePanelRgb `
     --ice-lance-icon-rgb $iceLanceIconRgb `
     --ice-lance-projectile-source-png (Resolve-RepoPath $IceLanceProjectileSource) `
+    --frost-armor-crystal-source-png (Resolve-RepoPath $FrostArmorCrystalSource) `
+    --frost-armor-frozen-casing-source-png (Resolve-RepoPath $FrostArmorFrozenCasingSource) `
     --ice-lance-spell-icon-rgb $iceLanceSpellIconRgb `
     --frost-armor-spell-icon-rgb $frostArmorSpellIconRgb `
     --blizzard-spell-icon-rgb $blizzardSpellIconRgb `

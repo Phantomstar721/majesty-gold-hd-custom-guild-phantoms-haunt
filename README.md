@@ -24,6 +24,8 @@ This currently builds:
 - A Phantom-only `Ice Lance` spell entry, generated-source directional
   projectile and icon art, a copied Frost Field hit overlay, and a timed Chill
   debuff.
+- A level-3 `Frost Armor` spell with a persistent crystal ward, one-hit damage
+  negation, a three-second retaliatory Freeze, and rest-to-recharge behavior.
 
 The in-map animated hero sprite is currently based on the Priestess of Krypta
 sprite set with a Phantom recolor.
@@ -473,6 +475,58 @@ PHo3Ice Lance Hit
 The impact art must be palette-remapped into a palette included by
 `phantom_maindata.cam`; the current build remaps it into palette `32`.
 
+### Frost Armor
+
+Phantoms automatically learn Frost Armor at level 3. `Phantom_tree` checks for
+nearby enemies before entering the normal Wizard combat tree and casts the ward
+on itself whenever it is learned, unspent, and inactive. The active ward has
+infinite duration and displays a rotating octahedral ice crystal above the
+Phantom.
+
+Frost Armor adds `10000` basic-damage armor while active, making the first
+ordinary weapon attack deal zero damage. The Phantom's existing `Hostiles`
+list acts as the local attack-attempt signal: the ward clears that list when
+cast, then its recurring watcher consumes the ward when the first valid
+attacker appears. This avoids modifying the global attack or damage functions
+and requires no changes to enemy definitions. It intentionally reacts to the
+first registered attack attempt, even when the engine's hit roll would
+otherwise miss.
+
+Unit attackers are Frozen for three seconds through Majesty's native
+`HasEffectPetrify`, `Freeze_Unit`, `GetProperUnitArt`, and `UnFreeze_Unit`
+path. The effect stops movement and actions rather than approximating another
+rate modifier. An attacker that is already petrified by some other effect is
+left alone. Buildings and lairs still consume the ward and have their damage
+absorbed, but are not Frozen.
+
+The spent state is a separate invisible, infinite-duration overlay. Entering a
+home building replaces the stock rest activity with a thin wrapper around
+`Rest_At_Guild`; once the Phantom reaches full health, the wrapper deletes the
+spent marker and makes Frost Armor available again. Merely losing the active
+ward or leaving combat does not recharge it.
+
+Frost Armor's generated art sources are:
+
+```text
+assets\source\frost-armor-crystal-source-v1.png
+assets\source\frost-armor-frozen-casing-source-v1.png
+```
+
+Both sources are packaged through palette `161` into 29-frame animations. The
+crystal simulates rotation around its vertical axis with horizontal
+compression, face reversal, a subtle pulse, and a small hover. The casing
+uses small (`58x72`), medium (`82x104`), and large (`116x144`) native TILE
+canvases chosen from the attacker's maximum HP, so the visual scales without
+editing every unit. The casing leaves its center transparent so the frozen
+sprite remains visible inside the faceted ice shell.
+
+Run `scripts\create_frost_armor_review.py` after a build to decode the actual
+packaged tiles into:
+
+```text
+artifacts\reviews\frost-armor-packaged-review.png
+```
+
 ### TILE v3 Encoding
 
 Majesty TILE version 3 RLE rows use this segment layout:
@@ -596,7 +650,8 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
   changing more offsets.
 - The current Phantom gravestone is a temporary first pass and is next in line
   for a complete visual redesign.
-- `Frost Armor` and `Blizzard` still need a dedicated stability pass.
+- `Frost Armor` is packaged for its first full in-game stability and placement
+  pass; `Blizzard` still needs its dedicated implementation pass.
 - The Phantoms Haunt borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
   while the mod is active.
@@ -629,8 +684,14 @@ Checkpoint recorded July 25, 2026:
   refresh, non-stacking, movement-slow, action-slow, duration, and status-icon
   review. The fixed modifiers deliberately describe a mild Chill rather than
   promising an exact percentage on every unit.
-- Next: continue with Frost Armor and Blizzard behavior, effects, stability,
-  and final presentation.
+- Frost Armor now auto-learns at level 3, casts at combat entry, persists until
+  the first attack attempt, negates ordinary weapon damage, consumes against
+  both units and buildings, Freezes unit attackers for three seconds, and only
+  recharges after a full-health building rest. Its animated octahedral ward
+  and three size-aware frozen casings are packaged from generated source art.
+- Next: exercise Frost Armor's attack detection, building consumption, ranged
+  retaliation, rest recharge, and effect placement in game, then continue to
+  Blizzard.
 
 ## Build
 
