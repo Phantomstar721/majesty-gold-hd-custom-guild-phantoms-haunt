@@ -4,7 +4,7 @@ import argparse
 from collections import deque
 from pathlib import Path
 
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 
 LABEL_BY_TILE: dict[int, str] = {}
@@ -21,14 +21,14 @@ for tile_index in range(4659, 4690):
 for tile_index in range(4690, 4723):
     LABEL_BY_TILE[tile_index] = "attack"
 
-for tile_index in range(4723, 4746):
-    LABEL_BY_TILE[tile_index] = "dissolve"
+for tile_index in range(4723, 4741):
+    LABEL_BY_TILE[tile_index] = "death_directional"
 
 for tile_index in range(4746, 4778):
     LABEL_BY_TILE[tile_index] = "cast"
 
 for tile_index in range(4778, 4786):
-    LABEL_BY_TILE[tile_index] = "dissolve"
+    LABEL_BY_TILE[tile_index] = "death_shared"
 LABEL_BY_TILE[4787] = "gravestone"
 # Tiles 4788-4791 are shared, detached Priestess casting-effect frames rather
 # than character poses. Leave them on the existing recolor path during this
@@ -43,7 +43,9 @@ def main() -> int:
     parser.add_argument("--direction-03", required=True, type=Path)
     parser.add_argument("--direction-04", required=True, type=Path)
     parser.add_argument("--direction-05", required=True, type=Path)
-    parser.add_argument("--gravestone-source", type=Path)
+    parser.add_argument("--death-concept", required=True, type=Path)
+    parser.add_argument("--death-directionals", required=True, type=Path)
+    parser.add_argument("--cast-glow", required=True, type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
     args = parser.parse_args()
 
@@ -78,24 +80,68 @@ def main() -> int:
         for index in (3, 2, 1, 0, 5, 4)
     ]
 
+    directional_death_grid = extract_grid_frames(
+        chroma_key(Image.open(args.death_directionals).convert("RGBA")),
+        columns=4,
+        rows=3,
+    )
+    death_frames_by_direction = [
+        [
+            directional_death_grid[row * 4 + column]
+            for row in range(3)
+        ]
+        for column in range(4)
+    ]
+    death_frames_by_direction.append(
+        [frame.transpose(Image.Transpose.FLIP_LEFT_RIGHT) for frame in death_frames_by_direction[2]]
+    )
+    death_frames_by_direction.append(
+        [frame.transpose(Image.Transpose.FLIP_LEFT_RIGHT) for frame in death_frames_by_direction[1]]
+    )
+    death_frames_by_direction = [
+        death_frames_by_direction[index]
+        for index in (3, 2, 1, 0, 5, 4)
+    ]
+
+    shared_death_frames = extract_grid_frames(
+        chroma_key(Image.open(args.death_concept).convert("RGBA")),
+        columns=4,
+        rows=2,
+    )
+    cast_glow_frames = extract_grid_frames(
+        chroma_key(Image.open(args.cast_glow).convert("RGBA")),
+        columns=4,
+        rows=1,
+    )
     frame_by_label = frames_by_direction[0]
-    if args.gravestone_source:
-        frame_by_label["gravestone"] = prepare_frame(
-            chroma_key(Image.open(args.gravestone_source).convert("RGBA")),
-            "gravestone",
-        )
-    else:
-        frame_by_label["gravestone"] = frame_by_label["dissolve"]
+    frame_by_label["gravestone"] = prepare_frame(shared_death_frames[7], "gravestone")
 
     for tile_index, label in sorted(LABEL_BY_TILE.items()):
-        direction, stage, stage_count = animation_position(tile_index, label)
-        image = animated_frame(
-            frames_by_direction[direction],
-            label,
-            stage,
-            stage_count,
-        )
+        if label == "death_directional":
+            direction = (tile_index - 4723) // 3
+            stage = (tile_index - 4723) % 3
+            image = prepare_frame(death_frames_by_direction[direction][stage], label)
+        elif label == "death_shared":
+            # Once the directional body has shattered, use only the approved
+            # direction-neutral spectral core and emerging marker phases.
+            phase = 5 if tile_index <= 4781 else 6
+            image = prepare_frame(shared_death_frames[phase], label)
+        elif label == "gravestone":
+            image = prepare_frame(shared_death_frames[7], label)
+        else:
+            direction, stage, stage_count = animation_position(tile_index, label)
+            image = animated_frame(
+                frames_by_direction[direction],
+                label,
+                stage,
+                stage_count,
+            )
         image.save(args.out_dir / f"hero_tile_{tile_index:05d}.png")
+
+    for stage, image in enumerate(cast_glow_frames):
+        prepare_frame(image, "cast_glow").save(
+            args.out_dir / f"cast_glow_{stage:02d}.png"
+        )
 
     preview = make_preview(frame_by_label)
     preview.save(args.out_dir / "phantom_generated_hero_sprite_preview.png")
@@ -157,10 +203,12 @@ def animated_frame(
         scales = (0.91, 0.96, 1.0, 1.03)
         return transform_action(image, rotate=rotations[stage], scale=scales[stage])
     if label == "cast":
-        scales = (0.90, 0.95, 1.0, 1.04)
         brightness = (0.72, 0.84, 0.94, 1.08)
         return ImageEnhance.Brightness(
-            transform_action(image, rotate=(-1.5, -0.5, 0.5, 1.0)[stage], scale=scales[stage])
+            # Keep the silhouette and feet locked across the cast. The source
+            # pose already communicates the action; rotating the full sprite
+            # made several directions visibly grow and shrink in-game.
+            transform_action(image, rotate=0.0, scale=1.0)
         ).enhance(brightness[stage])
     if label == "special":
         return ImageEnhance.Brightness(
@@ -272,6 +320,25 @@ def extract_three_by_two_frames(sheet: Image.Image) -> list[Image.Image]:
     return frames
 
 
+def extract_grid_frames(
+    sheet: Image.Image,
+    *,
+    columns: int,
+    rows: int,
+) -> list[Image.Image]:
+    cell_width = sheet.width // columns
+    cell_height = sheet.height // rows
+    frames: list[Image.Image] = []
+    for row in range(rows):
+        for column in range(columns):
+            left = column * cell_width
+            top = row * cell_height
+            right = sheet.width if column == columns - 1 else (column + 1) * cell_width
+            bottom = sheet.height if row == rows - 1 else (row + 1) * cell_height
+            frames.append(crop_alpha(sheet.crop((left, top, right, bottom)), pad=12))
+    return frames
+
+
 def remove_detached_ground_shadow(image: Image.Image) -> None:
     alpha = image.getchannel("A")
     mask = alpha.load()
@@ -326,6 +393,18 @@ def prepare_frame(image: Image.Image, label: str) -> Image.Image:
     image = crop_alpha(image, pad=6)
     if label == "hover":
         image = remove_detached_frame_artifacts(image, padding=12)
+    if label == "cast_glow":
+        # The source art is deliberately ice-white so its fine threads survive
+        # generation. Tint those threads toward the Phantom's restrained cyan
+        # before Majesty palette quantization, without turning them electric.
+        alpha = image.getchannel("A")
+        image = ImageOps.colorize(
+            ImageOps.grayscale(image),
+            black=(5, 20, 34),
+            white=(126, 218, 246),
+            mid=(43, 139, 190),
+        ).convert("RGBA")
+        image.putalpha(alpha)
     image = ImageEnhance.Contrast(image).enhance(1.08)
     image = ImageEnhance.Color(image).enhance(0.92)
     return image.filter(ImageFilter.SHARPEN)

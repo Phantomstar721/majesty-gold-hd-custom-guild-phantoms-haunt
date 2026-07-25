@@ -78,7 +78,7 @@ def main() -> int:
 
     card = Image.new("RGB", CARD_SIZE, (20, 24, 31))
     draw = ImageDraw.Draw(card)
-    draw.text((70, 35), "PHANTOM GUILD — DESTRUCTION PROGRESSION", font=font(54), fill=(235, 241, 248))
+    draw.text((70, 35), "PHANTOMS HAUNT — DESTRUCTION PROGRESSION", font=font(54), fill=(235, 241, 248))
     draw.text(
         (72, 100),
         "Fervus-compatible four-stage proposal • high-resolution source review",

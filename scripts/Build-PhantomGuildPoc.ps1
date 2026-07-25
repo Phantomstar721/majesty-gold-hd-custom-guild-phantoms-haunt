@@ -11,7 +11,9 @@ param(
     [string]$HeroDirection03 = ".\assets\source\phantom-hero-direction-03.png",
     [string]$HeroDirection04 = ".\assets\source\phantom-hero-direction-04.png",
     [string]$HeroDirection05 = ".\assets\source\phantom-hero-direction-05.png",
-    [string]$GravestoneImage = ".\assets\source\phantom-gravestone-source.png",
+    [string]$HeroDeathConcept = ".\assets\source\phantom-hero-death-concept-v2.png",
+    [string]$HeroDeathDirectionals = ".\assets\source\phantom-hero-death-directionals-v1.png",
+    [string]$HeroCastGlow = ".\assets\source\phantom-cast-staff-glow-v2.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
     [string]$GplCompiler = ""
 )
@@ -165,7 +167,9 @@ if ($LASTEXITCODE -ne 0) {
     --direction-03 (Resolve-RepoPath $HeroDirection03) `
     --direction-04 (Resolve-RepoPath $HeroDirection04) `
     --direction-05 (Resolve-RepoPath $HeroDirection05) `
-    --gravestone-source (Resolve-RepoPath $GravestoneImage) `
+    --death-concept (Resolve-RepoPath $HeroDeathConcept) `
+    --death-directionals (Resolve-RepoPath $HeroDeathDirectionals) `
+    --cast-glow (Resolve-RepoPath $HeroCastGlow) `
     --out-dir $heroSpriteDir
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom hero sprite generator failed with exit code $LASTEXITCODE"

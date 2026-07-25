@@ -1,7 +1,7 @@
 # Majesty Building Shadow Encoding
 
 This note records the working shadow format established while implementing the
-Phantom Guild. It applies to custom Majesty building sprites stored as indexed
+Phantoms Haunt. It applies to custom Majesty building sprites stored as indexed
 TILE v3 images.
 
 ## What the Engine Actually Renders
@@ -22,7 +22,7 @@ artifacts/references/wizard_guild_damaged_b_tile01783_raw_controls.png
 artifacts/references/wizard_guild_destroyed_tile01784_raw_controls.png
 ```
 
-The current Phantom Guild generator projects each frame's opaque silhouette
+The current Phantoms Haunt generator projects each frame's opaque silhouette
 toward the upper-left in sprite coordinates, consistent with Majesty's
 apparent light source over the viewer's right shoulder. The affine projection
 also compresses tall geometry toward its ground contact, so this should not be
@@ -45,7 +45,7 @@ The Wizard Guild reference uses these exact control entries:
 | `250` | `(229, 0, 229)` | Shadow band |
 
 The RGB values are how the indexed pixels appear in a raw preview; the palette
-indices are what matter to the renderer. The Phantom Guild uses registered
+indices are what matter to the renderer. The Phantoms Haunt uses registered
 palette `560`, whose entries `247-250` are patched to these reference values.
 
 Do not append a new SPLT palette for a mod building merely to add these colors.
@@ -116,7 +116,7 @@ cannot correct that failure. The RLE segment structure must be fixed.
   not an enclosed transparent component.
 - Fill the complete channel with the nearest shadow band first. Then derive
   index `247` only on the final shadow pixels touching actual body art. The
-  Phantom Guild generator performs this for gaps up to 14 pixels deep on the
+  Phantoms Haunt generator performs this for gaps up to 14 pixels deep on the
   shadow-facing side and inside concave row spans.
 - Preserve the nearest existing `248-250` feather band when filling a channel;
   hard-coding one band produces conspicuous blocks of a different magenta in
@@ -151,7 +151,7 @@ cannot correct that failure. The RLE segment structure must be fixed.
 
 ## High-Resolution Generated State Workflow
 
-The first successful Phantom Guild destruction pass established a repeatable
+The first successful Phantoms Haunt destruction pass established a repeatable
 way to create missing building states without asking the image model to produce
 engine-ready pixels:
 
@@ -175,7 +175,7 @@ engine-ready pixels:
 7. Review both the high-resolution progression and a nearest-neighbor contact
    sheet of the exact engine-sized frames before building.
 
-For the Phantom Guild, the validated Fervus-compatible progression is:
+For the Phantoms Haunt, the validated Fervus-compatible progression is:
 
 | Engine state | Tile | High-resolution concept |
 | --- | ---: | --- |
@@ -195,7 +195,7 @@ These numbers are not universal defaults. They record why this art fits its
 fixed Fervus canvases without clipping. A future sprite must be measured again.
 The invariant is that top, left, right, and reserved bottom gutters remain
 transparent after the shadow is painted. The generator and post-build
-validator now reject the two transitional Phantom Guild frames if they touch a
+validator now reject the two transitional Phantoms Haunt frames if they touch a
 fixed top or side boundary.
 
 ## Stock Destruction Overlay Attachments
@@ -221,7 +221,7 @@ set_offset + u32(set_offset + 64)
 Do not add `4` or `8` bytes. Writing later metadata can leave the visible
 effect unchanged while a mistaken validator appears to pass. After patching,
 read the built custom IMAG record back independently and verify the real
-coordinates. The Phantom Guild remaps those five layer-3 anchors to `(35, 25)`.
+coordinates. The Phantoms Haunt remaps those five layer-3 anchors to `(35, 25)`.
 
 Patch every engine state that displays the mismatched overlay, not merely the
 last rubble state. Base states `98-103` map in pairs to damage tiles `1529`,

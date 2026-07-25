@@ -105,6 +105,7 @@ CUSTOM_TILE_OWNERS = {
     b"PHG1Act": (b"PHG1Phantom Guild", "low16"),
     b"PHp1IceTile": (b"PHp1fire_blast_M", "u32"),
     b"PHM1PhantomTile": (b"PHM1Phantom", "low16"),
+    b"PHM1CastGlow": (b"PHM1Phantom", "low16"),
     b"PHo3IceTile": (b"PHo3Ice Lance Hit", "u32"),
 }
 
@@ -114,8 +115,23 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHG1Bld": 14,
     b"PHG1Act": 8,
     b"PHp1IceTile": 128,
-    b"PHM1PhantomTile": 208,
+    b"PHM1PhantomTile": 204,
+    b"PHM1CastGlow": 32,
     b"PHo3IceTile": 6,
+}
+
+ALIGNED_PHANTOM_DISSOLVE_TILES = {
+    f"PHM1PhantomTile{source_tile - 4586}".encode("ascii")
+    for source_tile in range(4779, 4786)
+}
+
+CLIP_SAFE_PHANTOM_DEATH_TILES = {
+    *{
+        f"PHM1PhantomTile{source_tile - 4586}".encode("ascii")
+        for source_tile in range(4723, 4741)
+    },
+    *ALIGNED_PHANTOM_DISSOLVE_TILES,
+    b"PHM1PhantomTile201",
 }
 
 SHADOWED_BUILDING_TILES = {
@@ -433,6 +449,8 @@ def validate_tile(path: Path, entry: Entry, tile: bytes, palette_count: int) -> 
     decoded_rows = (
         [[0 for _column in range(width)] for _row in range(height)]
         if entry.name in SHADOWED_BUILDING_TILES
+        or entry.name in ALIGNED_PHANTOM_DISSOLVE_TILES
+        or entry.name in CLIP_SAFE_PHANTOM_DEATH_TILES
         else None
     )
     for row, relative_start in enumerate(offsets):
@@ -487,6 +505,10 @@ def validate_tile(path: Path, entry: Entry, tile: bytes, palette_count: int) -> 
             "palette pixels outside shadow indices 247-250"
         )
     shadowless_hero_effect_tiles = {
+        *{
+            f"PHM1PhantomTile{offset}".encode("ascii")
+            for offset in range(4741 - 4586, 4746 - 4586)
+        },
         b"PHM1PhantomTile202",
         b"PHM1PhantomTile203",
         b"PHM1PhantomTile204",
@@ -503,8 +525,61 @@ def validate_tile(path: Path, entry: Entry, tile: bytes, palette_count: int) -> 
         and shadow_pixels == 0
     ):
         fail(f"{path}: {entry.label} lost its stock hero shadow control mask")
-    if decoded_rows is not None:
+    if entry.name in SHADOWED_BUILDING_TILES and decoded_rows is not None:
         validate_shadow_body_seam(path, entry, decoded_rows)
+    if entry.name in ALIGNED_PHANTOM_DISSOLVE_TILES and decoded_rows is not None:
+        validate_phantom_dissolve_baseline(path, entry, tile, decoded_rows)
+    if entry.name in CLIP_SAFE_PHANTOM_DEATH_TILES and decoded_rows is not None:
+        validate_phantom_death_frame_clearance(path, entry, decoded_rows)
+
+
+def validate_phantom_dissolve_baseline(
+    path: Path,
+    entry: Entry,
+    tile: bytes,
+    pixels: list[list[int]],
+) -> None:
+    hotspot_y = struct.unpack_from("<H", tile, 12)[0]
+    body_rows = [
+        y
+        for y, row in enumerate(pixels)
+        if any(value != 0 and not 247 <= value <= 250 for value in row)
+    ]
+    if not body_rows:
+        fail(f"{path}: {entry.label} has no ordinary body/effect pixels")
+    body_base_delta = max(body_rows) + 1 - hotspot_y
+    if not 6 <= body_base_delta <= 8:
+        fail(
+            f"{path}: {entry.label} body base is {body_base_delta:+d} pixels from its "
+            "hotspot; expected +6 through +8 after the two-pixel safety margin"
+        )
+
+
+def validate_phantom_death_frame_clearance(
+    path: Path,
+    entry: Entry,
+    pixels: list[list[int]],
+) -> None:
+    height = len(pixels)
+    width = len(pixels[0]) if pixels else 0
+    body_points = [
+        (x, y)
+        for y, row in enumerate(pixels)
+        for x, value in enumerate(row)
+        if value != 0 and not 247 <= value <= 250
+    ]
+    if not body_points:
+        fail(f"{path}: {entry.label} has no visible death artwork")
+    clipped = [
+        (x, y)
+        for x, y in body_points
+        if x in (0, width - 1) or y in (0, height - 1)
+    ]
+    if clipped:
+        fail(
+            f"{path}: {entry.label} death artwork touches a TILE boundary at "
+            f"{clipped[:8]}"
+        )
 
 
 def validate_shadow_body_seam(path: Path, entry: Entry, pixels: list[list[int]]) -> None:
@@ -782,15 +857,232 @@ def validate_custom_tile_references(
             fail(f"{path}: {entry.label} references palette {palette_index}; expected 560")
 
 
+def validate_phantom_die_directional_sequence(
+    path: Path,
+    image: bytes,
+    tiles: list[Entry],
+) -> None:
+    if len(image) < 24:
+        fail(f"{path}: Phantom IMAG is too short for an animation-set table")
+
+    entry_count = u32(image, 20)
+    table_end = 24 + entry_count * 8
+    if entry_count <= 0 or table_end > len(image):
+        fail(f"{path}: Phantom IMAG has an invalid animation-set table")
+
+    die_set_offset = next(
+        (
+            u32(image, 24 + index * 8 + 4)
+            for index in range(entry_count)
+            if u32(image, 24 + index * 8) == 96
+        ),
+        None,
+    )
+    if die_set_offset is None or die_set_offset + 0x58 > len(image):
+        fail(f"{path}: Phantom IMAG has no readable Die animation set")
+
+    tile_index_by_name = {entry.name: entry.index for entry in tiles}
+    populated = [
+        struct.unpack_from("<i", image, die_set_offset + 0x38 + slot * 4)[0]
+        for slot in range(8)
+    ]
+    populated = [offset for offset in populated if offset > 0]
+    if len(populated) != 6:
+        fail(f"{path}: Phantom Die set has {len(populated)} directions; expected six")
+
+    for direction_index, relative_offset in enumerate(populated):
+        frame_table = die_set_offset + relative_offset + 0x30
+        expected_source_tiles = (
+            4723 + direction_index * 3,
+            4724 + direction_index * 3,
+            4725 + direction_index * 3,
+        )
+        expected_indices = []
+        for source_tile in expected_source_tiles:
+            name = f"PHM1PhantomTile{source_tile - 4586}".encode("ascii")
+            if name not in tile_index_by_name:
+                fail(f"{path}: Phantom Die direction is missing custom TILE {name!r}")
+            expected_indices.append(tile_index_by_name[name])
+
+        actual = [
+            u32(image, frame_table + frame_index * 8 + 4) & 0xFFFF
+            for frame_index in range(6)
+        ]
+        expected = [
+            expected_indices[0],
+            expected_indices[1],
+            expected_indices[2],
+            expected_indices[2],
+            expected_indices[2],
+            expected_indices[2],
+        ]
+        if actual != expected:
+            fail(
+                f"{path}: Phantom Die direction {direction_index} begins {actual}; "
+                f"expected directional sequence {expected}"
+            )
+
+
+def validate_phantom_cast_glow_sequence(
+    path: Path,
+    image: bytes,
+    tiles: list[Entry],
+) -> None:
+    if len(image) < 24:
+        fail(f"{path}: Phantom IMAG is too short for an animation-set table")
+
+    entry_count = u32(image, 20)
+    table_end = 24 + entry_count * 8
+    if entry_count <= 0 or table_end > len(image):
+        fail(f"{path}: Phantom IMAG has an invalid animation-set table")
+
+    cast_set_offset = next(
+        (
+            u32(image, 24 + index * 8 + 4)
+            for index in range(entry_count)
+            if u32(image, 24 + index * 8) == 128
+        ),
+        None,
+    )
+    if cast_set_offset is None or cast_set_offset + 0x58 > len(image):
+        fail(f"{path}: Phantom IMAG has no readable Cast animation set")
+
+    populated = [
+        struct.unpack_from("<i", image, cast_set_offset + 0x40 + slot * 4)[0]
+        for slot in range(8)
+    ]
+    populated = [offset for offset in populated if offset > 0]
+    if len(populated) != 8:
+        fail(f"{path}: Phantom Cast set has {len(populated)} directions; expected eight")
+
+    tile_index_by_name = {entry.name: entry.index for entry in tiles}
+    effect_stages = (0, 1, 2, 1, 3)
+    for direction_index, relative_offset in enumerate(populated):
+        frame_table = cast_set_offset + relative_offset + 0x30
+        attachment_offsets = [
+            u32(image, frame_table + frame_index * 8)
+            for frame_index in range(8, 13)
+        ]
+        expected_attachment_offset = struct.unpack("<I", struct.pack("<hh", 2, -5))[0]
+        if any(value != expected_attachment_offset for value in attachment_offsets):
+            fail(
+                f"{path}: Phantom Cast direction {direction_index} has unexpected "
+                f"staff-glow offsets: {[hex(value) for value in attachment_offsets]}"
+            )
+        actual = [
+            u32(image, frame_table + frame_index * 8 + 4) & 0xFFFF
+            for frame_index in range(8, 13)
+        ]
+        expected = []
+        for stage in effect_stages:
+            name = f"PHM1CastGlowD{direction_index}F{stage}".encode("ascii")
+            if name not in tile_index_by_name:
+                fail(f"{path}: Phantom Cast direction is missing custom TILE {name!r}")
+            expected.append(tile_index_by_name[name])
+        if actual != expected:
+            fail(
+                f"{path}: Phantom Cast direction {direction_index} ends {actual}; "
+                f"expected staff-glow sequence {expected}"
+            )
+        recovery_name = f"PHM1PhantomTile{direction_index * 8}".encode("ascii")
+        if recovery_name not in tile_index_by_name:
+            fail(f"{path}: Phantom Cast recovery is missing custom TILE {recovery_name!r}")
+        recovery_actual = [
+            u32(image, frame_table + frame_index * 8 + 4) & 0xFFFF
+            for frame_index in range(13, 16)
+        ]
+        recovery_expected = [tile_index_by_name[recovery_name]] * 3
+        if recovery_actual != recovery_expected:
+            fail(
+                f"{path}: Phantom Cast direction {direction_index} recovers through "
+                f"{recovery_actual}; expected matching directional pose {recovery_expected}"
+            )
+
+
+def indexed_v3_body_bounds(tile: bytes) -> tuple[int, int, int, int] | None:
+    if len(tile) < 26:
+        return None
+    version, height, width = struct.unpack_from("<HHH", tile, 0)
+    if version != 3:
+        return None
+    palette_mode = struct.unpack_from("<H", tile, 20)[0]
+    pixel_end = struct.unpack_from("<I", tile, 22)[0] if palette_mode == 1 else len(tile)
+    offsets = [u32(tile, 26 + row * 4) for row in range(height)]
+    points: list[tuple[int, int]] = []
+    for row, relative_start in enumerate(offsets):
+        cursor = 26 + relative_start
+        end = 26 + offsets[row + 1] if row + 1 < height else pixel_end
+        while cursor + 4 <= end:
+            x_end, count, flags = struct.unpack_from("<HBB", tile, cursor)
+            cursor += 4
+            x_start = x_end - count
+            for column, value in enumerate(tile[cursor : cursor + count], x_start):
+                if 1 <= value <= 246:
+                    points.append((column, row))
+            cursor += count
+            if flags & 0x80:
+                break
+    if not points:
+        return None
+    return (
+        min(x for x, _y in points),
+        min(y for _x, y in points),
+        max(x for x, _y in points),
+        max(y for _x, y in points),
+    )
+
+
+def validate_phantom_cast_tile_geometry(
+    path: Path,
+    captured: dict[tuple[bytes, bytes], bytes],
+) -> None:
+    for direction in range(8):
+        geometry: list[tuple[int, int, int]] = []
+        for stage in range(4):
+            body_name = f"PHM1PhantomTile{4746 + direction * 4 + stage - 4586}".encode("ascii")
+            body_tile = captured.get((b"TILE", body_name))
+            if body_tile is None:
+                fail(f"{path}: missing cast body TILE {body_name!r}")
+            bounds = indexed_v3_body_bounds(body_tile)
+            if bounds is None:
+                fail(f"{path}: cast body TILE {body_name!r} has no readable body pixels")
+            left, top, right, bottom = bounds
+            hotspot_y = struct.unpack_from("<H", body_tile, 12)[0]
+            geometry.append((right - left + 1, bottom - top + 1, bottom - hotspot_y))
+
+            glow_name = f"PHM1CastGlowD{direction}F{stage}".encode("ascii")
+            glow_tile = captured.get((b"TILE", glow_name))
+            if glow_tile is None:
+                fail(f"{path}: missing cast glow TILE {glow_name!r}")
+            glow_bounds = indexed_v3_body_bounds(glow_tile)
+            if glow_bounds is None:
+                fail(f"{path}: cast glow TILE {glow_name!r} has no visible glow pixels")
+            glow_left, glow_top, glow_right, glow_bottom = glow_bounds
+            _version, glow_height, glow_width = struct.unpack_from("<HHH", glow_tile, 0)
+            if (
+                glow_left < 1
+                or glow_top < 1
+                or glow_right >= glow_width - 1
+                or glow_bottom >= glow_height - 1
+            ):
+                fail(f"{path}: cast glow TILE {glow_name!r} touches its canvas edge")
+
+        if len(set(geometry)) != 1:
+            fail(
+                f"{path}: Phantom Cast direction {direction} changes body geometry "
+                f"across frames: {geometry}"
+            )
+
+
 def validate_building_destruction_attachments(path: Path, image: bytes) -> None:
     if len(image) < 24:
-        fail(f"{path}: Phantom Guild IMAG is too short for an animation-set table")
+        fail(f"{path}: Phantoms Haunt IMAG is too short for an animation-set table")
 
     entry_count = u32(image, 20)
     table_start = 24
     table_end = table_start + entry_count * 8
     if entry_count <= 0 or table_end > len(image):
-        fail(f"{path}: Phantom Guild IMAG has an invalid animation-set table")
+        fail(f"{path}: Phantoms Haunt IMAG has an invalid animation-set table")
 
     actual: dict[int, tuple[int, int]] = {}
     for index in range(entry_count):
@@ -810,7 +1102,7 @@ def validate_building_destruction_attachments(path: Path, image: bytes) -> None:
 
     if actual != EXPECTED_BUILDING_DESTRUCTION_ATTACHMENTS:
         fail(
-            f"{path}: unexpected Phantom Guild destruction fire anchors; "
+            f"{path}: unexpected Phantoms Haunt destruction fire anchors; "
             f"expected={EXPECTED_BUILDING_DESTRUCTION_ATTACHMENTS}, actual={actual}"
         )
 
@@ -840,12 +1132,56 @@ def validate_bcd_copy(output_root: Path) -> None:
         fail(f"{data_bcd}: does not match the compiled GPL/Phantom.bcd")
 
 
+def validate_phantoms_haunt_identity(output_root: Path) -> None:
+    manifest_path = output_root / "PhantomGuildPoc.mmxml"
+    manifest = manifest_path.read_text(encoding="utf-8")
+    if "<DisplayName lang=\"en_US\">Phantoms Haunt POC</DisplayName>" not in manifest:
+        fail(f"{manifest_path}: missing Phantoms Haunt display name")
+
+    units_path = output_root / "Data" / "phantom_units.xml"
+    units = units_path.read_text(encoding="utf-8")
+    expected_building_identity = (
+        'ID="MBPhantomGuild" Name="Phantoms_Haunt" Description="Phantoms Haunt"'
+    )
+    if expected_building_identity not in units:
+        fail(f"{units_path}: building identity was not renamed to Phantoms Haunt")
+    if '<DefaultSound value="Phantoms_Haunt"/>' not in units:
+        fail(f"{units_path}: building sound name was not renamed to Phantoms_Haunt")
+
+    sounds_path = output_root / "Data" / "phantom_sounds.xml"
+    sounds = sounds_path.read_text(encoding="utf-8")
+    if 'ID="PH02" Name="Phantoms_Haunt"' not in sounds:
+        fail(f"{sounds_path}: building sound description retains the old name")
+
+    building_data_path = output_root / "GPL" / "Phantom_Building_Data.dat"
+    building_data = building_data_path.read_text(encoding="utf-8")
+    if "[Phantoms_Haunt]" not in building_data or "(title Phantoms_Haunt)" not in building_data:
+        fail(f"{building_data_path}: building data section was not renamed to Phantoms_Haunt")
+
+    hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
+    hero_data = hero_data_path.read_text(encoding="utf-8")
+    fearless_values = (
+        "(PercentageHPRetreat 0)",
+        "(enemy_estimation 0.1)",
+        "(self_estimation 10.0)",
+    )
+    missing = [value for value in fearless_values if value not in hero_data]
+    if missing:
+        fail(f"{hero_data_path}: fearless testing profile is missing {missing}")
+
+    generated_text = "\n".join((manifest, units, sounds, building_data, hero_data))
+    for stale_name in ("Phantoms Guild", "Phantoms_Guild", "Phantom_Guild"):
+        if stale_name in generated_text:
+            fail(f"{output_root}: generated text retains stale building name {stale_name!r}")
+
+
 def validate(output_root: Path) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
     validate_manifest(output_root)
     validate_descriptions(output_root)
     validate_bcd_copy(output_root)
+    validate_phantoms_haunt_identity(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:
@@ -862,9 +1198,35 @@ def validate(output_root: Path) -> None:
         fail(f"{gpltext_path}: STRT/QITM was not found")
     validate_indexed_item_strings(gpltext_path, qitm)
 
+    textdata_path = output_root / "Data" / "phantom_textdata.cam"
+    textdata_captured = archive_results["phantom_textdata.cam"][1]
+    unit_names = textdata_captured.get((b"STRT", b"UNTN"))
+    guild_strings = textdata_captured.get((b"STRT", b"AP07"))
+    if unit_names is None or b"Phantoms Haunt" not in unit_names:
+        fail(f"{textdata_path}: unit names do not contain Phantoms Haunt")
+    if guild_strings is None or b"PHANTOMS HAUNT" not in guild_strings:
+        fail(f"{textdata_path}: recruit dialog does not contain PHANTOMS HAUNT")
+    help_text = archive_results["phantom_gpltext.cam"][1].get((b"STRT", b"HPTX"))
+    if help_text is None or b"The Phantoms Haunt gathers" not in help_text:
+        fail(f"{gpltext_path}: building help text was not renamed to Phantoms Haunt")
+
     maindata_path = output_root / "Data" / "phantom_maindata.cam"
     sections, captured = archive_results["phantom_maindata.cam"]
     validate_custom_tile_references(maindata_path, sections, captured)
+    phantom_image = captured.get((b"IMAG", b"PHM1Phantom"))
+    if phantom_image is None:
+        fail(f"{maindata_path}: IMAG/PHM1Phantom was not found")
+    validate_phantom_die_directional_sequence(
+        maindata_path,
+        phantom_image,
+        sections.get(b"TILE", []),
+    )
+    validate_phantom_cast_glow_sequence(
+        maindata_path,
+        phantom_image,
+        sections.get(b"TILE", []),
+    )
+    validate_phantom_cast_tile_geometry(maindata_path, captured)
     building_image = captured.get((b"IMAG", b"PHG1Phantom Guild"))
     if building_image is None:
         fail(f"{maindata_path}: IMAG/PHG1Phantom Guild was not found")
@@ -876,7 +1238,7 @@ def validate(output_root: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate a generated Phantom Guild package.")
+    parser = argparse.ArgumentParser(description="Validate a generated Phantoms Haunt package.")
     parser.add_argument("--output-root", required=True, type=Path)
     args = parser.parse_args()
     try:

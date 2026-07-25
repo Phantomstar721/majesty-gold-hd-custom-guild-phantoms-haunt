@@ -52,7 +52,7 @@ PHANTOM_HERO_ICON_PALETTE_INDEX = 560
 PHANTOM_HERO_PORTRAIT_PALETTE_INDEX = 560
 BUILDING_ACTIVE_SET_ID = 192
 # The inherited Fervus destruction animation places its third fire layer well
-# beyond the upper-right edge of the Phantom Guild's custom damaged and rubble
+# beyond the upper-right edge of the Phantoms Haunt's custom damaged and rubble
 # frames. Keep the effect, but anchor it on the building across every collapse
 # state in which that layer appears.
 BUILDING_DESTRUCTION_ATTACHMENT_REMAPS = {
@@ -277,7 +277,7 @@ def phantom_units_xml() -> str:
 \t\t\t</Attributes>
 \t\t</Game>
 \t</Description>
-\t<Description type="Unit" subType="Building" ID="MBPhantomGuild" Name="Phantoms_Guild" Description="Phantoms Guild">
+\t<Description type="Unit" subType="Building" ID="MBPhantomGuild" Name="Phantoms_Haunt" Description="Phantoms Haunt">
 \t\t<Engine version="1">
 \t\t\t<Info value="BlockGround"/>
 \t\t\t<Info value="BlockFlying"/>
@@ -285,7 +285,7 @@ def phantom_units_xml() -> str:
 \t\t\t<CanUse value="HumanPlayer"/>
 \t\t\t<Menu value="1"/>
 \t\t\t<ImageIDBase value="PHG1"/>
-\t\t\t<DefaultSound value="Phantom_Guild"/>
+\t\t\t<DefaultSound value="Phantoms_Haunt"/>
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
@@ -463,7 +463,7 @@ def phantom_sounds_xml() -> str:
 \t\t\t</Phase>
 \t\t</Engine>
 \t</Description>
-\t<Description type="Sound" subType="Standard" ID="PH02" Name="Phantom_Guild">
+\t<Description type="Sound" subType="Standard" ID="PH02" Name="Phantoms_Haunt">
 \t\t<Engine version="1">
 \t\t\t<Category value="0"/>
 \t\t\t<Phase ID="Select">
@@ -492,9 +492,9 @@ def phantom_hero_data() -> str:
 \t\t(Friend\txx)
 \t\t(attacktype 1)
 \t\t(castingrange 240)
-\t\t(PercentageHPRetreat 40)
-\t\t(enemy_estimation 1.1)
-\t\t(self_estimation 1.2)
+\t\t(PercentageHPRetreat 0)
+\t\t(enemy_estimation 0.1)
+\t\t(self_estimation 10.0)
 \t\t(Loyalty 55)
 \t\t(Greed 12)
 \t\t(Luck 12)
@@ -530,11 +530,11 @@ def phantom_items_data() -> str:
 
 
 def phantom_building_data() -> str:
-    return """[Phantoms_Guild]
+    return """[Phantoms_Haunt]
 \t{Guild
 \t\t(type building)
 \t\t(subtype Guild)
-\t\t(title Phantoms_Guild)
+\t\t(title Phantoms_Haunt)
 \t\t(Level 1)
 \t\t(max_level 1)
 \t\t(member_title Phantom)
@@ -562,7 +562,7 @@ expression #Phantom_Item_BlackIcerod 81
 function DEAL_DEMON()
 
 declare
-\tagent AIRootAgent,palace,guild,lair,phantom_guild,elf_guild;
+\tagent AIRootAgent,palace,guild,lair,phantoms_haunt,elf_guild;
 \tlist guilds,palaces,lairs;
 
 begin
@@ -585,11 +585,11 @@ begin
 \t\t\t$NewThread( Guild's "SpecialScript", 60000 + $randomnumber(60000), Guild );
 \t\tend
 
-\tphantom_guild = $SpawnUnit(palace, "Phantoms_Guild", $RandomCoord(palace, 275, 475), "MaxHP");
-\tIf (phantom_guild != $NullAgent())
+\tphantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt", $RandomCoord(palace, 275, 475), "MaxHP");
+\tIf (phantoms_haunt != $NullAgent())
 \t\tbegin
-\t\t\tphantom_guild's "SpecialScript" = $Hero_Generator;
-\t\t\t$NewThread( phantom_guild's "SpecialScript", 60000 + $randomnumber(60000), phantom_guild );
+\t\t\tphantoms_haunt's "SpecialScript" = $Hero_Generator;
+\t\t\t$NewThread( phantoms_haunt's "SpecialScript", 60000 + $randomnumber(60000), phantoms_haunt );
 \t\tend
 
 \telf_guild = $SpawnUnit(palace, "Elven_Bungalow", $RandomCoord(palace, 275, 475), "MaxHP");
@@ -790,9 +790,9 @@ def mod_xml() -> str:
     return f"""<Majesty>
 \t<Mod id="{{{MOD_ID}}}">
 \t\t<Name>PhantomGuildPoc</Name>
-\t\t<DisplayName lang="en_US">Phantom Guild POC</DisplayName>
+\t\t<DisplayName lang="en_US">Phantoms Haunt POC</DisplayName>
 \t\t<Description lang="en_US">
-\t\t\t<Short>Adds a test Phantoms Guild and recruitable Phantom hero.</Short>
+\t\t\t<Short>Adds the Phantoms Haunt and its recruitable Phantom heroes.</Short>
 \t\t\t<Long/>
 \t\t</Description>
 \t\t<DataConfiguration>
@@ -817,7 +817,7 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
         unit_names.data,
         {
             fourcc_id(HERO_ID): "Phantom",
-            fourcc_id(BUILDING_TEXT_ID): "Phantoms Guild",
+            fourcc_id(BUILDING_TEXT_ID): "Phantoms Haunt",
             fourcc_id("PHIC"): "Frozen Cowl",
             fourcc_id("PHIR"): "Black Icerod",
         },
@@ -840,10 +840,10 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
     cloned_guild_strings = patch_indexed_strt_strings(
         source_guild_strings.data,
         {
-            0: "PHANTOMS GUILD",
+            0: "PHANTOMS HAUNT",
             1: "RECRUIT Phantom         ",
             2: "Recruit a Phantom ",
-            3: "Destroy this Phantoms Guild.",
+            3: "Destroy this Phantoms Haunt.",
         },
     )
 
@@ -886,7 +886,7 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
             fourcc_id("hP34"): (
                 "- Recruits Phantoms\n\n"
                 "- Phantoms are ghostly ice casters with custom class gear\n\n"
-                "\x01BCBCFFThe Phantoms Guild gathers cold, restless spirits into service as arcane heroes. "
+                "\x01BCBCFFThe Phantoms Haunt gathers cold, restless spirits into service as arcane heroes. "
                 "Its members fight like fragile spellcasters, striking from range with Ice Lance and other frost magic."
             ),
         },
@@ -962,6 +962,7 @@ def write_maindata_cam(
     ice_effect_maindata: Path | None,
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
+    hero_imag = replace_priestess_die_holds_with_directional_third_frames(hero_imag)
     building_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_BUILDING_IMAGE).data
     ice_lance_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICE_LANCE_ICON).data
     ice_lance_projectile = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICE_LANCE_PROJECTILE).data
@@ -1007,6 +1008,14 @@ def write_maindata_cam(
     building_sprite_rgb_paths = building_sprite_replacement_paths(building_sprite_rgb_dir)
     building_active_frame_paths = building_active_replacement_paths(building_sprite_rgb_dir)
     hero_sprite_png_paths = hero_sprite_replacement_paths(hero_sprite_png_dir)
+    hero_cast_glow_paths = cast_glow_replacement_paths(hero_sprite_png_dir)
+    if len(hero_cast_glow_paths) == 4:
+        # Every Cast direction is replaced with a staff-local glow below, so
+        # the four shared Priestess ground-swirl TILEs must not be copied into
+        # the Phantom archive as immediately orphaned custom assets.
+        phantom_sprite_tile_indices = [
+            index for index in phantom_sprite_tile_indices if not 4788 <= index <= 4791
+        ]
     building_sprite_tile_indices = sorted(
         referenced_low16_tile_indices(building_imag, len(tiles)) & set(building_sprite_rgb_paths)
     )
@@ -1153,6 +1162,7 @@ def write_maindata_cam(
     if phantom_sprite_tile_indices:
         first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
         phantom_sprite_tile_replacements: dict[int, int] = {}
+        phantom_sprite_tiles_by_source: dict[int, bytes] = {}
         for offset, source_tile_index in enumerate(phantom_sprite_tile_indices):
             custom_tile_index = first_custom_tile_index + offset
             phantom_sprite_tile_replacements[source_tile_index] = custom_tile_index
@@ -1180,10 +1190,24 @@ def write_maindata_cam(
                 shadow_source_path = (
                     None
                     if source_tile_index == 4787
-                    else hero_sprite_png_paths.get(4586 + hero_direction * 8)
+                    else (
+                        hero_sprite_png_paths[source_tile_index]
+                        if 4779 <= source_tile_index <= 4785
+                        else hero_sprite_png_paths.get(4586 + hero_direction * 8)
+                    )
                 )
+                death_art = is_phantom_death_art_tile(source_tile_index)
+                cast_body = is_phantom_cast_body_tile(source_tile_index)
+                render_template_tile = source_tile
+                if cast_body:
+                    # Stock Priestess cast phases use differently sized TILE
+                    # canvases. Reusing the first canvas for all four phases of
+                    # a direction keeps the Phantom's dimensions, hotspot, and
+                    # feet perfectly stable throughout the cast.
+                    cast_direction = (source_tile_index - 4746) // 4
+                    render_template_tile = tiles[4746 + cast_direction * 4].data
                 tile = tile_from_png_source(
-                    remap_tile_palette_index(source_tile, 32),
+                    remap_tile_palette_index(render_template_tile, 32),
                     palettes,
                     hero_sprite_png_paths[source_tile_index],
                     scale_multiplier=hero_sprite_scale_multiplier(source_tile_index),
@@ -1192,16 +1216,56 @@ def write_maindata_cam(
                     shadow_strength=hero_sprite_shadow_strength(source_tile_index),
                     horizontal_alignment=hero_sprite_horizontal_alignment(source_tile_index),
                     shadow_png_path=shadow_source_path,
+                    edge_margin=2 if death_art or cast_body else 0,
+                    body_base_offset=hero_sprite_body_base_offset(source_tile_index),
                 )
             else:
                 tile = recolored_priestess_phantom_sprite_tile(source_tile, palettes, source_tile_index)
             extra_tiles.append(
                 CamEntry(
-                    name=pad_name(f"PHM1PhantomTile{offset}".encode("ascii")),
+                    name=pad_name(
+                        f"PHM1PhantomTile{source_tile_index - 4586}".encode("ascii")
+                    ),
                     data=tile,
                 )
             )
+            phantom_sprite_tiles_by_source[source_tile_index] = tile
         hero_imag = remap_imag_low16_tile_indices(hero_imag, phantom_sprite_tile_replacements)
+        if len(hero_cast_glow_paths) == 4:
+            cast_glow_indices: dict[tuple[int, int], int] = {}
+            for direction in range(8):
+                for stage, glow_path in enumerate(hero_cast_glow_paths):
+                    body_source_tile = 4746 + direction * 4 + stage
+                    body_tile = phantom_sprite_tiles_by_source.get(body_source_tile)
+                    if body_tile is None:
+                        raise ValueError(
+                            f"Missing generated cast body TILE {body_source_tile} "
+                            f"for direction {direction}, stage {stage}"
+                        )
+                    custom_tile_index = max_tile_index + len(extra_tiles) + 1
+                    cast_glow_indices[(direction, stage)] = custom_tile_index
+                    extra_tiles.append(
+                        CamEntry(
+                            name=pad_name(
+                                f"PHM1CastGlowD{direction}F{stage}".encode("ascii")
+                            ),
+                            data=cast_staff_glow_overlay_tile(
+                                body_tile,
+                                palettes,
+                                glow_path,
+                                direction,
+                                stage,
+                            ),
+                        )
+                    )
+            hero_imag = replace_cast_effect_frames_with_directional_glows(
+                hero_imag,
+                cast_glow_indices,
+                {
+                    direction: phantom_sprite_tile_replacements[4586 + direction * 8]
+                    for direction in range(8)
+                },
+            )
 
     if ice_lance_hit_effect and ice_effect_tiles:
         first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
@@ -1665,15 +1729,17 @@ def is_building_dialog_key_index(index: int, colors: list[tuple[int, int, int]])
 
 
 def hero_sprite_scale_multiplier(source_tile_index: int) -> float:
-    # Cast TILEs are taller to accommodate the stock overhead magic effect.
-    # Do not let that extra canvas height enlarge the Phantom's body relative
-    # to stand/walk; reserve it for the approved hand vortex instead.
+    if 4723 <= source_tile_index <= 4740 or 4779 <= source_tile_index <= 4787:
+        return 1.0
     if 4746 <= source_tile_index <= 4777:
-        return 0.96
+        return 1.0
     return 1.12
 
 
 def hero_sprite_max_anchor_height(source_tile_index: int) -> int | None:
+    if 4746 <= source_tile_index <= 4777:
+        direction = (source_tile_index - 4746) // 4
+        return (71, 65, 58, 52, 48, 48, 48, 48)[direction]
     # The stock shared dissolve records use progressively enormous canvases for
     # effects. Scaling replacement character art to those per-frame bounds
     # makes the Phantom balloon several times before becoming a gravestone.
@@ -1683,12 +1749,20 @@ def hero_sprite_max_anchor_height(source_tile_index: int) -> int | None:
 
 
 def hero_sprite_vertical_offset(source_tile_index: int) -> int:
-    # These two shared dissolve canvases place the stock effect roughly 52
-    # pixels below the neighboring death frames. Keep their replacement body
-    # and projected shadow at the same world-space baseline as tiles 4782/4785.
-    if source_tile_index in (4783, 4784):
-        return -52
     return 0
+
+
+def hero_sprite_body_base_offset(source_tile_index: int) -> int | None:
+    if 4746 <= source_tile_index <= 4777:
+        direction = (source_tile_index - 4746) // 4
+        return (13, 14, 17, 12, 8, 8, 8, 8)[direction]
+    if 4723 <= source_tile_index <= 4740:
+        return 12
+    if 4779 <= source_tile_index <= 4785:
+        return 8
+    if source_tile_index == 4787:
+        return 22
+    return None
 
 
 def hero_sprite_shadow_strength(source_tile_index: int) -> float:
@@ -1718,6 +1792,18 @@ def hero_sprite_direction_index(source_tile_index: int) -> int:
     return direction
 
 
+def is_phantom_death_art_tile(source_tile_index: int) -> bool:
+    return (
+        4723 <= source_tile_index <= 4740
+        or 4779 <= source_tile_index <= 4785
+        or source_tile_index == 4787
+    )
+
+
+def is_phantom_cast_body_tile(source_tile_index: int) -> bool:
+    return 4746 <= source_tile_index <= 4777
+
+
 def tile_from_png_source(
     original_tile: bytes,
     palettes: list[CamEntry],
@@ -1729,6 +1815,8 @@ def tile_from_png_source(
     shadow_strength: float = 1.0,
     horizontal_alignment: str = "left",
     shadow_png_path: Path | None = None,
+    edge_margin: int = 0,
+    body_base_offset: int | None = None,
 ) -> bytes:
     decoded = decode_indexed_v3_tile(original_tile)
     colors = tile_palette_colors(original_tile, palettes)
@@ -1762,12 +1850,18 @@ def tile_from_png_source(
 
     anchor_height = max(1, anchor_bottom - anchor_top)
     if max_anchor_height is not None:
-        anchor_height = min(anchor_height, max_anchor_height)
+        anchor_height = max_anchor_height
     # Size the Phantom body by the stock character height, while allowing
     # action effects to use the rest of the native TILE canvas. Constraining
     # the whole attack/cast image to the narrow Priestess body bbox would make
     # the character tiny merely because an ice lance or vortex extends aside.
-    scale = min(width / source.width, anchor_height / source.height) * scale_multiplier
+    available_width = max(1, width - edge_margin * 2)
+    available_height = max(1, height - edge_margin * 2)
+    scale = min(
+        available_width / source.width,
+        available_height / source.height,
+        anchor_height / source.height,
+    ) * scale_multiplier
     scaled_size = (
         max(1, int(source.width * scale)),
         max(1, int(source.height * scale)),
@@ -1778,12 +1872,16 @@ def tile_from_png_source(
     target = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     anchor_x = (anchor_left + anchor_right) // 2
     x = anchor_x - source.width // 2
-    y = anchor_bottom - source.height + vertical_offset
+    if body_base_offset is None:
+        y = anchor_bottom - source.height + vertical_offset
+    else:
+        hotspot_y = struct.unpack_from("<H", original_tile, 12)[0]
+        y = hotspot_y + body_base_offset - source.height
     if source.width > width:
         x = width - source.width if horizontal_alignment == "right" else 0
     else:
-        x = max(0, min(width - source.width, x))
-    y = max(0, min(height - source.height, y))
+        x = max(edge_margin, min(width - edge_margin - source.width, x))
+    y = max(edge_margin, min(height - edge_margin - source.height, y))
     target.alpha_composite(source, (x, y))
 
     # Project the Phantom's own dark silhouette toward the upper-left Majesty
@@ -1813,12 +1911,16 @@ def tile_from_png_source(
             )
             shadow_target = Image.new("RGBA", (width, height), (0, 0, 0, 0))
             shadow_x = anchor_x - shadow_source.width // 2
-            shadow_y = anchor_bottom - shadow_source.height + vertical_offset
+            if body_base_offset is None:
+                shadow_y = anchor_bottom - shadow_source.height + vertical_offset
+            else:
+                hotspot_y = struct.unpack_from("<H", original_tile, 12)[0]
+                shadow_y = hotspot_y + body_base_offset - shadow_source.height
             if shadow_source.width > width:
                 shadow_x = width - shadow_source.width if horizontal_alignment == "right" else 0
             else:
-                shadow_x = max(0, min(width - shadow_source.width, shadow_x))
-            shadow_y = max(0, min(height - shadow_source.height, shadow_y))
+                shadow_x = max(edge_margin, min(width - edge_margin - shadow_source.width, shadow_x))
+            shadow_y = max(edge_margin, min(height - edge_margin - shadow_source.height, shadow_y))
             shadow_target.alpha_composite(shadow_source, (shadow_x, shadow_y))
 
     output_pixels = projected_floating_hero_shadow(shadow_target, shadow_strength)
@@ -1995,6 +2097,71 @@ def projected_floating_hero_shadow(
                 pixels[y][x] = 0
 
     return pixels
+
+
+def cast_staff_glow_overlay_tile(
+    body_tile: bytes,
+    palettes: list[CamEntry],
+    glow_png_path: Path,
+    direction: int,
+    stage: int,
+) -> bytes:
+    from PIL import Image
+
+    decoded = decode_indexed_v3_tile(body_tile)
+    colors = tile_palette_colors(body_tile, palettes)
+    if decoded is None or colors is None:
+        raise ValueError("Expected a readable indexed cast body TILE")
+    height, width, body_pixels = decoded
+
+    candidates: list[tuple[int, int]] = []
+    for y, row in enumerate(body_pixels):
+        if y > int(height * 0.62):
+            continue
+        for x, palette_index in enumerate(row):
+            if palette_index == 0 or 247 <= palette_index <= 250:
+                continue
+            red, green, blue = colors[palette_index]
+            if blue >= 115 and green >= 80 and blue > red + 24 and green > red + 12:
+                candidates.append((x, y))
+    if not candidates:
+        raise ValueError(f"Could not locate staff crystal for cast direction {direction}")
+
+    staff_on_right = direction in (0, 1, 4)
+    extreme_x = (
+        max(x for x, _y in candidates)
+        if staff_on_right
+        else min(x for x, _y in candidates)
+    )
+    crystal_points = [(x, y) for x, y in candidates if abs(x - extreme_x) <= 4]
+    center_x = round(sum(x for x, _y in crystal_points) / len(crystal_points))
+    center_y = round(sum(y for _x, y in crystal_points) / len(crystal_points))
+
+    glow = Image.open(glow_png_path).convert("RGBA")
+    glow = remove_small_detached_alpha_components(glow)
+    bbox = glow.getbbox()
+    if bbox is None:
+        raise ValueError(f"Cast glow source is empty: {glow_png_path}")
+    glow = glow.crop(bbox)
+    diameter = (11, 14, 18, 11)[stage]
+    glow.thumbnail((diameter, diameter), Image.Resampling.LANCZOS)
+
+    left = max(1, min(width - glow.width - 1, center_x - glow.width // 2))
+    top = max(1, min(height - glow.height - 1, center_y - glow.height // 2))
+    pixels = [[0 for _x in range(width)] for _y in range(height)]
+    for glow_y in range(glow.height):
+        for glow_x in range(glow.width):
+            red, green, blue, alpha = glow.getpixel((glow_x, glow_y))
+            if alpha < 18:
+                continue
+            pixels[top + glow_y][left + glow_x] = nearest_visible_palette_index(
+                max(12, red),
+                max(13, green),
+                max(18, blue),
+                colors,
+            )
+
+    return encode_indexed_v3_tile_like_original(body_tile, pixels)
 
 
 def tile_from_png_native_size(original_tile: bytes, palettes: list[CamEntry], png_path: Path) -> bytes:
@@ -2259,6 +2426,138 @@ def remap_imag_low16_tile_indices(imag: bytes, replacements: dict[int, int]) -> 
                 offset,
                 (value & 0xFFFF0000) | replacements[low_tile_index],
             )
+    return bytes(patched)
+
+
+def replace_priestess_die_holds_with_directional_third_frames(imag: bytes) -> bytes:
+    """Keep the recognizable shatter pose directional before shared effects."""
+    if len(imag) < 24:
+        raise ValueError("Hero IMAG is too short for an animation-set table")
+
+    entry_count = u32(imag, 20)
+    table_start = 24
+    table_end = table_start + entry_count * 8
+    if entry_count <= 0 or table_end > len(imag):
+        raise ValueError("Hero IMAG has an invalid animation-set table")
+
+    die_set_offset: int | None = None
+    for index in range(entry_count):
+        entry_offset = table_start + index * 8
+        if u32(imag, entry_offset) == 96:
+            die_set_offset = u32(imag, entry_offset + 4)
+            break
+    if die_set_offset is None or die_set_offset + 0x58 > len(imag):
+        raise ValueError("Hero IMAG has no readable Die animation set")
+
+    direction_offsets = [
+        struct.unpack_from("<i", imag, die_set_offset + 0x38 + slot * 4)[0]
+        for slot in range(8)
+    ]
+    populated = [offset for offset in direction_offsets if offset > 0]
+    if len(populated) != 6:
+        raise ValueError(f"Expected six populated Die directions, found {len(populated)}")
+
+    patched = bytearray(imag)
+    for direction_index, relative_offset in enumerate(populated):
+        direction_offset = die_set_offset + relative_offset
+        frame_table = direction_offset + 0x30
+        if frame_table + 13 * 8 > len(imag):
+            raise ValueError(f"Die direction {direction_index} has a truncated frame table")
+
+        first_tile = u32(imag, frame_table + 4) & 0xFFFF
+        expected_first = 4723 + direction_index * 3
+        if first_tile != expected_first:
+            raise ValueError(
+                f"Die direction {direction_index} begins with TILE {first_tile}; "
+                f"expected {expected_first}"
+            )
+        third_directional_tile = first_tile + 2
+        for frame_index in range(2, 6):
+            tile_offset = frame_table + frame_index * 8 + 4
+            value = u32(patched, tile_offset)
+            struct.pack_into(
+                "<I",
+                patched,
+                tile_offset,
+                (value & 0xFFFF0000) | third_directional_tile,
+            )
+
+    return bytes(patched)
+
+
+def replace_cast_effect_frames_with_directional_glows(
+    imag: bytes,
+    glow_indices: dict[tuple[int, int], int],
+    recovery_indices: dict[int, int],
+) -> bytes:
+    if len(glow_indices) != 32:
+        raise ValueError(f"Expected 32 directional cast glows, got {len(glow_indices)}")
+    if len(recovery_indices) != 8:
+        raise ValueError(f"Expected eight directional cast recovery TILEs, got {len(recovery_indices)}")
+    if len(imag) < 24:
+        raise ValueError("Hero IMAG is too short for an animation-set table")
+
+    entry_count = u32(imag, 20)
+    table_end = 24 + entry_count * 8
+    if entry_count <= 0 or table_end > len(imag):
+        raise ValueError("Hero IMAG has an invalid animation-set table")
+
+    cast_set_offset: int | None = None
+    for index in range(entry_count):
+        entry_offset = 24 + index * 8
+        if u32(imag, entry_offset) == 128:
+            cast_set_offset = u32(imag, entry_offset + 4)
+            break
+    if cast_set_offset is None or cast_set_offset + 0x58 > len(imag):
+        raise ValueError("Hero IMAG has no readable Cast animation set")
+
+    populated = [
+        struct.unpack_from("<i", imag, cast_set_offset + 0x40 + slot * 4)[0]
+        for slot in range(8)
+    ]
+    populated = [offset for offset in populated if offset > 0]
+    if len(populated) != 8:
+        raise ValueError(f"Expected eight populated Cast directions, found {len(populated)}")
+
+    patched = bytearray(imag)
+    effect_stages = (0, 1, 2, 1, 3)
+    for direction, relative_offset in enumerate(populated):
+        frame_table = cast_set_offset + relative_offset + 0x30
+        if frame_table + 16 * 8 > len(imag):
+            raise ValueError(f"Cast direction {direction} has a truncated frame table")
+        for frame_index, stage in zip(range(8, 13), effect_stages):
+            frame_offset = frame_table + frame_index * 8
+            tile_offset = frame_offset + 4
+            # The stock Priestess swirl is authored around the ground and its
+            # IMAG frames carry large per-direction offsets (often 40–75 px
+            # upward). Our glow is already positioned on the staff crystal in
+            # the body TILE's coordinate system, so those inherited offsets
+            # would displace it far above the Phantom. A tiny upward nudge
+            # centers the glow on the in-game staff crystal.
+            struct.pack_into("<hh", patched, frame_offset, 2, -5)
+            value = u32(patched, tile_offset)
+            custom_index = glow_indices[(direction, stage)]
+            if custom_index > 0xFFFF:
+                raise ValueError(f"Custom cast glow TILE index {custom_index} exceeds low16")
+            struct.pack_into(
+                "<I",
+                patched,
+                tile_offset,
+                (value & 0xFFFF0000) | custom_index,
+            )
+        recovery_index = recovery_indices[direction]
+        if recovery_index > 0xFFFF:
+            raise ValueError(f"Cast recovery TILE index {recovery_index} exceeds low16")
+        for frame_index in range(13, 16):
+            tile_offset = frame_table + frame_index * 8 + 4
+            value = u32(patched, tile_offset)
+            struct.pack_into(
+                "<I",
+                patched,
+                tile_offset,
+                (value & 0xFFFF0000) | recovery_index,
+            )
+
     return bytes(patched)
 
 
@@ -3306,6 +3605,21 @@ def hero_sprite_replacement_paths(hero_sprite_png_dir: Path | None) -> dict[int,
             continue
         paths[tile_index] = path
     return paths
+
+
+def cast_glow_replacement_paths(hero_sprite_png_dir: Path | None) -> list[Path]:
+    if hero_sprite_png_dir is None or not hero_sprite_png_dir.exists():
+        return []
+
+    prefix = "cast_glow_"
+    paths: dict[int, Path] = {}
+    for path in sorted(hero_sprite_png_dir.glob(f"{prefix}*.png")):
+        try:
+            stage = int(path.stem[len(prefix) :])
+        except ValueError:
+            continue
+        paths[stage] = path
+    return [paths[index] for index in sorted(paths)]
 
 
 def splt_palette_colors(palette: bytes) -> list[tuple[int, int, int]]:

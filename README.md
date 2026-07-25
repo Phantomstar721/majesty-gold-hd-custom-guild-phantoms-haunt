@@ -1,16 +1,16 @@
-# Majesty Phantom Guild POC
+# Majesty Phantoms Haunt POC
 
 Proof of concept for adding a new buildable guild and recruitable custom hero to
 Majesty Gold HD through a local mod package.
 
 This currently builds:
 
-- `Phantoms Guild`, building ID `MBPhantomGuild`, castle build-menu cost `1`.
+- `Phantoms Haunt`, building ID `MBPhantomGuild`, castle build-menu cost `1`.
 - `Phantom`, hero ID `PHM1`, recruit cost `1`.
 - Custom generated Phantom profile art, small hero icon, and small guild icon.
-- A custom blue Phantom Guild dialog look built by borrowing the stock Elf
+- A custom blue Phantoms Haunt dialog look built by borrowing the stock Elf
   recruit dialog.
-- Custom generated Phantom Guild world/building sprite frames, including
+- Custom generated Phantoms Haunt world/building sprite frames, including
   inactive, active, damaged, destroyed, and build-progress variants.
 - Custom Phantom starter special items:
   - `Frozen Cowl`, item ID `80`, grants `+1` armor.
@@ -30,9 +30,9 @@ sprite set with a Phantom recolor.
 
 Confirmed working in-game:
 
-- Private Workshop packaging keeps `Phantoms Guild` available across quest
+- Private Workshop packaging keeps `Phantoms Haunt` available across quest
   reloads and main-menu returns.
-- `Phantoms Guild` is buildable from the castle menu and recruits `Phantom`
+- `Phantoms Haunt` is buildable from the castle menu and recruits `Phantom`
   heroes.
 - Phantom profile art, matching hero-list/guild member icons, custom guild
   build-menu icon, custom dialog panel art, generated in-map sprite art,
@@ -40,12 +40,12 @@ Confirmed working in-game:
 - `Ice Lance` is a Phantom-only custom spell with its own directional
   projectile art and Frost Field hit overlay, without modifying stock Wizard
   spell visuals.
-- `Phantoms Guild` now has a generated Phantom-only building sprite set wired
+- `Phantoms Haunt` now has a generated Phantom-only building sprite set wired
   through appended tile records, without modifying the stock Wizard Guild art.
-- Occupied Phantom Guilds use an eight-frame full-building active animation so
+- Occupied Haunts use an eight-frame full-building active animation so
   the cyan windows and arcane highlights pulse while heroes are inside.
 - `A Deal with the Demon` is patched for testing so it starts with both a
-  Phantom Guild and an Elven Bungalow.
+  Phantoms Haunt and an Elven Bungalow.
 
 Next planned work:
 
@@ -127,7 +127,7 @@ The normal fast test cycle is:
 1. Build into `dist\PhantomGuildPoc`.
 2. Deploy directly into Steam's subscribed Workshop folder with
    `scripts\Deploy-PhantomGuildPocRegisteredWorkshop.ps1`.
-3. Launch Majesty and enable `Phantom Guild POC` in the mod list.
+3. Launch Majesty and enable `Phantoms Haunt POC` in the mod list.
 
 Keep the SDK/RGSeditor path available for updating the private Workshop item
 metadata, but day-to-day local testing should use the registered Workshop deploy
@@ -145,7 +145,7 @@ The current Workshop-only compromise is to borrow the stock Elf recruit dialog:
 AP07
 ```
 
-The Phantom Guild uses `AP07` because that ID already has the right recruit
+The Phantoms Haunt uses `AP07` because that ID already has the right recruit
 behavior. The mod replaces the AP07 strings and redirects its raw texture
 reference from `INTIraw textures` to `PHTIraw textures`, which gives the Phantom
 Guild the blue custom panel background. The AP07 menu also references the Elf
@@ -156,7 +156,7 @@ AVd1 -> PHM1
 INTI -> PHTI
 ```
 
-This makes the Phantom Guild use the Phantom icon and custom background. Because
+This makes the Phantoms Haunt use the Phantom icon and custom background. Because
 AP07 is shared, the stock Elven Bungalow also inherits those AP07 visual
 overrides while this mod is active.
 
@@ -213,13 +213,13 @@ The working custom guild sprite path is:
 
 - Start from the stock `ABQ1Temple, Fervus1` image record. It has normal
   peasant-built construction behavior and a scaffold footprint that fits the
-  large Phantom Guild art better than the Rogue Guild source did.
+  large Phantoms Haunt art better than the Rogue Guild source did.
 - Do not start from the Wizard Guild image record for this building. Its
   construction state has special magical self-build visuals that look wrong
-  when reused for the Phantom Guild, even though the Wizard active-state pulse
+  when reused for the Phantoms Haunt, even though the Wizard active-state pulse
   behavior was useful as a reference.
 - Generate exact-size PNG/RGB replacements for the specific Fervus source tiles
-  used by the Phantom Guild clone. The current generator reads from
+  used by the Phantoms Haunt clone. The current generator reads from
   `assets\source\phantom-guild-sprite-sheet-smooth.png` and writes files named
   like `building_tile_01505.png`.
 - Generate the three construction states from
@@ -242,10 +242,10 @@ The working custom guild sprite path is:
   do not replace the stock Fervus tile IDs in-place.
 
 This keeps the original Wizard Guild functioning normally while giving the
-Phantom Guild its own inactive, active, damaged, destroyed, and build-progress
+Phantoms Haunt its own inactive, active, damaged, destroyed, and build-progress
 world art.
 
-The Phantom Guild should remain a normal peasant-built guild. Its building XML
+The Phantoms Haunt should remain a normal peasant-built guild. Its building XML
 intentionally matches normal guild placement behavior and does not use
 terrain-height modification.
 
@@ -260,7 +260,7 @@ behavior while keeping the Fervus construction scaffold:
 
 - `scripts\generate_phantom_building_sprites.py` emits
   `building_active_frame_00.png` through `building_active_frame_07.png`.
-- These are full-building frames generated from the same smooth Phantom Guild
+- These are full-building frames generated from the same smooth Phantoms Haunt
   source art, with only the cyan highlight intensity pulsed.
 - The generator also projects each clean building silhouette down and left,
   painting a three-band cast shadow with Majesty's reserved palette indices
@@ -308,7 +308,7 @@ source sheet:
   spell, and equipment icon PNG/RGB files into `dist\temp`.
 - `assets\source\phantom-icons-sheet.png` is a current reference/contact sheet
   for humans, not build input.
-- The Phantom Guild build-menu icon, hero-list icon, guild member/count icon,
+- The Phantoms Haunt build-menu icon, hero-list icon, guild member/count icon,
   and Phantom profile portrait are palette-remapped to palette `560` so they
   share the same cyan/blue visual family in-game.
 - The cloned Phantom image has an internal hero icon tile copied from the
@@ -476,10 +476,10 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
 - The current Phantom gravestone is a temporary first pass and is next in line
   for a complete visual redesign.
 - `Frost Armor` and `Blizzard` still need a dedicated stability pass.
-- The Phantom Guild borrows the stock Elf recruit dialog. This keeps the mod
+- The Phantoms Haunt borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
   while the mod is active.
-- The Phantom Guild is still a proof of concept rather than a balanced finished
+- The Phantoms Haunt is still a proof of concept rather than a balanced finished
   content mod.
 
 ## Next Session
@@ -492,15 +492,16 @@ Checkpoint recorded July 25, 2026:
   runs, missing seams, bounded transparent construction pits, and transparent
   islands enclosed entirely by shadow controls.
 - The directional Phantom hero, floating movement, action frames, corrected
-  direction mapping, projected detached shadows, movement speed, bravery
-  behavior, and reward responsiveness are working well enough to retain.
-- Remaining hero-art issue: clean up the death sequence, especially the
-  visually strange middle frames. Do this first and validate the complete
-  in-game transition from living sprite through dissolve to gravestone.
-- After death frames are approved, redesign and replace the Phantom gravestone.
-- After the hero and gravestone are locked, move on to the spell pass: review
-  and finish Ice Lance, Frost Armor, and Blizzard behavior, effects, stability,
-  and final presentation.
+  direction mapping, projected detached shadows, movement speed, death and
+  dark-ice gravestone sequence, and staff-centered cyan snowflake cast effect
+  are approved for the spell pass.
+- Cast body geometry and recovery poses are locked directionally across all
+  eight Cast records; validators reject the old Priestess swirl, mismatched
+  recovery direction, clipping, and frame-size drift.
+- Phantom retreat and combat estimates are temporarily set to a fearless
+  testing profile so spell behavior can be exercised without frequent retreat.
+- Next: review and finish Ice Lance, Frost Armor, and Blizzard behavior,
+  effects, stability, and final presentation.
 
 ## Build
 

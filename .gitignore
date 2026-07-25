@@ -1,4 +1,5 @@
 dist/
+artifacts/
 local_tile_*.bmp
 __pycache__/
 *.pyc
