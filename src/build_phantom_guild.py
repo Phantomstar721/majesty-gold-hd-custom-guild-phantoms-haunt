@@ -747,7 +747,6 @@ declare
 begin
 \t$PlaySound(thisagent, "Phantom", "VFX_SPECIAL1");
 \t$hero_birth(thisagent);
-\tthisagent's "Special_Boolean" = False;
 \t$Phantom_grant_starter_items(thisagent);
 \t$LearnSpell(thisagent, "ice_lance");
 \tthisagent's "Reborn_Counter" = 0;
@@ -869,6 +868,12 @@ begin
 \tIf ($isdead(thisagent))
 \t\treturn;
 
+\tIf (thisagent's "Special_Boolean" == False)
+\t\tbegin
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);
+\t\t\tthisagent's "Special_Boolean" = True;
+\t\tend
+
 \tIf (thisagent's "Reborn_Counter" != 0)
 \t\treturn;
 
@@ -948,7 +953,6 @@ begin
 \t\tend
 
 \t$Phantom_Frost_Armor_Recharge_Check(thisagent);
-\t$Phantom_Ensure_Frost_Armor_Passive(thisagent);
 
 \tIf ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))
 \t\treturn;
@@ -989,21 +993,6 @@ begin
 \t\treturn;
 
 \t$Frost_Armor_Freeze(attacker);
-end
-
-function Phantom_Ensure_Frost_Armor_Passive(agent thisagent)
-
-declare
-
-begin
-\tIf ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
-\t\treturn;
-
-\tIf (thisagent's "Special_Boolean" == True)
-\t\treturn;
-
-\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);
-\tthisagent's "Special_Boolean" = True;
 end
 
 function Phantom_Frost_Armor_Recharge_Check(agent thisagent)

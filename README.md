@@ -508,10 +508,12 @@ expire with its natural animation. Visual renewal therefore never decides
 whether the armor can be cast and never owns the armor-stat cleanup.
 
 Learning Frost Armor also applies a permanent `+10` basic-damage armor bonus.
-The watcher records this one-time application in the Phantom's otherwise-unused
-`Special_Boolean`, preventing the passive armor from stacking. With the
-starter Frozen Cowl equipped, a level-3 Phantom therefore has `12` persistent
-physical armor before later upgrades.
+The first level-3 Frost Armor activation records this one-time application in
+the Phantom's otherwise-unused `Special_Boolean`, preventing the passive armor
+from stacking. Keeping this grant out of the always-running level-1 watcher
+also preserves the known-good pre-Frost-Armor combat path. With the starter
+Frozen Cowl equipped, an activated level-3 Phantom therefore has `12`
+persistent physical armor before later upgrades.
 
 Frost Armor adds `10000` basic-damage armor while active, making the first
 ordinary weapon attack deal zero damage. The Phantom's existing `Hostiles`

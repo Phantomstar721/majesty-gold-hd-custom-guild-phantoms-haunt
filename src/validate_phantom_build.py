@@ -1355,7 +1355,6 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         'thisagent\'s "BackScript" != $Attack_object',
         "function Phantom_Frost_Armor_Watch(agent thisagent)",
         "$Phantom_Frost_Armor_Recharge_Check(thisagent);",
-        "$Phantom_Ensure_Frost_Armor_Passive(thisagent);",
         "If ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))",
         'If (thisagent\'s "Reborn_Counter" != 1)',
         'If ($CheckEffector(thisagent, "frost_armor_effector") == False)',
@@ -1368,7 +1367,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         '$DeleteEffector(thisagent, "frost_armor_effector");',
         'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")',
         "$Frost_Armor_Freeze(attacker);",
-        "function Phantom_Ensure_Frost_Armor_Passive(agent thisagent)",
+        'If (thisagent\'s "Special_Boolean" == False)',
         "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);",
         'thisagent\'s "Special_Boolean" = True;',
         "$Freeze_Unit(target);",
@@ -1392,6 +1391,8 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     missing_gpl = [value for value in gpl_contract if value not in gpl]
     if missing_gpl:
         fail(f"{gpl_path}: Frost Armor behavior contract is missing {missing_gpl}")
+    if "$Phantom_Ensure_Frost_Armor_Passive" in gpl:
+        fail(f"{gpl_path}: level-1 Frost Armor watcher still invokes passive armor")
 
     consume = gpl.index('thisagent\'s "Reborn_Counter" = 2;')
     incoming_filter = gpl.index('If (hostile\'s "Target" == thisagent)')
