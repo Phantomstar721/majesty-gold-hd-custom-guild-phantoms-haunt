@@ -900,9 +900,6 @@ begin
 \tIf ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
 \t\treturn False;
 
-\tIf ($IsSpellAvailable(thisagent, "frost_armor", 1) == False)
-\t\treturn False;
-
 \tIf ($Frost_Armor_Check(thisagent) == 0)
 \t\treturn False;
 
@@ -910,7 +907,28 @@ begin
 \tIf ($ListSize(targets) == 0)
 \t\treturn False;
 
-\t$CastSpell(thisagent, "frost_armor", thisagent, "");
+\t$Frost_Armor_Begin(thisagent, thisagent);
+\t$PerformAction(thisagent, "Basic_Cast", thisagent);
+\treturn True;
+end
+
+function Phantom_Arm_Frost_Armor_In_Combat(agent thisagent) is boolean
+
+declare
+
+begin
+\tIf ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
+\t\treturn False;
+
+\tIf ($Frost_Armor_Check(thisagent) == 0)
+\t\treturn False;
+
+\tIf (thisagent's "ActiveScript" != $Attack_object &&
+\t\tthisagent's "BackScript" != $Attack_object)
+\t\treturn False;
+
+\t$Frost_Armor_Begin(thisagent, thisagent);
+\t$PerformAction(thisagent, "Basic_Cast", thisagent);
 \treturn True;
 end
 
@@ -927,6 +945,9 @@ begin
 \t\tend
 
 \t$Phantom_Frost_Armor_Recharge_Check(thisagent);
+
+\tIf ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))
+\t\treturn;
 
 \tIf (thisagent's "Reborn_Counter" != 1)
 \t\treturn;

@@ -479,8 +479,13 @@ The impact art must be palette-remapped into a palette included by
 
 Phantoms automatically learn Frost Armor at level 3. `Phantom_tree` checks for
 nearby enemies before entering the normal Wizard combat tree and casts the ward
-on itself whenever it is learned, unspent, and inactive. Ready, active, and
-spent are stored as `0`, `1`, and `2` in the Phantom's otherwise unused
+on itself whenever it is learned, unspent, and inactive. Auto-cast applies the
+armor directly and plays the stock `Basic_Cast` presentation action, avoiding
+the spell scheduler's silent availability rejection. The Phantom watcher also
+recognizes `Attack_object` in either `ActiveScript` or `BackScript`, covering
+combat travel that began outside the decision tree's immediate proximity
+check. Ready, active, and spent are stored as `0`, `1`, and `2` in the
+Phantom's otherwise unused
 `Reborn_Counter` hero field. Stock code only changes that field for Healers, so
 it gives the custom hero durable per-agent state without tying spell selection
 to an overlay timer. The field is reset during Phantom birth and death; a
