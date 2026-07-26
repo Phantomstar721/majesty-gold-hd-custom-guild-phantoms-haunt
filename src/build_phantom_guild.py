@@ -729,6 +729,40 @@ begin
 \t$newThread( AIRootAgent's "VictoryCondition2", 1200000);
 end
 
+Function Potion_Check(agent thisagent, list potentials) is boolean
+
+Declare
+\tinteger intel_roll;
+
+Begin
+\tIf (thisagent's "Title" == "Phantom")
+\t\treturn False;
+
+\t$DebugOut("Should I buy some Healing Potions?");
+
+\tIf ($GetAttribute(thisagent, #ATTRIB_NumHealingPotions) >= #Max_Heal_Potions)
+\t\treturn False;
+
+\tIf ($Total_Gold(thisagent) < #Heal_Potion_Price)
+\t\treturn False;
+
+\tpotentials = $List_Attribs(potentials, #ATTRIB_ResearchHealingPotions);
+
+\tIf ($ListSize(potentials) == 0)
+\t\treturn False;
+
+\tintel_roll = $RandomNumber(30) + 1;
+\tIf ($GetAttribute(thisagent, #ATTRIB_Intelligence) > intel_roll)
+\t\tbegin
+\t\t\tthisagent's "TaskName" = "visiting";
+\t\t\tthisagent's "Target" = $Loyalty_Mod_Pick_Closest(thisagent, potentials);
+\t\t\t$SpecifyIntent(thisagent, #Intent_purchasing_heal_potions);
+\t\t\treturn True;
+\t\tend
+
+\treturn False;
+End
+
 function Phantom_tree (agent thisagent)
 
 declare

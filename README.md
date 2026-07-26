@@ -124,15 +124,24 @@ The current generator handles step 5 in `write_gpltext_cam()` by extending
 `Unknown Item` in the hero Items panel.
 
 Healing-potion shopping is centralized in stock `Potion_Check`, called from
-`Purchase_Equipment` for both Marketplaces and Trading Posts. Two attempts to
-mask the Phantom's potion count through a copied Wizard tree and a custom
-equipment wrapper left the hero permanently stuck in its thinking state. The
-second attempt used the stock `AdjustAttribute` counter mutation and still
-failed, proving that the custom tree/wrapper interception itself is unsafe.
-The current build has fully restored the stock `Wizard_tree`; do not retry
-that interception. A future exclusion must operate through a verified
-class-aware stock hook or a safely compiled replacement of the specific stock
-purchase function.
+`Purchase_Equipment` for both Marketplaces and Trading Posts. The mod overrides
+that stock function by name, the same supported replacement mechanism already
+used for `DEAL_DEMON`. The first check returns `False` when the buyer's title is
+`Phantom`, before a shop target, task name, or purchase intent can be assigned.
+The remainder of the function retains the stock checks and task setup for every
+other hero. Phantoms therefore continue using the unmodified stock
+`Wizard_tree` and never start a healing-potion shopping trip.
+
+Two earlier attempts masked the Phantom's potion count through a copied Wizard
+tree and a custom equipment wrapper. Both left the hero permanently stuck in
+its thinking state, including the version that used stock `AdjustAttribute`
+counter mutation. Do not retry tree-level interception; the narrow
+`Potion_Check` replacement is the stock-compatible class hook.
+
+The Magic Bazaar does not sell ordinary healing potions. Rangers have
+class-specific herb behavior, while several quests grant potions only to
+explicitly spawned Wizards, Paladins, or Elves. No generic stock quest grant
+was found that applies to a normally recruited Phantom.
 
 Do not use the earlier birth-thread transfer approach for Phantom starter gear.
 Creating string-named custom inventory items through a delayed hero thread was
@@ -805,9 +814,10 @@ Checkpoint recorded July 25, 2026:
 - Tomorrow's desired gameplay/mechanics checklist:
   - Preserve or deliberately implement Frozen Cowl and Black Icerod dropping
     when a Phantom leaves the realm through the palace.
-  - Prevent Phantoms from buying healing potions at Marketplaces and Trading
-    Posts, then make ordinary healing and any externally granted healing
-    potions ineffective on Phantoms.
+  - Healing-potion purchasing at Marketplaces and Trading Posts is blocked by
+    the class guard in the stock `Potion_Check` replacement. Next make ordinary
+    healing and any externally granted healing potions ineffective on
+    Phantoms.
   - Allow Priestess healing casts to heal Phantoms as the intended exception.
   - Prevent Phantoms and Paladins from existing in the same realm.
   - Design and implement the Phantom spells `Icy Touch` and `Blizzard`.

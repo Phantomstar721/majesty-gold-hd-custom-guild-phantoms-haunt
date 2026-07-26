@@ -1478,6 +1478,53 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: experimental passive-armor item state is still present")
 
 
+def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    contract = (
+        "Function Potion_Check(agent thisagent, list potentials) is boolean",
+        'If (thisagent\'s "Title" == "Phantom")',
+        "$GetAttribute(thisagent, #ATTRIB_NumHealingPotions) >= #Max_Heal_Potions",
+        "$Total_Gold(thisagent) < #Heal_Potion_Price",
+        "potentials = $List_Attribs(potentials, #ATTRIB_ResearchHealingPotions);",
+        "intel_roll = $RandomNumber(30) + 1;",
+        'thisagent\'s "TaskName" = "visiting";',
+        'thisagent\'s "Target" = $Loyalty_Mod_Pick_Closest(thisagent, potentials);',
+        "$SpecifyIntent(thisagent, #Intent_purchasing_heal_potions);",
+    )
+    missing = [value for value in contract if value not in gpl]
+    if missing:
+        fail(f"{gpl_path}: Phantom Potion_Check override is missing {missing}")
+
+    function = gpl.index(
+        "Function Potion_Check(agent thisagent, list potentials) is boolean"
+    )
+    guard = gpl.index('If (thisagent\'s "Title" == "Phantom")', function)
+    rejected = gpl.index("return False;", guard)
+    potion_count = gpl.index(
+        "$GetAttribute(thisagent, #ATTRIB_NumHealingPotions) >= #Max_Heal_Potions",
+        function,
+    )
+    target = gpl.index(
+        'thisagent\'s "Target" = $Loyalty_Mod_Pick_Closest(thisagent, potentials);',
+        function,
+    )
+    intent = gpl.index(
+        "$SpecifyIntent(thisagent, #Intent_purchasing_heal_potions);", function
+    )
+    if not function < guard < rejected < potion_count < target < intent:
+        fail(
+            f"{gpl_path}: Phantom must be rejected by Potion_Check before "
+            "stock shopping state is evaluated or assigned"
+        )
+    if "$Phantom_Wizard_Tree" in gpl or "$Phantom_Purchase_Equipment" in gpl:
+        fail(
+            f"{gpl_path}: unstable local Wizard-tree potion wrapper is present"
+        )
+    if "$Wizard_tree(thisagent);" not in gpl:
+        fail(f"{gpl_path}: Phantom no longer uses the stock Wizard tree")
+
+
 def validate(output_root: Path) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
@@ -1488,6 +1535,7 @@ def validate(output_root: Path) -> None:
     validate_phantom_item_cleanup(output_root)
     validate_ice_lance_contract(output_root)
     validate_frost_armor_contract(output_root)
+    validate_phantom_potion_purchase_contract(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:
