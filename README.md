@@ -520,11 +520,14 @@ The spent state is the durable state value `2`. Entering a home building
 replaces the stock rest activity with a thin wrapper around
 `Rest_At_Guild`; once the Phantom reaches full health, the wrapper deletes the
 spent marker. Inns and Gazebos share Majesty's `rest_at_inn` full-heal path, so
-the Phantom-owned watcher also recharges the armor when either finishes and
-switches to `Done_resting_inn` while the hero is still inside. Checking the
-completed rest script, full HP, and `InsideBuilding` together avoids recharging
-the armor during ordinary shop visits. Merely losing the active ward or
-leaving combat does not recharge it.
+the Phantom-owned watcher recognizes the complete rest window from
+`rest_at_inn` through `Done_resting_inn`; guild rest is similarly recognized
+from `Rest_at_guild` through `Done_resting_guild`. These stock activities
+guarantee a full heal. Using the entire activity window avoids missing the
+brief done-state transition while `InsideBuilding` still prevents ordinary
+shop visits from recharging the armor. The Haunt wrapper also clears spent
+state unconditionally after calling the stock full-heal function. Merely
+losing the active ward or leaving combat does not recharge it.
 
 Frost Armor's generated art sources are:
 

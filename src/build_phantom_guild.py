@@ -986,10 +986,10 @@ begin
 \tIf ($InsideBuilding(thisagent) == False)
 \t\treturn;
 
-\tIf ($GetAttribute(thisagent, #ATTRIB_HP) != $GetAttribute(thisagent, #ATTRIB_MaxHP))
-\t\treturn;
-
-\tIf (thisagent's "ActiveScript" == $Done_resting_inn ||
+\tIf (thisagent's "ActiveScript" == $rest_at_inn ||
+\t\tthisagent's "ActiveScript" == $Done_resting_inn ||
+\t\tthisagent's "ActiveScript" == $Rest_at_guild ||
+\t\tthisagent's "ActiveScript" == $Phantom_Rest_At_Guild ||
 \t\tthisagent's "ActiveScript" == $Done_resting_guild)
 \t\tthisagent's "Reborn_Counter" = 0;
 end
@@ -1058,9 +1058,8 @@ declare
 begin
 \t$Rest_At_Guild(thisagent);
 
-\tIf ($GetAttribute(thisagent, #ATTRIB_HP) == $GetAttribute(thisagent, #ATTRIB_MaxHP))
-\t\tIf (thisagent's "Reborn_Counter" == 2)
-\t\t\tthisagent's "Reborn_Counter" = 0;
+\tIf (thisagent's "Reborn_Counter" == 2)
+\t\tthisagent's "Reborn_Counter" = 0;
 end
 
 function Blizzard_Check(agent thisagent) is integer
