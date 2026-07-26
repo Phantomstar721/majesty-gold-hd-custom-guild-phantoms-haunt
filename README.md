@@ -15,13 +15,20 @@ This currently builds:
 - Custom Phantom starter special items:
   - `Frozen Cowl`, item ID `80`, grants `+2` physical armor using the same
     `AdjustAttribute(Armor_Basic_Damage)` path as Majesty's Ring of Protection.
-  - `Black Icerod`, item ID `81`, uses its in-game-confirmed stable `+8`
-    weapon-damage implementation. The attempted `+5 Parry` versions crashed
-    and have been removed.
-  - Phantom starter items are removed by `Phantom_death` before normal
-    gravestone handling. Realm-exit item dropping is part of the desired
-    Phantom design and should be preserved or implemented deliberately rather
-    than treated as a cleanup defect.
+  - `Black Icerod`, item ID `81`, retains its in-game-confirmed stable `+8`
+    weapon damage, grants `+5 Parry` through the same
+    `MagicalAdjustAttribute(Parry)` path used by Majesty's Ring of Protection,
+    and provides `+10` casting range through the safe prototype-backed path.
+  - Blacksmith and Wizard Guild purchases use Majesty's four stock structural
+    and magical equipment attributes. The Cowl and Icerod each have sixteen
+    internal special-item variants so their visible name and tooltip can mirror
+    all four structural tiers and all four independent enchantment tiers.
+  - `Frost Armor`, item ID `82`, is granted at level 3 as a visible,
+    non-droppable class-effect marker and grants the spell's persistent `+10`
+    physical armor.
+  - Phantom class items are removed by `Phantom_death` before normal gravestone
+    handling and by a class guard in the stock-compatible realm-exit inventory
+    disposal path.
 - Phantom baseline balance: `8` Vitality, `8` Strength, `25` Magic Resistance,
   `25` Dodge, and `180` conceptual base casting range. Artifice remains `8`;
   Majesty uses it for equipment-shopping choices, stealing checks, and
@@ -34,7 +41,8 @@ This currently builds:
   projectile and icon art, a copied Frost Field hit overlay, and a timed Chill
   debuff.
 - A level-3 `Frost Armor` spell with a persistent crystal ward, one-hit damage
-  negation, a three-second retaliatory Freeze, and rest-to-recharge behavior.
+  negation against normal weapon and spell damage, a three-second retaliatory
+  Freeze, and rest-to-recharge behavior.
 
 The in-map animated hero sprite is currently based on the Priestess of Krypta
 sprite set with a Phantom recolor.
@@ -76,6 +84,7 @@ pattern used by Majesty's quest and Bazaar inventory items:
    ```gpl
    expression #Phantom_Item_FrozenCowl 80
    expression #Phantom_Item_BlackIcerod 81
+   expression #Phantom_Item_FrostArmorBonus 82
    ```
 
 2. Define a matching inventory item description in `phantom_units_xml()`.
@@ -101,19 +110,23 @@ pattern used by Majesty's quest and Bazaar inventory items:
    ```
 
    Inventory entries are only IDs while held; the item XML does not
-   automatically add its stats to the owner. The current starter-item grant
-   therefore applies the two bonuses explicitly:
+   automatically add its stats to the owner. The current item grants therefore
+   apply their bonuses explicitly:
 
    ```gpl
    $AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);
    $AdjustAttribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
+   $MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);
+   $AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);
    ```
 
-   Frozen Cowl uses the ordinary armor adjustment from the stock Ring of
-   Protection path. Black Icerod currently uses its earlier stable
-   weapon-damage adjustment. Their `QITM` strings display `+2 armor` and `+8
-   damage`; Majesty does not generate those descriptions from the GPL changes,
-   so validation must keep the displayed text and mechanical values
+   Frozen Cowl and the level-3 Frost Armor marker use the ordinary armor
+   adjustment from the stock Ring of Protection path. Black Icerod retains its
+   stable weapon-damage adjustment and uses the Ring's exact
+   `MagicalAdjustAttribute` path for its Parry bonus. Their `QITM` strings
+   display the current structural, magical, Parry, and casting-range values;
+   Majesty does not generate those descriptions from the GPL changes, so
+   validation keeps every tier's displayed text and mechanical values
    synchronized.
 
 5. Add the display name to `QITM` in `phantom_gpltext.cam`. `QITM` is an
@@ -124,6 +137,59 @@ pattern used by Majesty's quest and Bazaar inventory items:
 The current generator handles step 5 in `write_gpltext_cam()` by extending
 `QITM` through `patch_indexed_strt_strings()`. This was required to avoid
 `Unknown Item` in the hero Items panel.
+
+### Tiered Cowl and Icerod upgrades
+
+The Phantom declares stock `Staff` and `Leather` equipment eligibility so
+Majesty's unmodified `Purchase_Equipment` decision tree will consider all four
+normal equipment paths. Both upgrade chances are `100` during testing. This
+also means the ordinary equipment rows may describe the underlying slots as a
+Staff and Leather Armor; the separate Special Items rows remain the
+player-facing Cowl and Icerod representation.
+
+The durable mechanical state stays in Majesty's normal attributes:
+
+- `Weapon_Struct_Bonus` selects the Icerod's Blacksmith tier and contributes
+  normal structural weapon damage.
+- `Weapon_Magic_Bonus` contributes normal magical weapon damage and adds `10`
+  Icerod casting range per enchantment.
+- `Armor_Struct_Bonus` selects the Cowl's Blacksmith tier and contributes
+  normal structural armor.
+- `Armor_Magic_Bonus` contributes the Cowl's normal magical defense.
+
+The Blacksmith tier controls the visible four-name path:
+
+```text
+Frozen Cowl -> Icy Cowl -> Hardened Ice Cowl -> Eternal Ice Cowl
+Black Icerod -> Dark Icerod -> Deep Icerod -> Eternal Icerod
+```
+
+Structural and magical levels are independent, producing sixteen possible
+states for each item family. IDs `80`, `81`, and `82` retain their existing
+meanings for save compatibility. Cowl variants use IDs `83-97`; Icerod
+variants use IDs `98-112`. A successful stock grant deletes the previous
+family marker and creates the one selected by
+`structural_level * 4 + magical_level`. Item replacement never reapplies the
+starter `+2` armor or `+8` damage bonuses.
+
+Icerod Blacksmith grants also apply `5 * (new tier - old tier)` Parry through
+`MagicalAdjustAttribute`. The delta is required because stock Majesty may buy
+several building-supported upgrade levels during one visit. Resulting Icerod
+Parry bonuses are `+5`, `+10`, `+15`, and `+20`.
+
+Active Frost Armor temporarily adds `10000` to `Armor_Magic_Bonus`, the same
+attribute used by Cowl enchantment. The Phantom-specific Wizard Guild check
+subtracts that temporary ward amount when determining the real enchantment
+level. If a Cowl is enchanted while the ward is active, the grant stores
+`10000 + new enchantment level`; consuming the ward later subtracts `10000`
+and leaves the legitimate enchantment intact.
+
+Stock `Weapon_Magic_Bonus` increases weapon damage and AI weapon evaluation;
+it does not increase Ice Lance spell damage. Icerod enchantment instead adds
+range through `Phantom_effective_casting_range`: `190`, `200`, `210`, and
+`220`. The Phantom branches in stock-compatible `attack_object` and
+`getattackrange` use that computed value. The implementation does not mutate
+the runtime `castingrange` prototype field.
 
 Healing-potion shopping is centralized in stock `Potion_Check`, called from
 `Purchase_Equipment` for both Marketplaces and Trading Posts. The mod overrides
@@ -151,11 +217,11 @@ Do not use the earlier birth-thread transfer approach for Phantom starter gear.
 Creating string-named custom inventory items through a delayed hero thread was
 unstable and caused crashes after Phantom spawn.
 
-Phantom starter gear should also be removed before normal hero death item-drop
-logic runs. The current build does that with `Phantom_death`, which deletes only
-`#Phantom_Item_FrozenCowl` and `#Phantom_Item_BlackIcerod`, then calls the stock
-`gravestone` flow so other legitimate inventory items still behave normally.
-Add any future Phantom-only starter or class gear to
+Phantom class gear should also be removed before normal hero death item-drop
+logic runs. The current build does that with `Phantom_death`, which deletes
+every Cowl and Icerod tier plus `#Phantom_Item_FrostArmorBonus`, then calls the
+stock `gravestone` flow so other legitimate inventory items still behave
+normally. Add any future Phantom-only starter or class gear to
 `Phantom_remove_starter_items` at the same time it is granted.
 
 Class gear that must never become loot also needs
@@ -163,11 +229,22 @@ Class gear that must never become loot also needs
 stock `flee_map` path calls `Hero_Drop_Quest_Items` after a departing hero
 enters the palace. `CanDropItem=1` makes that function delete the inventory
 entry and spawn its world-item agent beside the palace; `0` makes it delete the
-entry without spawning anything in the stock path. The desired Phantom
-mechanic is for its class items to remain droppable on realm exit, so revisit
-`CanDropItem` and the departure path intentionally rather than treating the
-observed ground items as a cleanup bug. Keep the explicit `Phantom_death`
-cleanup, which is a separate working requirement.
+entry without spawning anything in the documented stock path. In practice,
+Majesty's native inventory lookup still classified the custom Phantom IDs as
+droppable even though their deployed unit descriptions contained
+`CanDropItem=0`.
+
+The package therefore replaces `Hero_Drop_Quest_Items` by name using the same
+supported stock-function replacement mechanism as `Potion_Check`. For a
+Phantom, the wrapper first stops the class watcher and invokes
+`Phantom_remove_starter_items`; stopping the watcher prevents the level-3 Frost
+Armor marker from being recreated between cleanup and deletion. The remainder
+of the function preserves Majesty's stock loop exactly: all other inventory
+items are deleted, exempt Marketplace items stay non-droppable, and legitimate
+droppable quest items are spawned normally. Other hero classes enter the
+unchanged stock portion immediately. This realm-exit candidate still needs
+in-game verification. Keep the explicit `Phantom_death` cleanup, which is a
+separate working requirement.
 
 ## Implementation Notes
 
@@ -417,30 +494,47 @@ index `255` and magenta-like colors must be avoided when converting RGB pixels,
 or visible pixels can become transparent/keyed out in-game.
 
 Ice Lance deals `8` damage, compared with stock Energy Blast's `10`. The
-Phantom's base casting range is `180`, below the Wizard's `240`. Majesty stores
-casting range on the hero rather than the individual spell, so this technically
-applies to the Phantom's complete spell kit; Frost Armor is self-targeted and
-Blizzard is caster-centered, making Ice Lance the only current spell materially
-affected. Custom special items are stored as inventory IDs and do not
-automatically transfer XML attributes to their owner. Frozen Cowl therefore
-uses the stock Ring-of-Protection pattern to apply `+2` basic-damage armor when
-granted. The Cowl passed combat, treasure, and gold tests independently.
-Black Icerod Parry tests used both `AdjustAttribute` and
-`MagicalAdjustAttribute`, including a version deferred until after birth.
-Restoring the original `+8` weapon-damage path removed the in-game crash, so
-the Parry implementation is now treated as unsafe rather than an active item
-feature. Stock `target_eval` divides enemy HP by
-`hero_damage`. That helper totals basic, structural, and magical weapon damage,
-then adds integer `Strength / strength_div`. For the original Strength-2
-caster, every term was `0`, causing the crash on entering combat. Majesty's
+Phantom's conceptual unequipped casting range is `180`; Black Icerod raises the
+effective value to `190`, still below the Wizard's `240`. Majesty stores
+`castingrange` as a GPL prototype field rather than a normal engine attribute.
+Stock scripts read that field during combat but do not mutate it. An earlier
+`thisagent's "castingrange" += 10` item grant caused an access violation when
+`attack_object` began, so the current safe implementation stores the guaranteed
+Icerod-equipped value `190` directly in `Phantom_Hero_Data.dat`. Enchanted
+Icerod range is calculated without changing that field:
+`190 + Weapon_Magic_Bonus * 10`. Phantom-only branches in the stock-compatible
+combat and travel-range helpers use the resulting `190-220` value. Every
+living Phantom receives the Icerod at birth and keeps it until death or realm
+departure, so the base prototype value and inventory presentation remain
+aligned.
+
+Casting range belongs to the hero rather than the individual spell, so the
+Icerod technically affects the Phantom's complete spell kit; Frost Armor is
+self-targeted and Blizzard is caster-centered, making Ice Lance the only
+current spell materially affected. Custom special items are stored as
+inventory IDs and do not automatically transfer XML attributes to their owner.
+Frozen Cowl therefore uses the stock Ring-of-Protection pattern to apply `+2`
+basic-damage armor when granted. The Cowl passed combat, treasure, and gold
+tests independently.
+Earlier Black Icerod Parry tests replaced rather than supplemented the stable
+`+8` weapon damage. That overlapped a separate stock `target_eval`
+divide-by-zero hazard and did not isolate Parry as the cause. Stock
+`target_eval` divides enemy HP by `hero_damage`; that helper totals basic,
+structural, and magical weapon damage, then adds integer
+`Strength / strength_div`. For the original Strength-2 caster with no Icerod
+damage, every term was `0`, causing the crash on entering combat. Majesty's
 `strength_div` is `8`, so the Phantom now uses Strength `8` with base weapon
-damage `0`. Integer division supplies the required AI-evaluation floor of `1`
-without requiring a nonzero base weapon stat. The separate XML `Attack` value
-remains `30`, and Ice Lance damage remains its independent fixed value of `8`.
-With the restored Icerod equipped, the runtime weapon-damage component is `8`;
-this is the current stable item design. Package validation requires the safe
-Strength threshold, the known-good rod damage path, and rejects the
-experimental `+5 Parry` mutation.
+damage `0`. Integer division supplies the required AI-evaluation floor of `1`,
+and the retained Icerod damage supplies a further stable floor while equipped.
+The separate XML `Attack` value remains `30`, and Ice Lance damage remains its
+independent fixed value of `8`.
+
+The current Icerod implementation keeps the confirmed `+8` weapon-damage
+adjustment and adds `+5 Parry` with the exact
+`MagicalAdjustAttribute(Parry)` native used by the stock Ring of Protection.
+Both mutations occur inside the same inventory-item absence guard, so neither
+can stack during the birth path. Package validation requires both bonuses and
+rejects an ordinary `AdjustAttribute(Parry)` substitution.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to
@@ -570,21 +664,37 @@ Majesty does not treat effector duration `0` as infinite: it lets an overlay
 expire with its natural animation. Visual renewal therefore never decides
 whether the armor can be cast and never owns the armor-stat cleanup.
 
-Frost Armor adds `10000` basic-damage armor while active, making the first
-ordinary weapon attack deal zero damage. The Phantom's existing `Hostiles`
-list acts as the local attack-attempt signal: the ward clears that list when
-cast, then its recurring watcher consumes the ward when the first valid
-attacker appears. Majesty's `react(attacker, target)` adds the attacker just
-before the hit roll, but other AI paths can leave broader combat relationships
-in the same list. The watcher therefore also requires that the reported
-hostile currently targets the Phantom and is within its own maximum attack
-range (plus a small 24-unit movement/geometry tolerance). Nonqualifying entries
-are cleared so a later real attack can report itself again. This prevents the
-Phantom's first attack against a distant melee target from consuming the ward.
-The local filter avoids modifying global attack/damage functions and requires
-no changes to enemy definitions. It intentionally reacts to the first
-qualified attack attempt, even when the engine's hit roll would otherwise
-miss.
+At level 3, the same Phantom-owned watcher grants a visible `Frost Armor`
+special item once. Its item-presence guard is the persistent-state marker, and
+the grant applies `+10` basic-damage armor through the same ordinary
+`AdjustAttribute` path proven by Frozen Cowl and the stock Ring of Protection.
+This makes the bonus visible in the Items panel and included in Majesty's
+displayed armor total. The first-pass item icon deliberately reuses Frozen
+Cowl's armor icon. It is intrinsic class gear rather than loot and is included
+in Phantom death cleanup.
+
+Separately, the active one-hit ward adds both `10000` basic-damage armor and
+`10000` magical-armor bonus. The first value zeroes a normal weapon attack;
+the second zeroes Majesty's ordinary `spell_attack` damage path, which subtracts
+twice the defender's magical-armor bonus after the Magic Resistance roll.
+Consuming the ward—or dying while it is active—removes both temporary
+adjustments as a matched pair; the persistent item-backed `+10` basic armor
+remains. Direct scripted HP loss that bypasses both `damage` and `spelldamage`
+is outside this protection.
+
+The Phantom's existing `Hostiles` list acts as the local attack-attempt signal:
+the ward clears that list when cast, then its recurring watcher consumes the
+ward when the first valid attacker appears. Majesty's
+`react(attacker, target)` adds the attacker just before the hit roll, but other
+AI paths can leave broader combat relationships in the same list. The watcher
+therefore also requires that the reported hostile currently targets the
+Phantom and is within its own maximum attack range (plus a small 24-unit
+movement/geometry tolerance). Nonqualifying entries are cleared so a later
+real attack can report itself again. This prevents the Phantom's first attack
+against a distant melee target from consuming the ward. The local filter
+avoids modifying global attack/damage functions and requires no changes to
+enemy definitions. It intentionally reacts to the first qualified attack
+attempt, even when the engine's hit roll would otherwise miss.
 
 Unit attackers are Frozen for three seconds through Majesty's native
 `HasEffectPetrify`, `Freeze_Unit`, `GetProperUnitArt`, and `UnFreeze_Unit`
@@ -756,10 +866,10 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
   changing more offsets.
 - The current Phantom gravestone is a temporary first pass and is next in line
   for a complete visual redesign.
-- `Frost Armor` still needs its full behavior and placement pass. Crashes
-  previously observed during the same testing window stopped after Black
-  Icerod was restored from `+5 Parry` to `+8` damage, so there is no longer a
-  confirmed Frost Armor crash. `Blizzard` still needs its dedicated
+- `Frost Armor` still needs its remaining balance and placement pass. Earlier
+  crashes overlapped an Icerod version that removed its stable weapon damage;
+  the current Icerod keeps that damage while adding Parry through the stock
+  Ring of Protection mutation. `Blizzard` still needs its dedicated
   implementation pass.
 - The Phantoms Haunt borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
@@ -786,30 +896,39 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
 - Phantom retreat and combat estimates are temporarily set to a fearless
   testing profile so spell behavior can be exercised without frequent retreat.
 - Ice Lance now has final-path generated-source projectile/icon art, 32 packaged
-  directions, `8` damage, `180` Phantom casting range, native impact animation,
-  and a centralized three-second non-stacking movement/action Chill with an
-  approved animated cyan snowflake indicator.
+  directions, `8` damage, `180` conceptual base / `190` Icerod-equipped Phantom
+  casting range, native impact animation, and a centralized three-second
+  non-stacking movement/action Chill with an approved animated cyan snowflake
+  indicator.
 - Ice Lance has passed the current in-game art, direction, impact, damage,
   refresh, non-stacking, movement-slow, action-slow, duration, and status-icon
   review. The fixed modifiers deliberately describe a mild Chill rather than
   promising an exact percentage on every unit.
 - Frozen Cowl is a starter item that displays and grants `+2` physical armor.
-  Black Icerod uses its in-game-confirmed stable displayed and mechanical `+8`
-  weapon damage; the crashing `+5 Parry` path has been removed and is rejected
-  by validation. Both are currently marked non-droppable, and death cleanup
-  works. Realm-exit dropping is a desired mechanic to formalize rather than a
-  defect to remove.
+  Black Icerod retains its in-game-confirmed displayed and mechanical `+8`
+  weapon damage and now adds a displayed and mechanical `+5 Parry` through the
+  stock Ring path; the combined version is verified in game. The current build
+  candidate also displays `+10 cast range` and safely represents it with the
+  guaranteed Icerod-equipped prototype value `190`. Both starter items are
+  currently marked non-droppable, and death cleanup works. The current build
+  candidate also explicitly removes all three Phantom class items before the
+  stock realm-exit drop loop; the range and departure paths still need in-game
+  verification.
 - Phantom base weapon damage is intentionally `0`. Strength is `8`, producing
   the minimum safe stock `hero_damage` value of `1` through integer `8 / 8`.
-  This prevents `target_eval` division by zero without restoring the Icerod's
-  obsolete weapon-damage bonus. Ice Lance remains fixed at `8` spell damage.
+  This prevents `target_eval` division by zero even before the Icerod adds its
+  retained `+8` weapon damage. Ice Lance remains fixed at `8` spell damage.
 - Frost Armor learns at level 3, persists until the first qualified attack
-  attempt, negates ordinary weapon damage, consumes against units and
+  attempt, negates ordinary weapon and spell damage, consumes against units and
   buildings, Freezes unit attackers for three seconds, and recharges after a
   completed full-health rest at the Phantoms Haunt, an Inn, or a Gazebo. Its
-  animated octahedral ward and three size-aware frozen casings are packaged
-  from generated source art. Its auto-cast currently checks a fixed `240`
-  radius.
+  temporary basic and magical armor adjustments are removed together on
+  consumption or death. Its animated octahedral ward and three size-aware
+  frozen casings are packaged from generated source art. Its auto-cast
+  currently checks a fixed `240` radius. The current build candidate also
+  grants a visible level-3 `Frost Armor (+10 armor)` special item so the
+  permanent physical-armor component is attributable in the hero panel; this
+  new item path still needs in-game verification.
 - The Phantom-only stock `Potion_Check` replacement is verified in game:
   Phantoms remain active, do not get stuck thinking, and skip healing-potion
   purchases while retaining other shop decisions.
@@ -817,8 +936,8 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   retaliation, rest recharge, and effect placement with the stable Icerod
   build before continuing to Blizzard.
 - Tomorrow's desired gameplay/mechanics checklist:
-  - Preserve or deliberately implement Frozen Cowl and Black Icerod dropping
-    when a Phantom leaves the realm through the palace.
+  - Verify Frozen Cowl, Black Icerod, and the Frost Armor marker are destroyed
+    rather than dropped when a Phantom leaves through the palace.
   - Healing-potion purchasing at Marketplaces and Trading Posts is blocked by
     the class guard in the stock `Potion_Check` replacement. Next make ordinary
     healing and any externally granted healing potions ineffective on

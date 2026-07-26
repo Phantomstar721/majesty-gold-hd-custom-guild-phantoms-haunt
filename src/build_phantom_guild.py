@@ -85,6 +85,27 @@ STAFF_SMALL_ICON_TILES: tuple[int, ...] = ()
 MX_STAFF_ICON_TILES: tuple[int, ...] = ()
 LEATHER_ARMOR_ICON_TILES: tuple[int, ...] = ()
 
+PHANTOM_COWL_BASE_ITEM_ID = 80
+PHANTOM_ICEROD_BASE_ITEM_ID = 81
+PHANTOM_FROST_ARMOR_ITEM_ID = 82
+PHANTOM_COWL_VARIANT_FIRST_ID = 83
+PHANTOM_COWL_VARIANT_LAST_ID = 97
+PHANTOM_ICEROD_VARIANT_FIRST_ID = 98
+PHANTOM_ICEROD_VARIANT_LAST_ID = 112
+
+PHANTOM_COWL_TIER_NAMES = (
+    "Frozen Cowl",
+    "Icy Cowl",
+    "Hardened Ice Cowl",
+    "Eternal Ice Cowl",
+)
+PHANTOM_ICEROD_TIER_NAMES = (
+    "Black Icerod",
+    "Dark Icerod",
+    "Deep Icerod",
+    "Eternal Icerod",
+)
+
 
 @dataclass(frozen=True)
 class CamEntry:
@@ -199,6 +220,84 @@ def main() -> int:
     return 0
 
 
+def phantom_equipment_item_specs() -> list[tuple[int, str, str, str, str]]:
+    specs: list[tuple[int, str, str, str, str]] = []
+    for family in ("cowl", "icerod"):
+        for struct_level in range(4):
+            for magic_level in range(4):
+                combination = struct_level * 4 + magic_level
+                if family == "cowl":
+                    item_id = (
+                        PHANTOM_COWL_BASE_ITEM_ID
+                        if combination == 0
+                        else PHANTOM_COWL_VARIANT_FIRST_ID + combination - 1
+                    )
+                    agent_name = (
+                        "FrozenCowl"
+                        if combination == 0
+                        else f"PhantomCowlS{struct_level}M{magic_level}"
+                    )
+                    attribute_name = (
+                        "Phantom_Item_FrozenCowl"
+                        if combination == 0
+                        else f"Phantom_Item_Cowl_S{struct_level}_M{magic_level}"
+                    )
+                    display_name = PHANTOM_COWL_TIER_NAMES[struct_level]
+                    image_id = "PHIC"
+                else:
+                    item_id = (
+                        PHANTOM_ICEROD_BASE_ITEM_ID
+                        if combination == 0
+                        else PHANTOM_ICEROD_VARIANT_FIRST_ID + combination - 1
+                    )
+                    agent_name = (
+                        "BlackIcerod"
+                        if combination == 0
+                        else f"PhantomIcerodS{struct_level}M{magic_level}"
+                    )
+                    attribute_name = (
+                        "Phantom_Item_BlackIcerod"
+                        if combination == 0
+                        else f"Phantom_Item_Icerod_S{struct_level}_M{magic_level}"
+                    )
+                    display_name = PHANTOM_ICEROD_TIER_NAMES[struct_level]
+                    image_id = "PHIR"
+                specs.append((item_id, agent_name, attribute_name, display_name, image_id))
+    return sorted(specs)
+
+
+def phantom_equipment_units_xml() -> str:
+    descriptions: list[str] = []
+    for _, agent_name, attribute_name, display_name, image_id in phantom_equipment_item_specs():
+        descriptions.append(
+            f"""\t<Description type="Unit" subType="Character" ID="{agent_name}" Name="{agent_name}" Description="{display_name}">
+\t\t<Engine version="1">
+\t\t\t<Info value="Static"/>
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="BlockGround"/>
+\t\t\t<CanUse value="HumanPlayer"/>
+\t\t\t<Menu value="8"/>
+\t\t\t<ImageIDBase value="{image_id}"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="APb1"/>
+\t\t\t<MaxHP value="10"/>
+\t\t\t<RecruitDelay value="10000"/>
+\t\t\t<Flags value="NotFlaggable"/>
+\t\t\t<Flags value="NotSpellTarget"/>
+\t\t\t<Flags value="IsInventoryItem"/>
+\t\t\t<HelpID value="h020"/>
+\t\t\t<Attributes>
+\t\t\t\t<Attribute ID="CanDropItem" Value="0"/>
+\t\t\t\t<Attribute ID="{attribute_name}" Value="0"/>
+\t\t\t</Attributes>
+\t\t</Game>
+\t</Description>"""
+        )
+    return "\n".join(descriptions)
+
+
 def phantom_units_xml() -> str:
     return f"""<Majesty>
 \t<Description type="Unit" subType="Character" ID="PHM1" Name="Phantom" Description="Phantom">
@@ -236,13 +335,16 @@ def phantom_units_xml() -> str:
 \t\t\t<Flags value="HasHPBar"/>
 \t\t\t<Flags value="CanHighlight"/>
 \t\t\t<HelpID value="h020"/>
+\t\t\t<AllowedWeapon value="Staff"/>
+\t\t\t<AllowedArmor value="Leather"/>
 \t\t\t<AllowedSpells>
 \t\t\t\t<Spell ID="0" Value="ice_lance"/>
 \t\t\t\t<Spell ID="1" Value="frost_armor"/>
 \t\t\t</AllowedSpells>
 \t\t</Game>
 \t</Description>
-\t<Description type="Unit" subType="Character" ID="FrozenCowl" Name="FrozenCowl" Description="Frozen Cowl">
+{phantom_equipment_units_xml()}
+\t<Description type="Unit" subType="Character" ID="FrostArmorBonus" Name="FrostArmorBonus" Description="Frost Armor">
 \t\t<Engine version="1">
 \t\t\t<Info value="Static"/>
 \t\t\t<Info value="Directionless"/>
@@ -262,31 +364,7 @@ def phantom_units_xml() -> str:
 \t\t\t<HelpID value="h020"/>
 \t\t\t<Attributes>
 \t\t\t\t<Attribute ID="CanDropItem" Value="0"/>
-\t\t\t\t<Attribute ID="Phantom_Item_FrozenCowl" Value="0"/>
-\t\t\t</Attributes>
-\t\t</Game>
-\t</Description>
-\t<Description type="Unit" subType="Character" ID="BlackIcerod" Name="BlackIcerod" Description="Black Icerod">
-\t\t<Engine version="1">
-\t\t\t<Info value="Static"/>
-\t\t\t<Info value="Directionless"/>
-\t\t\t<Info value="BlockGround"/>
-\t\t\t<CanUse value="HumanPlayer"/>
-\t\t\t<Menu value="8"/>
-\t\t\t<ImageIDBase value="PHIR"/>
-\t\t\t<DefaultSound value="0"/>
-\t\t</Engine>
-\t\t<Game version="1">
-\t\t\t<DialogID value="APb1"/>
-\t\t\t<MaxHP value="10"/>
-\t\t\t<RecruitDelay value="10000"/>
-\t\t\t<Flags value="NotFlaggable"/>
-\t\t\t<Flags value="NotSpellTarget"/>
-\t\t\t<Flags value="IsInventoryItem"/>
-\t\t\t<HelpID value="h020"/>
-\t\t\t<Attributes>
-\t\t\t\t<Attribute ID="CanDropItem" Value="0"/>
-\t\t\t\t<Attribute ID="Phantom_Item_BlackIcerod" Value="0"/>
+\t\t\t\t<Attribute ID="Phantom_Item_FrostArmorBonus" Value="0"/>
 \t\t\t</Attributes>
 \t\t</Game>
 \t</Description>
@@ -608,15 +686,15 @@ def phantom_hero_data() -> str:
 \t\t(PrimaryStat ATTRIB_Intelligence)
 \t\t(Friend\txx)
 \t\t(attacktype 1)
-\t\t(castingrange 180)
+\t\t(castingrange 190)
 \t\t(PercentageHPRetreat 0)
 \t\t(enemy_estimation 0.1)
 \t\t(self_estimation 10.0)
 \t\t(Loyalty 55)
 \t\t(Greed 12)
 \t\t(Luck 12)
-\t\t(Upgrade_Armor_Chance\t0)
-\t\t(Upgrade_Weapon_Chance\t0)
+\t\t(Upgrade_Armor_Chance\t100)
+\t\t(Upgrade_Weapon_Chance\t100)
 \t\t(Poison_Weapon_Chance\t0)
 \t\t(evaluationScript\twizard_eval_nearby)
 \t\t(activeScript\tPhantom_tree)
@@ -630,20 +708,27 @@ def phantom_hero_data() -> str:
 
 
 def phantom_items_data() -> str:
-    return """[FrozenCowl]
-\t{Special_Item
+    entries: list[str] = []
+    for _, agent_name, _, _, _ in phantom_equipment_item_specs():
+        entries.append(
+            f"""[{agent_name}]
+\t{{Special_Item
 \t\t(type \t\tSpecial_Item)
-\t\t(Title\t\tFrozenCowl)
-\t}
+\t\t(Title\t\t{agent_name})
+\t}}
 [end]
-
-[BlackIcerod]
+"""
+        )
+    entries.append(
+        """[FrostArmorBonus]
 \t{Special_Item
 \t\t(type \t\tSpecial_Item)
-\t\t(Title\t\tBlackIcerod)
+\t\t(Title\t\tFrostArmorBonus)
 \t}
 [end]
 """
+    )
+    return "\n".join(entries)
 
 
 def phantom_building_data() -> str:
@@ -673,8 +758,14 @@ def phantom_building_data() -> str:
 
 
 def phantom_gpl() -> str:
-    return """expression #Phantom_Item_FrozenCowl 80
-expression #Phantom_Item_BlackIcerod 81
+    item_expressions = "\n".join(
+        f"expression #{attribute_name} {item_id}"
+        for item_id, _, attribute_name, _, _ in phantom_equipment_item_specs()
+    )
+    item_expressions += (
+        f"\nexpression #Phantom_Item_FrostArmorBonus {PHANTOM_FROST_ARMOR_ITEM_ID}\n"
+    )
+    return item_expressions + """
 
 function DEAL_DEMON()
 
@@ -763,6 +854,277 @@ Begin
 \treturn False;
 End
 
+Function WizGuild_Check(agent ThisAgent, string Equipment, integer Bonus, list WizGuilds) is boolean
+
+Declare
+\tagent WizGuild;
+\tlist Potentials;
+\tinteger Intel_Roll,Gold_Needed;
+
+Begin
+\tIf (ThisAgent's "Title" == "Phantom" && Equipment == "Armor")
+\t\tBonus = $Phantom_cowl_magic_level(ThisAgent);
+
+\tIf (Bonus >= 3)
+\t\treturn False;
+
+\tIf (Bonus == 0)
+\t\tGold_Needed = #Cost_Per_Magic_Enchantment1;
+\tIf (Bonus == 1)
+\t\tGold_Needed = #Cost_Per_Magic_Enchantment2;
+\tIf (Bonus == 2)
+\t\tGold_Needed = #Cost_Per_Magic_Enchantment3;
+
+\tIf ($Total_Gold(ThisAgent) < Gold_Needed)
+\t\treturn False;
+
+\tIf ($ListSize(WizGuilds) == 0)
+\t\treturn False;
+
+\tForeach WizGuild in WizGuilds do
+\t\tbegin
+\t\t\tIf (WizGuild's "Level" > Bonus)
+\t\t\t\tPotentials << WizGuild;
+\t\tend
+
+\tIf ($ListSize(Potentials) == 0)
+\t\treturn False;
+
+\tIntel_Roll = $RandomNumber(30) + 1;
+\tIf ($GetAttribute(ThisAgent, #ATTRIB_Intelligence) > Intel_Roll)
+\t\tbegin
+\t\t\tIf (Equipment == "Weapon")
+\t\t\t\tThisAgent's "Task_Number" = #ATTRIB_Weapon_Magic_Bonus;
+\t\t\tElse
+\t\t\t\tThisAgent's "Task_Number" = #ATTRIB_Armor_Magic_Bonus;
+
+\t\t\tThisAgent's "Target" = $Loyalty_Mod_Pick_Closest(ThisAgent, Potentials);
+\t\t\tThisAgent's "TaskName" = "visiting";
+\t\t\treturn True;
+\t\tend
+
+\treturn False;
+End
+
+Function Obtain_Upgrade(agent ThisAgent)
+
+Declare
+\tagent ThisBuilding;
+\tinteger What_To_Upgrade,Total_Gold,Gold,Upgrade,Mult,Old_Upgrade,Parry_Increase;
+
+Begin
+\tThisBuilding = ThisAgent's "Target";
+\tTotal_Gold = $Total_Gold(ThisAgent);
+\tWhat_To_Upgrade = ThisAgent's "Task_Number";
+\tOld_Upgrade = $GetAttribute(ThisAgent, What_To_Upgrade);
+\t$SetThreadInterval(ThisAgent's "ActiveScript", #Normal_Cycle);
+\tMult = #armor_multiplier;
+
+\tIf (What_To_Upgrade == #ATTRIB_Armor_Struct_Bonus)
+\t\tbegin
+\t\t\tIf (Old_Upgrade == 0 && Total_Gold >= #Cost_Per_Struct_Upgrade1 * Mult &&
+\t\t\t\t$GetAttribute(ThisBuilding, #ATTRIB_ResearchArmorLevel_2) != 0)
+\t\t\t\tbegin
+\t\t\t\t\tTotal_Gold -= #Cost_Per_Struct_Upgrade1 * Mult;
+\t\t\t\t\tGold += #Cost_Per_Struct_Upgrade1 * Mult;
+\t\t\t\t\tUpgrade = 1;
+\t\t\t\tend
+
+\t\t\tIf (Old_Upgrade <= 1 && Total_Gold >= #Cost_Per_Struct_Upgrade2 * Mult &&
+\t\t\t\t$GetAttribute(ThisBuilding, #ATTRIB_ResearchArmorLevel_3) != 0)
+\t\t\t\tbegin
+\t\t\t\t\tTotal_Gold -= #Cost_Per_Struct_Upgrade2 * Mult;
+\t\t\t\t\tGold += #Cost_Per_Struct_Upgrade2 * Mult;
+\t\t\t\t\tUpgrade = 2;
+\t\t\t\tend
+
+\t\t\tIf (Old_Upgrade <= 2 && Total_Gold >= #Cost_Per_Struct_Upgrade3 * Mult &&
+\t\t\t\t$GetAttribute(ThisBuilding, #ATTRIB_ResearchArmorLevel_4) != 0)
+\t\t\t\tbegin
+\t\t\t\t\tGold += #Cost_Per_Struct_Upgrade3 * Mult;
+\t\t\t\t\tUpgrade = 3;
+\t\t\t\tend
+\t\tend
+\tElse
+\t\tbegin
+\t\t\tIf (Old_Upgrade == 0 && Total_Gold >= #Cost_Per_Struct_Upgrade1 &&
+\t\t\t\t$GetAttribute(ThisBuilding, #ATTRIB_ResearchWeaponLevel_2) != 0)
+\t\t\t\tbegin
+\t\t\t\t\tTotal_Gold -= #Cost_Per_Struct_Upgrade1;
+\t\t\t\t\tGold += #Cost_Per_Struct_Upgrade1;
+\t\t\t\t\tUpgrade = 1;
+\t\t\t\tend
+
+\t\t\tIf (Old_Upgrade <= 1 && Total_Gold >= #Cost_Per_Struct_Upgrade2 &&
+\t\t\t\t$GetAttribute(ThisBuilding, #ATTRIB_ResearchWeaponLevel_3) != 0)
+\t\t\t\tbegin
+\t\t\t\t\tTotal_Gold -= #Cost_Per_Struct_Upgrade2;
+\t\t\t\t\tGold += #Cost_Per_Struct_Upgrade2;
+\t\t\t\t\tUpgrade = 2;
+\t\t\t\tend
+
+\t\t\tIf (Old_Upgrade <= 2 && Total_Gold >= #Cost_Per_Struct_Upgrade3 &&
+\t\t\t\t$GetAttribute(ThisBuilding, #ATTRIB_ResearchWeaponLevel_4) != 0)
+\t\t\t\tbegin
+\t\t\t\t\tGold += #Cost_Per_Struct_Upgrade3;
+\t\t\t\t\tUpgrade = 3;
+\t\t\t\tend
+\t\tend
+
+\tIf (Upgrade > 0)
+\t\tbegin
+\t\t\t$Spend_Gold(ThisAgent, ThisBuilding, Gold);
+\t\t\t$SetAttribute(ThisAgent, What_To_Upgrade, Upgrade);
+
+\t\t\tIf (ThisAgent's "Title" == "Phantom")
+\t\t\t\tbegin
+\t\t\t\t\tIf (What_To_Upgrade == #ATTRIB_Weapon_Struct_Bonus)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tParry_Increase = (Upgrade - Old_Upgrade) * 5;
+\t\t\t\t\t\t\t$MagicalAdjustAttribute(ThisAgent, #ATTRIB_Parry, Parry_Increase);
+\t\t\t\t\t\t\t$Phantom_sync_icerod_item(ThisAgent);
+\t\t\t\t\t\tend
+\t\t\t\t\tElse
+\t\t\t\t\t\t$Phantom_sync_cowl_item(ThisAgent);
+\t\t\t\tend
+\t\tend
+
+\tThisAgent's "ActiveScript" = $Done_Enhancing_Equipment;
+End
+
+Function Obtain_Enchantment(agent ThisAgent)
+
+Declare
+\tagent ThisBuilding;
+\tinteger What_To_Upgrade,Total_Gold,Gold,Upgrade,Bldg_Level,Current_Upgrade,Stored_Upgrade;
+
+Begin
+\tThisBuilding = ThisAgent's "Target";
+\tTotal_Gold = $Total_Gold(ThisAgent);
+\tWhat_To_Upgrade = ThisAgent's "Task_Number";
+\tCurrent_Upgrade = $GetAttribute(ThisAgent, What_To_Upgrade);
+\tIf (ThisAgent's "Title" == "Phantom" &&
+\t\tWhat_To_Upgrade == #ATTRIB_Armor_Magic_Bonus)
+\t\tCurrent_Upgrade = $Phantom_cowl_magic_level(ThisAgent);
+
+\tThisAgent's "Task_Number" = 0;
+\t$SetThreadInterval(ThisAgent's "ActiveScript", #Normal_Cycle);
+\tBldg_Level = ThisBuilding's "Level";
+
+\tIf (Current_Upgrade == 0 && Total_Gold >= #Cost_Per_Magic_Enchantment1)
+\t\tbegin
+\t\t\tTotal_Gold -= #Cost_Per_Magic_Enchantment1;
+\t\t\tGold += #Cost_Per_Magic_Enchantment1;
+\t\t\tUpgrade = 1;
+\t\tend
+
+\tIf (Current_Upgrade <= 1 && Total_Gold >= #Cost_Per_Magic_Enchantment2 && Bldg_Level > 1)
+\t\tbegin
+\t\t\tTotal_Gold -= #Cost_Per_Magic_Enchantment2;
+\t\t\tGold += #Cost_Per_Magic_Enchantment2;
+\t\t\tUpgrade = 2;
+\t\tend
+
+\tIf (Current_Upgrade <= 2 && Total_Gold >= #Cost_Per_Magic_Enchantment3 && Bldg_Level > 2)
+\t\tbegin
+\t\t\tGold += #Cost_Per_Magic_Enchantment3;
+\t\t\tUpgrade = 3;
+\t\tend
+
+\tIf (Upgrade > 0)
+\t\tbegin
+\t\t\t$Spend_Gold(ThisAgent, ThisBuilding, Gold);
+\t\t\tStored_Upgrade = Upgrade;
+\t\t\tIf (ThisAgent's "Title" == "Phantom" &&
+\t\t\t\tWhat_To_Upgrade == #ATTRIB_Armor_Magic_Bonus &&
+\t\t\t\tThisAgent's "Reborn_Counter" == 1)
+\t\t\t\tStored_Upgrade += 10000;
+\t\t\t$SetAttribute(ThisAgent, What_To_Upgrade, Stored_Upgrade);
+
+\t\t\tIf (ThisAgent's "Title" == "Phantom")
+\t\t\t\tbegin
+\t\t\t\t\tIf (What_To_Upgrade == #ATTRIB_Weapon_Magic_Bonus)
+\t\t\t\t\t\t$Phantom_sync_icerod_item(ThisAgent);
+\t\t\t\t\tElse
+\t\t\t\t\t\t$Phantom_sync_cowl_item(ThisAgent);
+\t\t\t\tend
+\t\tend
+
+\tThisAgent's "ActiveScript" = $Done_Enhancing_Equipment;
+End
+
+function attack_object(agent thisagent)
+
+declare
+\tinteger targetrange,attackrange;
+\tagent target;
+\tstring spell_name;
+\tboolean casting;
+
+begin
+\ttarget = thisagent's "target";
+
+\tIf ($notvalid(target))
+\t\t$reset_tasks(thisagent);
+\tElse If ($haslowHP(thisagent))
+\t\t$heal_self(thisagent);
+\tElse
+\t\tbegin
+\t\t\tspell_name = $getbestspell(thisagent, #list_attack);
+\t\t\tIf (spell_name == "nothing")
+\t\t\t\tbegin
+\t\t\t\t\tattackrange = $getattribute(thisagent, #ATTRIB_maxattackrange);
+\t\t\t\t\tcasting = False;
+\t\t\t\tend
+\t\t\tElse
+\t\t\t\tbegin
+\t\t\t\t\tIf (thisagent's "Title" == "Phantom")
+\t\t\t\t\t\tattackrange = $Phantom_effective_casting_range(thisagent);
+\t\t\t\t\tElse
+\t\t\t\t\t\tattackrange = thisagent's "castingrange";
+\t\t\t\t\tcasting = True;
+\t\t\t\tend
+
+\t\t\ttargetrange = $distanceBetweenAgents(thisagent, target);
+\t\t\tIf (targetrange > attackrange)
+\t\t\t\tbegin
+\t\t\t\t\tthisagent's "destination" = $locationof(target);
+\t\t\t\t\tthisagent's "activeScript" = $travel_to;
+\t\t\t\t\tthisagent's "backScript" = $attack_object;
+\t\t\t\t\t$move(thisagent, target);
+\t\t\t\tend
+\t\t\tElse If (($listsize(thisagent's "hostiles") > 0) &&
+\t\t\t\t((target's "type" == "building") || (target's "type" == "lair")))
+\t\t\t\t(thisagent's "evaluationscript")(thisagent);
+\t\t\tElse If ($Hero_Peasant_check(thisagent) == False)
+\t\t\t\tbegin
+\t\t\t\t\tIf (casting)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t$PlaySound(ThisAgent, "VFX_CAST_SPELL1");
+\t\t\t\t\t\t\t$castspell(thisagent, spell_name, target, "");
+\t\t\t\t\t\tend
+\t\t\t\t\tElse
+\t\t\t\t\t\t$performAction(thisagent, thisagent's "attack_action", target);
+\t\t\t\tend
+\t\tend
+end
+
+function getattackrange(agent thisagent) is integer
+
+declare
+\tinteger arrivedist;
+
+begin
+\tIf ($getbestspell(thisagent, #List_attack) == "nothing")
+\t\tarrivedist = $getattribute(thisagent, #ATTRIB_MaxAttackRange);
+\tElse If (thisagent's "Title" == "Phantom")
+\t\tarrivedist = $Phantom_effective_casting_range(thisagent);
+\tElse
+\t\tarrivedist = thisagent's "castingrange";
+
+\treturn arrivedist;
+end
+
 function Phantom_tree (agent thisagent)
 
 declare
@@ -788,6 +1150,174 @@ begin
 \t$NewThread(thisagent's "QuestScript", 100, thisagent);
 end
 
+function Phantom_has_cowl_item(agent thisagent) is boolean
+
+declare
+\tinteger item_id;
+
+begin
+\tIf ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent))
+\t\treturn True;
+
+\titem_id = 83;
+\tWhile (item_id <= 97) do
+\t\tbegin
+\t\t\tIf ($AgentHasInventoryItem(item_id, thisagent))
+\t\t\t\treturn True;
+\t\t\titem_id += 1;
+\t\tend
+
+\treturn False;
+end
+
+function Phantom_has_icerod_item(agent thisagent) is boolean
+
+declare
+\tinteger item_id;
+
+begin
+\tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent))
+\t\treturn True;
+
+\titem_id = 98;
+\tWhile (item_id <= 112) do
+\t\tbegin
+\t\t\tIf ($AgentHasInventoryItem(item_id, thisagent))
+\t\t\t\treturn True;
+\t\t\titem_id += 1;
+\t\tend
+
+\treturn False;
+end
+
+function Phantom_remove_cowl_items(agent thisagent)
+
+declare
+\tinteger item_id;
+
+begin
+\tWhile ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent)) do
+\t\t$DeleteInventoryItem(#Phantom_Item_FrozenCowl, thisagent);
+
+\titem_id = 83;
+\tWhile (item_id <= 97) do
+\t\tbegin
+\t\t\tWhile ($AgentHasInventoryItem(item_id, thisagent)) do
+\t\t\t\t$DeleteInventoryItem(item_id, thisagent);
+\t\t\titem_id += 1;
+\t\tend
+end
+
+function Phantom_remove_icerod_items(agent thisagent)
+
+declare
+\tinteger item_id;
+
+begin
+\tWhile ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent)) do
+\t\t$DeleteInventoryItem(#Phantom_Item_BlackIcerod, thisagent);
+
+\titem_id = 98;
+\tWhile (item_id <= 112) do
+\t\tbegin
+\t\t\tWhile ($AgentHasInventoryItem(item_id, thisagent)) do
+\t\t\t\t$DeleteInventoryItem(item_id, thisagent);
+\t\t\titem_id += 1;
+\t\tend
+end
+
+function Phantom_cowl_magic_level(agent thisagent) is integer
+
+declare
+\tinteger magic_level;
+
+begin
+\tmagic_level = $GetAttribute(thisagent, #ATTRIB_Armor_Magic_Bonus);
+\tIf (thisagent's "Reborn_Counter" == 1)
+\t\tmagic_level -= 10000;
+
+\tIf (magic_level < 0)
+\t\tmagic_level = 0;
+\tIf (magic_level > 3)
+\t\tmagic_level = 3;
+
+\treturn magic_level;
+end
+
+function Phantom_effective_casting_range(agent thisagent) is integer
+
+declare
+\tinteger magic_level;
+
+begin
+\tmagic_level = $GetAttribute(thisagent, #ATTRIB_Weapon_Magic_Bonus);
+\tIf (magic_level < 0)
+\t\tmagic_level = 0;
+\tIf (magic_level > 3)
+\t\tmagic_level = 3;
+
+\treturn 190 + (magic_level * 10);
+end
+
+function Phantom_sync_cowl_item(agent thisagent)
+
+declare
+\tinteger struct_level,magic_level,combination,item_id;
+
+begin
+\tstruct_level = $GetAttribute(thisagent, #ATTRIB_Armor_Struct_Bonus);
+\tIf (struct_level < 0)
+\t\tstruct_level = 0;
+\tIf (struct_level > 3)
+\t\tstruct_level = 3;
+\tmagic_level = $Phantom_cowl_magic_level(thisagent);
+\tcombination = (struct_level * 4) + magic_level;
+
+\tIf (combination == 0)
+\t\titem_id = 80;
+\tElse
+\t\titem_id = 82 + combination;
+
+\t$Phantom_remove_cowl_items(thisagent);
+\t$CreateNewInventoryItem(item_id, thisagent, #Allow_Cloned_Quest_Item);
+end
+
+function Phantom_sync_icerod_item(agent thisagent)
+
+declare
+\tinteger struct_level,magic_level,combination,item_id;
+
+begin
+\tstruct_level = $GetAttribute(thisagent, #ATTRIB_Weapon_Struct_Bonus);
+\tIf (struct_level < 0)
+\t\tstruct_level = 0;
+\tIf (struct_level > 3)
+\t\tstruct_level = 3;
+\tmagic_level = $GetAttribute(thisagent, #ATTRIB_Weapon_Magic_Bonus);
+\tIf (magic_level < 0)
+\t\tmagic_level = 0;
+\tIf (magic_level > 3)
+\t\tmagic_level = 3;
+\tcombination = (struct_level * 4) + magic_level;
+
+\tIf (combination == 0)
+\t\titem_id = 81;
+\tElse
+\t\titem_id = 97 + combination;
+
+\t$Phantom_remove_icerod_items(thisagent);
+\t$CreateNewInventoryItem(item_id, thisagent, #Allow_Cloned_Quest_Item);
+end
+
+function Phantom_sync_equipment_items(agent thisagent)
+
+declare
+
+begin
+\t$Phantom_sync_cowl_item(thisagent);
+\t$Phantom_sync_icerod_item(thisagent);
+end
+
 function Phantom_grant_starter_items (agent thisagent)
 
 declare
@@ -796,16 +1326,17 @@ begin
 \tIf ($isdead(thisagent))
 \t\treturn;
 
-\tIf ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent) == False)
+\tIf ($Phantom_has_cowl_item(thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_FrozenCowl, thisagent, #Allow_Cloned_Quest_Item);
 \t\t\t$AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);
 \t\tend
 
-\tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
+\tIf ($Phantom_has_icerod_item(thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
 \t\t\t$AdjustAttribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
+\t\t\t$MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);
 \t\tend
 end
 
@@ -872,6 +1403,7 @@ begin
 \t\tbegin
 \t\t\t$DeleteEffector(thisagent, "frost_armor_effector");
 \t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, -10000);
 \t\tend
 \tthisagent's "Reborn_Counter" = 0;
 \t$Phantom_remove_starter_items(thisagent);
@@ -883,15 +1415,63 @@ function Phantom_remove_starter_items(agent thisagent)
 declare
 
 begin
-\tWhile ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent)) do
+\t$Phantom_remove_cowl_items(thisagent);
+\t$Phantom_remove_icerod_items(thisagent);
+
+\tWhile ($AgentHasInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent)) do
 \t\tbegin
-\t\t\t$DeleteInventoryItem(#Phantom_Item_FrozenCowl, thisagent);
+\t\t\t$DeleteInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent);
+\t\tend
+end
+
+Function Hero_Drop_Quest_Items (agent ThisAgent)
+
+Declare
+\tinteger WhatItem;
+\tstring agentType;
+
+Begin
+\tIf (ThisAgent's "Title" == "Phantom")
+\t\tbegin
+\t\t\tIf ($isdead(ThisAgent) == False)
+\t\t\t\t$KillThread(ThisAgent's "QuestScript");
+\t\t\t$Phantom_remove_starter_items(ThisAgent);
 \t\tend
 
-\tWhile ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent)) do
+\tWhatItem = -1;
+
+\tWhile ($AgentHasInventoryItem(WhatItem, ThisAgent)) do
 \t\tbegin
-\t\t\t$DeleteInventoryItem(#Phantom_Item_BlackIcerod, thisagent);
+\t\t\t$DeleteInventoryItem(WhatItem, ThisAgent);
+
+\t\t\tIf (WhatItem != #QItem_Magic_Sword &&
+\t\t\t\tWhatItem != #MarketItem_Ring_Protection &&
+\t\t\t\tWhatItem != #MarketItem_Market3_Item)
+\t\t\t\tbegin
+\t\t\t\t\tIf ($CanDropInventoryItem(WhatItem) == True)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tagentType = $GetInventoryItemAgentType(WhatItem);
+\t\t\t\t\t\t\t$SpawnUnit(ThisAgent, agentType, "Override", $Concatenate($MakeInventoryAttribute(WhatItem), 0));
+\t\t\t\t\t\tend
+\t\t\t\tend
+
+\t\t\tWhatItem = -1;
 \t\tend
+End
+
+function Phantom_Grant_Frost_Armor_Bonus(agent thisagent)
+
+declare
+
+begin
+\tIf ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
+\t\treturn;
+
+\tIf ($AgentHasInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent))
+\t\treturn;
+
+\t$CreateNewInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent, #Allow_Cloned_Quest_Item);
+\t$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);
 end
 
 function Frost_Armor_Begin(agent thisagent, agent target)
@@ -908,6 +1488,7 @@ begin
 \tthisagent's "Reborn_Counter" = 1;
 \t$createeffector(thisagent, "frost_armor_effector", 180000);
 \t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10000);
+\t$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, 10000);
 \t$clearlist(thisagent's "Hostiles");
 end
 
@@ -980,6 +1561,7 @@ begin
 \t\t\treturn;
 \t\tend
 
+\t$Phantom_Grant_Frost_Armor_Bonus(thisagent);
 \t$Phantom_Frost_Armor_Recharge_Check(thisagent);
 
 \tIf ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))
@@ -1015,6 +1597,7 @@ begin
 \tthisagent's "Reborn_Counter" = 2;
 \t$DeleteEffector(thisagent, "frost_armor_effector");
 \t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);
+\t$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, -10000);
 \t$CreateEffector(thisagent, "ice_lance_hit_effector", 0);
 
 \tIf (attacker's "Type" == "Building" || attacker's "Type" == "Lair")
@@ -1259,11 +1842,34 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
 def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
     quest_item_names = read_cam_entry(source_gpltext, b"STRT", b"QITM")
     help_text = read_cam_entry(source_gpltext, b"STRT", b"HPTX")
+    equipment_item_text: dict[int, str] = {}
+    for item_id, _, _, display_name, _ in phantom_equipment_item_specs():
+        if "Cowl" in display_name:
+            if item_id == PHANTOM_COWL_BASE_ITEM_ID:
+                combination = 0
+            else:
+                combination = item_id - PHANTOM_COWL_VARIANT_FIRST_ID + 1
+            struct_level, magic_level = divmod(combination, 4)
+            bonus_text = (
+                f"(+{2 + struct_level} armor, +{magic_level} magic armor)"
+            )
+        else:
+            if item_id == PHANTOM_ICEROD_BASE_ITEM_ID:
+                combination = 0
+            else:
+                combination = item_id - PHANTOM_ICEROD_VARIANT_FIRST_ID + 1
+            struct_level, magic_level = divmod(combination, 4)
+            bonus_text = (
+                f"(+{8 + struct_level} damage, +{magic_level} magic, "
+                f"+{5 + struct_level * 5} parry, +{10 + magic_level * 10} cast range)"
+            )
+        equipment_item_text[item_id] = f"{display_name}\n\x01FFDDAA{bonus_text}"
+
     patched_quest_item_names = patch_indexed_strt_strings(
         quest_item_names.data,
         {
-            80: "Frozen Cowl\n\x01FFDDAA(+2 armor)",
-            81: "Black Icerod\n\x01FFDDAA(+8 damage)",
+            **equipment_item_text,
+            82: "Frost Armor\n\x01FFDDAA(+10 armor)",
         },
     )
     patched_help_text = patch_strt_strings(

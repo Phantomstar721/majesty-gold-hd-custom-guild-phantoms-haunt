@@ -15,6 +15,62 @@ DIR_ENTRY_SIZE = 8
 SECTION_HEADER_SIZE = 8
 ENTRY_HEADER_SIZE = 28
 
+PHANTOM_COWL_TIER_NAMES = (
+    "Frozen Cowl",
+    "Icy Cowl",
+    "Hardened Ice Cowl",
+    "Eternal Ice Cowl",
+)
+PHANTOM_ICEROD_TIER_NAMES = (
+    "Black Icerod",
+    "Dark Icerod",
+    "Deep Icerod",
+    "Eternal Icerod",
+)
+
+
+def phantom_equipment_item_records() -> list[tuple[int, str, str, bytes]]:
+    records: list[tuple[int, str, str, bytes]] = []
+    for family in ("cowl", "icerod"):
+        for struct_level in range(4):
+            for magic_level in range(4):
+                combination = struct_level * 4 + magic_level
+                if family == "cowl":
+                    item_id = 80 if combination == 0 else 82 + combination
+                    agent_name = (
+                        "FrozenCowl"
+                        if combination == 0
+                        else f"PhantomCowlS{struct_level}M{magic_level}"
+                    )
+                    attribute_name = (
+                        "Phantom_Item_FrozenCowl"
+                        if combination == 0
+                        else f"Phantom_Item_Cowl_S{struct_level}_M{magic_level}"
+                    )
+                    display_name = PHANTOM_COWL_TIER_NAMES[struct_level]
+                    bonus = f"(+{2 + struct_level} armor, +{magic_level} magic armor)"
+                else:
+                    item_id = 81 if combination == 0 else 97 + combination
+                    agent_name = (
+                        "BlackIcerod"
+                        if combination == 0
+                        else f"PhantomIcerodS{struct_level}M{magic_level}"
+                    )
+                    attribute_name = (
+                        "Phantom_Item_BlackIcerod"
+                        if combination == 0
+                        else f"Phantom_Item_Icerod_S{struct_level}_M{magic_level}"
+                    )
+                    display_name = PHANTOM_ICEROD_TIER_NAMES[struct_level]
+                    bonus = (
+                        f"(+{8 + struct_level} damage, +{magic_level} magic, "
+                        f"+{5 + struct_level * 5} parry, "
+                        f"+{10 + magic_level * 10} cast range)"
+                    )
+                text = f"{display_name}\n\x01FFDDAA{bonus}".encode("latin-1")
+                records.append((item_id, agent_name, attribute_name, text))
+    return sorted(records)
+
 
 class ValidationError(Exception):
     pass
@@ -82,8 +138,8 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
 EXPECTED_DESCRIPTION_IDS = {
     "phantom_units.xml": {
         ("Unit", "PHM1"),
-        ("Unit", "FrozenCowl"),
-        ("Unit", "BlackIcerod"),
+        *((("Unit", agent_name) for _, agent_name, _, _ in phantom_equipment_item_records())),
+        ("Unit", "FrostArmorBonus"),
         ("Unit", "MBPhantomGuild"),
     },
     "phantom_actions.xml": {
@@ -396,12 +452,15 @@ def validate_strt(path: Path, entry: Entry, data: bytes) -> None:
 
 def validate_indexed_item_strings(path: Path, data: bytes) -> None:
     count = struct.unpack_from("<H", data, 0)[0]
-    if count <= 81:
-        fail(f"{path}: STRT/QITM has {count} strings; item IDs 80 and 81 require at least 82")
-    expected_items = (
-        (80, b"Frozen Cowl\n\x01FFDDAA(+2 armor)"),
-        (81, b"Black Icerod\n\x01FFDDAA(+8 damage)"),
-    )
+    if count <= 112:
+        fail(
+            f"{path}: STRT/QITM has {count} strings; "
+            "Phantom equipment variants require item IDs through 112"
+        )
+    expected_items = [
+        *((item_id, text) for item_id, _, _, text in phantom_equipment_item_records()),
+        (82, b"Frost Armor\n\x01FFDDAA(+10 armor)"),
+    ]
     for item_id, expected_text in expected_items:
         offset = struct.unpack_from("<I", data, 4 + item_id * 4)[0]
         record_id = struct.unpack_from("<I", data, offset)[0]
@@ -1204,14 +1263,18 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
 def validate_phantom_item_cleanup(output_root: Path) -> None:
     units_path = output_root / "Data" / "phantom_units.xml"
     tree = parse_xml(units_path)
-    for item_id in ("FrozenCowl", "BlackIcerod"):
+    item_ids = [
+        *(agent_name for _, agent_name, _, _ in phantom_equipment_item_records()),
+        "FrostArmorBonus",
+    ]
+    for item_id in item_ids:
         description = tree.find(f'.//Description[@ID="{item_id}"]')
         if description is None:
-            fail(f"{units_path}: Phantom starter item {item_id} is missing")
+            fail(f"{units_path}: Phantom class item {item_id} is missing")
         can_drop = description.find('.//Attribute[@ID="CanDropItem"]')
         if can_drop is None or can_drop.get("Value") != "0":
             fail(
-                f"{units_path}: Phantom starter item {item_id} must set "
+                f"{units_path}: Phantom class item {item_id} must set "
                 "CanDropItem=0 so realm exit deletes it instead of spawning loot"
             )
 
@@ -1226,10 +1289,71 @@ def validate_phantom_item_cleanup(output_root: Path) -> None:
         "$DeleteInventoryItem(#Phantom_Item_FrozenCowl, thisagent);",
         "While ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent))",
         "$DeleteInventoryItem(#Phantom_Item_BlackIcerod, thisagent);",
+        "While ($AgentHasInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent))",
+        "$DeleteInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent);",
+        "Function Hero_Drop_Quest_Items (agent ThisAgent)",
+        'If (ThisAgent\'s "Title" == "Phantom")',
+        'If ($isdead(ThisAgent) == False)',
+        '$KillThread(ThisAgent\'s "QuestScript");',
+        "$Phantom_remove_starter_items(ThisAgent);",
+        "While ($AgentHasInventoryItem(WhatItem, ThisAgent))",
+        "$DeleteInventoryItem(WhatItem, ThisAgent);",
+        "WhatItem != #QItem_Magic_Sword",
+        "WhatItem != #MarketItem_Ring_Protection",
+        "WhatItem != #MarketItem_Market3_Item",
+        "If ($CanDropInventoryItem(WhatItem) == True)",
+        "agentType = $GetInventoryItemAgentType(WhatItem);",
+        '$SpawnUnit(ThisAgent, agentType, "Override", $Concatenate($MakeInventoryAttribute(WhatItem), 0));',
     )
     missing = [value for value in cleanup_contract if value not in gpl]
     if missing:
         fail(f"{gpl_path}: Phantom starter-item cleanup is missing {missing}")
+
+    if gpl.count("Function Hero_Drop_Quest_Items (agent ThisAgent)") != 1:
+        fail(
+            f"{gpl_path}: Phantom package must contain exactly one stock-compatible "
+            "Hero_Drop_Quest_Items replacement"
+        )
+
+    cleanup_helper = gpl.index("function Phantom_remove_starter_items(agent thisagent)")
+    drop_function = gpl.index("Function Hero_Drop_Quest_Items (agent ThisAgent)")
+    phantom_guard = gpl.index('If (ThisAgent\'s "Title" == "Phantom")', drop_function)
+    watcher_stop = gpl.index('$KillThread(ThisAgent\'s "QuestScript");', phantom_guard)
+    class_cleanup = gpl.index(
+        "$Phantom_remove_starter_items(ThisAgent);",
+        watcher_stop,
+    )
+    stock_loop = gpl.index(
+        "While ($AgentHasInventoryItem(WhatItem, ThisAgent))",
+        class_cleanup,
+    )
+    generic_delete = gpl.index(
+        "$DeleteInventoryItem(WhatItem, ThisAgent);",
+        stock_loop,
+    )
+    generic_drop_check = gpl.index(
+        "If ($CanDropInventoryItem(WhatItem) == True)",
+        generic_delete,
+    )
+    generic_spawn = gpl.index(
+        '$SpawnUnit(ThisAgent, agentType, "Override", $Concatenate($MakeInventoryAttribute(WhatItem), 0));',
+        generic_drop_check,
+    )
+    if not (
+        cleanup_helper
+        < drop_function
+        < phantom_guard
+        < watcher_stop
+        < class_cleanup
+        < stock_loop
+        < generic_delete
+        < generic_drop_check
+        < generic_spawn
+    ):
+        fail(
+            f"{gpl_path}: realm-exit cleanup must stop the Phantom watcher and "
+            "delete class items before preserving the stock remaining-item loop"
+        )
 
 
 def validate_ice_lance_contract(output_root: Path) -> None:
@@ -1259,8 +1383,10 @@ def validate_ice_lance_contract(output_root: Path) -> None:
 
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     hero_data = hero_data_path.read_text(encoding="utf-8")
-    if "(castingrange 180)" not in hero_data:
-        fail(f"{hero_data_path}: Phantom base casting range is not 180")
+    if "(castingrange 190)" not in hero_data:
+        fail(
+            f"{hero_data_path}: Phantom Icerod-equipped casting range is not 190"
+        )
 
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
@@ -1342,6 +1468,19 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     if "(Lived_In_Script Phantom_Lived_In)" not in building_data:
         fail(f"{building_data_path}: full-health Frost Armor recharge wrapper is missing")
 
+    items_data_path = output_root / "GPL" / "Phantom_Items_Data.dat"
+    items_data = items_data_path.read_text(encoding="utf-8")
+    item_data_contract = (
+        "[FrostArmorBonus]",
+        "(Title\t\tFrostArmorBonus)",
+    )
+    missing_item_data = [value for value in item_data_contract if value not in items_data]
+    if missing_item_data:
+        fail(
+            f"{items_data_path}: visible Frost Armor armor item is missing "
+            f"{missing_item_data}"
+        )
+
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
     gpl_contract = (
@@ -1351,6 +1490,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         'thisagent\'s "Reborn_Counter" = 1;',
         '$createeffector(thisagent, "frost_armor_effector", 180000);',
         "#ATTRIB_Armor_Basic_Damage, 10000",
+        "#ATTRIB_Armor_Magic_Bonus, 10000",
         '$clearlist(thisagent\'s "Hostiles");',
         'targets = $compile_enemies(thisagent, 240);',
         '$Frost_Armor_Begin(thisagent, thisagent);',
@@ -1359,6 +1499,12 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         'thisagent\'s "ActiveScript" != $Attack_object',
         'thisagent\'s "BackScript" != $Attack_object',
         "function Phantom_Frost_Armor_Watch(agent thisagent)",
+        "function Phantom_Grant_Frost_Armor_Bonus(agent thisagent)",
+        "If ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)",
+        "If ($AgentHasInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent))",
+        "$CreateNewInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent, #Allow_Cloned_Quest_Item);",
+        "$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);",
+        "$Phantom_Grant_Frost_Armor_Bonus(thisagent);",
         "$Phantom_Frost_Armor_Recharge_Check(thisagent);",
         "If ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))",
         'If (thisagent\'s "Reborn_Counter" != 1)',
@@ -1393,8 +1539,27 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     missing_gpl = [value for value in gpl_contract if value not in gpl]
     if missing_gpl:
         fail(f"{gpl_path}: Frost Armor behavior contract is missing {missing_gpl}")
+    if gpl.count("$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);") != 1:
+        fail(
+            f"{gpl_path}: persistent Frost Armor must contain exactly one "
+            "guarded +10 armor adjustment"
+        )
+    if gpl.count(
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, 10000);"
+    ) != 1:
+        fail(
+            f"{gpl_path}: active Frost Armor must contain exactly one "
+            "+10000 magical-armor adjustment"
+        )
+    if gpl.count(
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, -10000);"
+    ) != 2:
+        fail(
+            f"{gpl_path}: active Frost Armor magical armor must be removed "
+            "on both consumption and death"
+        )
     if "$Phantom_Ensure_Frost_Armor_Passive" in gpl:
-        fail(f"{gpl_path}: level-1 Frost Armor watcher still invokes passive armor")
+        fail(f"{gpl_path}: legacy level-1 passive-armor implementation is present")
     if "$Phantom_Wizard_Tree" in gpl or "$Phantom_Purchase_Equipment" in gpl:
         fail(
             f"{gpl_path}: unstable local Wizard-tree potion wrapper is still present"
@@ -1422,10 +1587,113 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")'
     )
     freeze = gpl.index("$Frost_Armor_Freeze(attacker);")
-    if not incoming_filter < range_filter < consume < building_guard < freeze:
+    consume_basic_cleanup = gpl.index(
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);",
+        consume,
+    )
+    consume_magic_cleanup = gpl.index(
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, -10000);",
+        consume_basic_cleanup,
+    )
+    if not (
+        incoming_filter
+        < range_filter
+        < consume
+        < consume_basic_cleanup
+        < consume_magic_cleanup
+        < building_guard
+        < freeze
+    ):
         fail(
             f"{gpl_path}: Frost Armor must validate an in-range incoming "
-            "attacker, consume, then apply the building/lair freeze exclusion"
+            "attacker, remove both ward defenses, then apply the building/lair "
+            "freeze exclusion"
+        )
+
+    ward_begin = gpl.index("function Frost_Armor_Begin(agent thisagent, agent target)")
+    ward_basic_grant = gpl.index(
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10000);",
+        ward_begin,
+    )
+    ward_magic_grant = gpl.index(
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, 10000);",
+        ward_basic_grant,
+    )
+    ward_hostile_clear = gpl.index(
+        '$clearlist(thisagent\'s "Hostiles");',
+        ward_magic_grant,
+    )
+    death = gpl.index("function Phantom_death(agent thisagent)")
+    death_basic_cleanup = gpl.index(
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);",
+        death,
+    )
+    death_magic_cleanup = gpl.index(
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, -10000);",
+        death_basic_cleanup,
+    )
+    death_state_reset = gpl.index('thisagent\'s "Reborn_Counter" = 0;', death)
+    if not (
+        death
+        < death_basic_cleanup
+        < death_magic_cleanup
+        < death_state_reset
+        < ward_begin
+        < ward_basic_grant
+        < ward_magic_grant
+        < ward_hostile_clear
+    ):
+        fail(
+            f"{gpl_path}: Frost Armor must add and remove its basic and "
+            "magical ward armor as a matched pair"
+        )
+
+    bonus_function = gpl.index(
+        "function Phantom_Grant_Frost_Armor_Bonus(agent thisagent)"
+    )
+    bonus_level_gate = gpl.index(
+        "If ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)",
+        bonus_function,
+    )
+    bonus_item_guard = gpl.index(
+        "If ($AgentHasInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent))",
+        bonus_level_gate,
+    )
+    bonus_item_grant = gpl.index(
+        "$CreateNewInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent, #Allow_Cloned_Quest_Item);",
+        bonus_item_guard,
+    )
+    bonus_adjustment = gpl.index(
+        "$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);",
+        bonus_item_grant,
+    )
+    watcher = gpl.index("function Phantom_Frost_Armor_Watch(agent thisagent)")
+    watcher_bonus_call = gpl.index(
+        "$Phantom_Grant_Frost_Armor_Bonus(thisagent);",
+        watcher,
+    )
+    watcher_recharge_call = gpl.index(
+        "$Phantom_Frost_Armor_Recharge_Check(thisagent);",
+        watcher,
+    )
+    watcher_arm_call = gpl.index(
+        "If ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))",
+        watcher,
+    )
+    if not (
+        bonus_function
+        < bonus_level_gate
+        < bonus_item_guard
+        < bonus_item_grant
+        < bonus_adjustment
+        < watcher
+        < watcher_bonus_call
+        < watcher_recharge_call
+        < watcher_arm_call
+    ):
+        fail(
+            f"{gpl_path}: persistent Frost Armor must be level-gated, "
+            "item-guarded, and granted before reactive ward processing"
         )
 
     units_path = output_root / "Data" / "phantom_units.xml"
@@ -1446,25 +1714,39 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     item_contract = (
         '$AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);',
         '$AdjustAttribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);',
+        '$MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);',
+        '$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);',
     )
     missing_items = [value for value in item_contract if value not in gpl]
     if missing_items:
         fail(f"{gpl_path}: Phantom starter-item bonuses are missing {missing_items}")
     grant = gpl.index("$Phantom_grant_starter_items(thisagent);")
     item_guard = gpl.index(
-        "If ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)",
+        "If ($Phantom_has_icerod_item(thisagent) == False)",
     )
     damage_adjustment = gpl.index(
         "$AdjustAttribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);",
         item_guard,
     )
-    if not grant < item_guard < damage_adjustment:
+    parry_adjustment = gpl.index(
+        "$MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);",
+        damage_adjustment,
+    )
+    if not grant < item_guard < damage_adjustment < parry_adjustment:
         fail(
-            f"{gpl_path}: Black Icerod damage must be applied within the "
-            "guarded starter-item grant"
+            f"{gpl_path}: Black Icerod damage and stock-path Parry bonuses "
+            "must be applied within the guarded starter-item grant"
         )
-    if "#ATTRIB_Parry, 5" in gpl:
-        fail(f"{gpl_path}: experimental Black Icerod Parry bonus is still present")
+    if gpl.count("$MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);") != 1:
+        fail(
+            f"{gpl_path}: Black Icerod must contain exactly one guarded "
+            "stock-path +5 Parry adjustment"
+        )
+    if "$AdjustAttribute(thisagent, #ATTRIB_Parry, 5);" in gpl:
+        fail(
+            f"{gpl_path}: Black Icerod uses ordinary rather than stock "
+            "MagicalAdjustAttribute Parry mutation"
+        )
     if '<Strength value="8"/>' not in units:
         fail(
             f"{units_path}: Strength must be at least strength_div (8) when "
@@ -1525,6 +1807,99 @@ def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: Phantom no longer uses the stock Wizard tree")
 
 
+def validate_phantom_equipment_upgrade_contract(output_root: Path) -> None:
+    units_path = output_root / "Data" / "phantom_units.xml"
+    units = units_path.read_text(encoding="utf-8")
+    eligibility_contract = (
+        '<AllowedWeapon value="Staff"/>',
+        '<AllowedArmor value="Leather"/>',
+    )
+    missing = [value for value in eligibility_contract if value not in units]
+    if missing:
+        fail(f"{units_path}: stock equipment eligibility is missing {missing}")
+
+    tree = parse_xml(units_path)
+    for _, agent_name, attribute_name, _ in phantom_equipment_item_records():
+        description = tree.find(f'.//Description[@ID="{agent_name}"]')
+        if description is None:
+            fail(f"{units_path}: equipment variant {agent_name} is missing")
+        item_attribute = description.find(f'.//Attribute[@ID="{attribute_name}"]')
+        if item_attribute is None:
+            fail(
+                f"{units_path}: equipment variant {agent_name} does not map "
+                f"inventory attribute {attribute_name}"
+            )
+
+    hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
+    hero_data = hero_data_path.read_text(encoding="utf-8")
+    for preference in (
+        "(Upgrade_Armor_Chance\t100)",
+        "(Upgrade_Weapon_Chance\t100)",
+    ):
+        if preference not in hero_data:
+            fail(f"{hero_data_path}: Phantom shop preference {preference!r} is missing")
+
+    items_data_path = output_root / "GPL" / "Phantom_Items_Data.dat"
+    items_data = items_data_path.read_text(encoding="utf-8")
+    for _, agent_name, _, _ in phantom_equipment_item_records():
+        if f"[{agent_name}]" not in items_data or f"(Title\t\t{agent_name})" not in items_data:
+            fail(f"{items_data_path}: special-item data for {agent_name} is missing")
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    contract = (
+        "Function WizGuild_Check(agent ThisAgent, string Equipment, integer Bonus, list WizGuilds) is boolean",
+        'If (ThisAgent\'s "Title" == "Phantom" && Equipment == "Armor")',
+        "Bonus = $Phantom_cowl_magic_level(ThisAgent);",
+        "Function Obtain_Upgrade(agent ThisAgent)",
+        "Old_Upgrade = $GetAttribute(ThisAgent, What_To_Upgrade);",
+        "Parry_Increase = (Upgrade - Old_Upgrade) * 5;",
+        "$MagicalAdjustAttribute(ThisAgent, #ATTRIB_Parry, Parry_Increase);",
+        "$Phantom_sync_icerod_item(ThisAgent);",
+        "$Phantom_sync_cowl_item(ThisAgent);",
+        "Function Obtain_Enchantment(agent ThisAgent)",
+        "Current_Upgrade = $Phantom_cowl_magic_level(ThisAgent);",
+        'ThisAgent\'s "Reborn_Counter" == 1',
+        "Stored_Upgrade += 10000;",
+        "$SetAttribute(ThisAgent, What_To_Upgrade, Stored_Upgrade);",
+        "function Phantom_cowl_magic_level(agent thisagent) is integer",
+        "magic_level -= 10000;",
+        "function Phantom_effective_casting_range(agent thisagent) is integer",
+        "return 190 + (magic_level * 10);",
+        "function Phantom_sync_cowl_item(agent thisagent)",
+        "item_id = 82 + combination;",
+        "function Phantom_sync_icerod_item(agent thisagent)",
+        "item_id = 97 + combination;",
+        "function attack_object(agent thisagent)",
+        "attackrange = $Phantom_effective_casting_range(thisagent);",
+        "function getattackrange(agent thisagent) is integer",
+        "arrivedist = $Phantom_effective_casting_range(thisagent);",
+        "function Phantom_remove_cowl_items(agent thisagent)",
+        "function Phantom_remove_icerod_items(agent thisagent)",
+    )
+    missing = [value for value in contract if value not in gpl]
+    if missing:
+        fail(f"{gpl_path}: Phantom equipment upgrade contract is missing {missing}")
+
+    for item_id, _, attribute_name, _ in phantom_equipment_item_records():
+        expression = f"expression #{attribute_name} {item_id}"
+        if expression not in gpl:
+            fail(f"{gpl_path}: inventory expression {expression!r} is missing")
+
+    if gpl.count("Function Obtain_Upgrade(agent ThisAgent)") != 1:
+        fail(f"{gpl_path}: exactly one stock-compatible Obtain_Upgrade override is required")
+    if gpl.count("Function Obtain_Enchantment(agent ThisAgent)") != 1:
+        fail(
+            f"{gpl_path}: exactly one stock-compatible Obtain_Enchantment override is required"
+        )
+    if gpl.count(
+        "Function WizGuild_Check(agent ThisAgent, string Equipment, integer Bonus, list WizGuilds) is boolean"
+    ) != 1:
+        fail(f"{gpl_path}: exactly one Frost-aware WizGuild_Check override is required")
+    if 'thisagent\'s "castingrange" +=' in gpl or 'thisagent\'s "castingrange" =' in gpl:
+        fail(f"{gpl_path}: runtime castingrange mutation is unsafe")
+
+
 def validate(output_root: Path) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
@@ -1536,6 +1911,7 @@ def validate(output_root: Path) -> None:
     validate_ice_lance_contract(output_root)
     validate_frost_armor_contract(output_root)
     validate_phantom_potion_purchase_contract(output_root)
+    validate_phantom_equipment_upgrade_contract(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:
