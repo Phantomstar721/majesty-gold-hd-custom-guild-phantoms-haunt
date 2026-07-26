@@ -398,15 +398,19 @@ def validate_indexed_item_strings(path: Path, data: bytes) -> None:
     count = struct.unpack_from("<H", data, 0)[0]
     if count <= 81:
         fail(f"{path}: STRT/QITM has {count} strings; item IDs 80 and 81 require at least 82")
-    for item_id, expected_text in ((80, b"Frozen Cowl"), (81, b"Black Icerod")):
+    expected_items = (
+        (80, b"Frozen Cowl\n\x01FFDDAA(+1 armor)"),
+        (81, b"Black Icerod\n\x01FFDDAA(+8 damage)"),
+    )
+    for item_id, expected_text in expected_items:
         offset = struct.unpack_from("<I", data, 4 + item_id * 4)[0]
         record_id = struct.unpack_from("<I", data, offset)[0]
         end = data.index(b"\x00", offset + 4)
         text = data[offset + 4 : end]
         if record_id != item_id:
             fail(f"{path}: STRT/QITM slot {item_id} contains record ID {record_id}")
-        if expected_text not in text:
-            fail(f"{path}: STRT/QITM slot {item_id} does not contain {expected_text.decode()!r}")
+        if text != expected_text:
+            fail(f"{path}: STRT/QITM slot {item_id} is not the known-good item text")
 
 
 def validate_tile(path: Path, entry: Entry, tile: bytes, palette_count: int) -> None:
@@ -1255,8 +1259,8 @@ def validate_ice_lance_contract(output_root: Path) -> None:
 
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     hero_data = hero_data_path.read_text(encoding="utf-8")
-    if "(castingrange 190)" not in hero_data:
-        fail(f"{hero_data_path}: Phantom effective casting range is not 190")
+    if "(castingrange 180)" not in hero_data:
+        fail(f"{hero_data_path}: Phantom base casting range is not 180")
 
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
@@ -1367,9 +1371,6 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         '$DeleteEffector(thisagent, "frost_armor_effector");',
         'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")',
         "$Frost_Armor_Freeze(attacker);",
-        'If (thisagent\'s "Special_Boolean" == False)',
-        "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);",
-        'thisagent\'s "Special_Boolean" = True;',
         "$Freeze_Unit(target);",
         '$CreateEffector(target, "frost_armor_frozen_small", 3000);',
         '$CreateEffector(target, "frost_armor_frozen_medium", 3000);',
@@ -1414,7 +1415,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     stat_contract = (
         '<Vitality value="8"/>',
         '<MagicResistance value="25"/>',
-        '<Parry value="25"/>',
+        '<Parry value="20"/>',
         '<Dodge value="25"/>',
     )
     missing_stats = [value for value in stat_contract if value not in units]
@@ -1422,15 +1423,18 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{units_path}: Phantom rebalance stats are missing {missing_stats}")
 
     item_contract = (
-        '#ATTRIB_Armor_Basic_Damage, 2',
+        '#ATTRIB_Armor_Basic_Damage, 1',
+        '#ATTRIB_Weapon_Basic_Damage, 8',
     )
     missing_items = [value for value in item_contract if value not in gpl]
     if missing_items:
         fail(f"{gpl_path}: Phantom starter-item bonuses are missing {missing_items}")
     if "#ATTRIB_Parry, 5" in gpl:
-        fail(f"{gpl_path}: Black Icerod still mutates Parry at runtime")
+        fail(f"{gpl_path}: experimental Black Icerod Parry bonus is still present")
     if 'thisagent\'s "castingrange" +=' in gpl:
         fail(f"{gpl_path}: unsafe runtime casting-range mutation is present")
+    if 'Special_Boolean' in gpl:
+        fail(f"{gpl_path}: experimental passive-armor item state is still present")
 
 
 def validate(output_root: Path) -> None:

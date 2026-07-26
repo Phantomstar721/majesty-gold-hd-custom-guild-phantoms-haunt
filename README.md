@@ -13,8 +13,8 @@ This currently builds:
 - Custom generated Phantoms Haunt world/building sprite frames, including
   inactive, active, damaged, destroyed, and build-progress variants.
 - Custom Phantom starter special items:
-  - `Frozen Cowl`, item ID `80`, grants `+2` physical armor.
-  - `Black Icerod`, item ID `81`, grants `+5` parry and `+10` casting range.
+  - `Frozen Cowl`, item ID `80`, grants `+1` armor.
+  - `Black Icerod`, item ID `81`, grants `+8` weapon damage.
   - Phantom starter items are removed by `Phantom_death` before normal
     gravestone handling, and are marked non-droppable so leaving the realm
     through the palace deletes them instead of spawning them as ground loot.
@@ -92,7 +92,7 @@ pattern used by Majesty's quest and Bazaar inventory items:
    function:
 
    ```gpl
-   $adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 2);
+   $adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);
    ```
 
 5. Add the display name to `QITM` in `phantom_gpltext.cam`. `QITM` is an
@@ -372,21 +372,12 @@ index `255` and magenta-like colors must be avoided when converting RGB pixels,
 or visible pixels can become transparent/keyed out in-game.
 
 Ice Lance deals `8` damage, compared with stock Energy Blast's `10`. The
-Phantom's conceptual base casting range is `180`; the Black Icerod adds `10`,
-bringing an equipped Phantom to `190`, below the Wizard's `240` and leaving
-room for later Icerod upgrades. Because every Phantom receives the
-non-droppable Icerod, hero data safely stores the effective `190` directly.
-Majesty's stock scripts read `castingrange` during combat but never mutate it
-at runtime; attempting to apply the item with `castingrange += 10` caused an
-access violation when `attack_object` began. Majesty stores casting range on
-the hero rather than the individual spell, so this technically applies to the
-Phantom's complete spell kit; Frost Armor is self-targeted and Blizzard is
-caster-centered, making Ice Lance the only current spell materially affected.
-
-Black Icerod's conceptual `+5` Parry is represented by an effective `25` in
-the Phantom's unit data. As with casting range, every Phantom receives the
-non-droppable item, so storing the equipped total directly avoids an additional
-birth-time attribute mutation while preserving the intended starting value.
+Phantom's base casting range is `180`, below the Wizard's `240`. Majesty stores
+casting range on the hero rather than the individual spell, so this technically
+applies to the Phantom's complete spell kit; Frost Armor is self-targeted and
+Blizzard is caster-centered, making Ice Lance the only current spell materially
+affected. Black Icerod retains its original known-good `+8` weapon-damage
+implementation while the inventory crash regression is isolated.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to
@@ -511,14 +502,6 @@ watcher recreates it if that animation expires while state is still active.
 Majesty does not treat effector duration `0` as infinite: it lets an overlay
 expire with its natural animation. Visual renewal therefore never decides
 whether the armor can be cast and never owns the armor-stat cleanup.
-
-Learning Frost Armor also applies a permanent `+10` basic-damage armor bonus.
-The first level-3 Frost Armor activation records this one-time application in
-the Phantom's otherwise-unused `Special_Boolean`, preventing the passive armor
-from stacking. Keeping this grant out of the always-running level-1 watcher
-also preserves the known-good pre-Frost-Armor combat path. With the starter
-Frozen Cowl equipped, an activated level-3 Phantom therefore has `12`
-persistent physical armor before later upgrades.
 
 Frost Armor adds `10000` basic-damage armor while active, making the first
 ordinary weapon attack deal zero damage. The Phantom's existing `Hostiles`
@@ -732,8 +715,7 @@ Checkpoint recorded July 25, 2026:
 - Phantom retreat and combat estimates are temporarily set to a fearless
   testing profile so spell behavior can be exercised without frequent retreat.
 - Ice Lance now has final-path generated-source projectile/icon art, 32 packaged
-  directions, `8` damage, `180` base / `190` Black-Icerod-equipped Phantom
-  casting range, native impact animation,
+  directions, `8` damage, `180` Phantom casting range, native impact animation,
   and a centralized three-second non-stacking movement/action Chill with an
   approved animated cyan snowflake indicator.
 - Ice Lance has passed the current in-game art, direction, impact, damage,

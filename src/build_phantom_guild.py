@@ -225,7 +225,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Strength value="2"/>
 \t\t\t<MagicResistance value="25"/>
 \t\t\t<Attack value="30"/>
-\t\t\t<Parry value="25"/>
+\t\t\t<Parry value="20"/>
 \t\t\t<Dodge value="25"/>
 \t\t\t<WeaponBasicDamage value="0"/>
 \t\t\t<ArmorBasicDamage value="0"/>
@@ -608,7 +608,7 @@ def phantom_hero_data() -> str:
 \t\t(PrimaryStat ATTRIB_Intelligence)
 \t\t(Friend\txx)
 \t\t(attacktype 1)
-\t\t(castingrange 190)
+\t\t(castingrange 180)
 \t\t(PercentageHPRetreat 0)
 \t\t(enemy_estimation 0.1)
 \t\t(self_estimation 10.0)
@@ -765,12 +765,13 @@ begin
 \tIf ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_FrozenCowl, thisagent, #Allow_Cloned_Quest_Item);
-\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 2);
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);
 \t\tend
 
 \tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
 \t\tend
 end
 
@@ -866,12 +867,6 @@ declare
 begin
 \tIf ($isdead(thisagent))
 \t\treturn;
-
-\tIf (thisagent's "Special_Boolean" == False)
-\t\tbegin
-\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);
-\t\t\tthisagent's "Special_Boolean" = True;
-\t\tend
 
 \tIf (thisagent's "Reborn_Counter" != 0)
 \t\treturn;
@@ -1233,8 +1228,8 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
     patched_quest_item_names = patch_indexed_strt_strings(
         quest_item_names.data,
         {
-            80: "Frozen Cowl\n\x01FFDDAA(+2 physical armor)",
-            81: "Black Icerod\n\x01FFDDAA(+5 parry, +10 casting range)",
+            80: "Frozen Cowl\n\x01FFDDAA(+1 armor)",
+            81: "Black Icerod\n\x01FFDDAA(+8 damage)",
         },
     )
     patched_help_text = patch_strt_strings(
