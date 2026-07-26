@@ -737,7 +737,58 @@ begin
 \t$DebugOut("Phantom deciding");
 
 \tIf ($Phantom_Try_Frost_Armor(thisagent) == False)
-\t\t$Wizard_tree(thisagent);
+\t\t$Phantom_Wizard_Tree(thisagent);
+end
+
+function Phantom_Wizard_Tree(agent thisagent)
+
+declare
+
+begin
+\t$createeffector(thisagent, "thought_bubble_think", #think_bubble_time);
+\t$SpecifyIntent(thisagent, #Intent_Thinking);
+
+\tIf ($check_nearby(thisagent) == False)
+\tIf ($Check_rewards(thisagent, False) == False)
+\tIf ($Defend_home(thisagent) == False)
+\tIf ($defend_building(thisagent, "Library") == False)
+\tIf ($defend_building(thisagent, "Marketplace") == False)
+\tIf ($rest(thisagent) == False)
+\tIf ($Phantom_Purchase_Equipment(thisagent) == False)
+\tIf ($Purchase_bazaar(thisagent, 70) == False)
+\tIf ($pursue_entertainment(thisagent) == False)
+\tIf ($Check_Library(thisagent, 90, "Wizard_Spell") == False)
+\tIf ($check_library(thisagent, 55, "Wizard_train_intel") == False)
+\tIf ($check_library(thisagent, 15, "Train_magic_resist") == False)
+\tIf ($Hall_Champs_Check(thisagent, 30) == False)
+\tIf ($follow_support_check(thisagent, "barbarian", 30) == False)
+\tIf ($follow_support_check(thisagent, "monk", 20) == False)
+\tIf ($Raid_lair(thisagent, 45) == False)
+\tIf ($raid_enemy_building(thisagent, 30) == False)
+\tIf ($Combat_wandering(thisagent, 65) == False)
+\tIf ($combat_wandering_heroes(thisagent, 60) == False)
+\tIf ($Explore_Map(thisagent, 50) == False)
+\tIf ($Visit_Building(thisagent, "Royal_gardens", 5) == False)
+\tIf ($Go_Home(thisagent, 85) == False)
+\t\tbegin
+\t\t\t$SpecifyIntent(thisagent, #intent_wandering);
+\t\t\tthisagent's "counter" = 0;
+\t\t\tthisagent's "activescript" = $hero_wander;
+\t\tend
+end
+
+function Phantom_Purchase_Equipment(agent thisagent) is boolean
+
+declare
+\tinteger stored_potions;
+\tboolean purchased;
+
+begin
+\tstored_potions = $GetAttribute(thisagent, #ATTRIB_NumHealingPotions);
+\t$SetAttribute(thisagent, #ATTRIB_NumHealingPotions, #Max_Heal_Potions);
+\tpurchased = $Purchase_equipment(thisagent);
+\t$SetAttribute(thisagent, #ATTRIB_NumHealingPotions, stored_potions);
+\treturn purchased;
 end
 
 function Phantom_birth (agent thisagent)
