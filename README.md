@@ -499,12 +499,14 @@ The impact art must be palette-remapped into a palette included by
 ### Frost Armor
 
 Phantoms automatically learn Frost Armor at level 3. `Phantom_tree` checks for
-enemies within the Phantom's `SightRange` before entering the normal Wizard
-combat tree and casts the ward on itself whenever it is learned, unspent, and
-inactive. The trigger intentionally uses combat awareness rather than Ice
-Lance's shorter casting range because Frost Armor is self-targeted. Auto-cast
-applies the armor directly and plays the stock `Basic_Cast` presentation
-action, avoiding the spell scheduler's silent availability rejection. The
+enemies within the Phantom's fixed `240` sight radius before entering the
+normal Wizard combat tree and casts the ward on itself whenever it is learned,
+unspent, and inactive. The fixed radius avoids passing a nested
+`GetAttribute` call into Majesty's runtime-sensitive `compile_enemies` native.
+The trigger intentionally uses combat awareness rather than Ice Lance's
+shorter casting range because Frost Armor is self-targeted. Auto-cast applies
+the armor directly and plays the stock `Basic_Cast` presentation action,
+avoiding the spell scheduler's silent availability rejection. The
 Phantom watcher also recognizes `Attack_object` in either `ActiveScript` or
 `BackScript`, covering combat travel that began outside the decision tree's
 immediate proximity check. Ready, active, and spent are stored as `0`, `1`, and

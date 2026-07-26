@@ -1352,7 +1352,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         '$createeffector(thisagent, "frost_armor_effector", 180000);',
         "#ATTRIB_Armor_Basic_Damage, 10000",
         '$clearlist(thisagent\'s "Hostiles");',
-        'targets = $compile_enemies(thisagent, $GetAttribute(thisagent, #ATTRIB_SightRange));',
+        'targets = $compile_enemies(thisagent, 240);',
         '$Frost_Armor_Begin(thisagent, thisagent);',
         '$PerformAction(thisagent, "Basic_Cast", thisagent);',
         "function Phantom_Arm_Frost_Armor_In_Combat(agent thisagent) is boolean",
@@ -1399,6 +1399,14 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: Frost Armor combat detection is incorrectly limited "
             "to Ice Lance casting range"
+        )
+    if (
+        "targets = $compile_enemies("
+        "thisagent, $GetAttribute(thisagent, #ATTRIB_SightRange));"
+    ) in gpl:
+        fail(
+            f"{gpl_path}: unsafe nested native call is present in Frost Armor "
+            "combat detection"
         )
 
     consume = gpl.index('thisagent\'s "Reborn_Counter" = 2;')

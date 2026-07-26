@@ -903,7 +903,7 @@ begin
 \tIf ($Frost_Armor_Check(thisagent) == 0)
 \t\treturn False;
 
-\ttargets = $compile_enemies(thisagent, $GetAttribute(thisagent, #ATTRIB_SightRange));
+\ttargets = $compile_enemies(thisagent, 240);
 \tIf ($ListSize(targets) == 0)
 \t\treturn False;
 
