@@ -770,7 +770,7 @@ def phantom_gpl() -> str:
 function DEAL_DEMON()
 
 declare
-\tagent AIRootAgent,palace,guild,lair,phantoms_haunt,elf_guild;
+\tagent AIRootAgent,palace,guild,lair,phantoms_haunt,elf_guild,agrela_temple;
 \tlist guilds,palaces,lairs;
 
 begin
@@ -805,6 +805,13 @@ begin
 \t\tbegin
 \t\t\telf_guild's "SpecialScript" = $Hero_Generator;
 \t\t\t$NewThread( elf_guild's "SpecialScript", 60000 + $randomnumber(60000), elf_guild );
+\t\tend
+
+\tagrela_temple = $SpawnUnit(palace, "Temple_Agrela1", $RandomCoord(palace, 275, 475), "MaxHP");
+\tIf (agrela_temple != $NullAgent())
+\t\tbegin
+\t\t\tagrela_temple's "SpecialScript" = $Hero_Generator;
+\t\t\t$NewThread( agrela_temple's "SpecialScript", 60000 + $randomnumber(60000), agrela_temple );
 \t\tend
 
 \t$listobjects(palace,"lair",-1,lairs,#NoHiddenMap);
@@ -853,6 +860,325 @@ Begin
 
 \treturn False;
 End
+
+Function Bazaar_Item_Check ( agent ThisAgent, integer item, list potentials, integer Item_cost ) is boolean
+
+Declare
+\tinteger Intel_Roll;
+
+Begin
+\t$DebugOut ( "Should I buy item#", item, "?" );
+
+\tIf (ThisAgent's "Title" == "Phantom" && item == #Bazaar_Item_Four)
+\t\treturn False;
+
+\tIf ((thisagent's "title" == "cultist") && (item == #Bazaar_Item_Six))
+\t\treturn False;
+
+\tIf (item == #Bazaar_Item_Two)
+\t\tIf ((thisagent's "title" != "ranger") && (thisagent's "title" != "rogue") && (thisagent's "title" != "elf"))
+\t\t\treturn False;
+
+\tIf ($AgentHasInventoryItem(item, thisagent))
+\t\tbegin
+\t\t\t$DebugOut ( "I already have item #", item, ", so I dont need one." );
+\t\t\treturn False;
+\t\tend
+
+\tIf ($Total_Gold(ThisAgent) < Item_Cost)
+\t\tbegin
+\t\t\t$DebugOut ("I don't have enough money for item #", item, "!");
+\t\t\treturn False;
+\t\tend
+
+\tIntel_Roll = $RandomNumber (30) + 1;
+
+\tIf ($GetAttribute(ThisAgent, #ATTRIB_Intelligence) > Intel_Roll)
+\t\tbegin
+\t\t\tThisAgent's "TaskName" = $Get_Bazaar_Task_Name(item);
+\t\t\tThisAgent's "Target" = $Loyalty_Mod_Pick_Closest(ThisAgent, Potentials);
+\t\t\t$DebugOut ("Yes!");
+\t\t\t$SetBuyerIntent(ThisAgent, item);
+\t\t\treturn True;
+\t\tend
+
+\t$DebugOut ("No!");
+\treturn False;
+End
+
+Function Heal( Agent ThisAgent, Agent Target, integer Healing_Amount )
+
+Declare
+
+Begin
+\tIf (Target's "Title" == "Phantom")
+\t\tIf (ThisAgent's "Title" != "Priestess")
+\t\t\treturn;
+
+\t$Healing_Shared(Target, Healing_Amount);
+End
+
+Function Player_Heal( Agent Target, integer Healing_Amount )
+
+Declare
+
+Begin
+\tIf (Target's "Title" == "Phantom")
+\t\treturn;
+
+\t$Healing_Shared(Target, Healing_Amount);
+End
+
+function Regeneration_elixer_effect ( agent thisagent, agent target )
+
+declare
+
+begin
+\tIf ($IsDead(thisagent))
+\t\treturn;
+
+\tIf (thisagent's "Title" == "Phantom")
+\t\tbegin
+\t\t\t$DeleteInventoryItem(#Bazaar_Item_Four, ThisAgent);
+\t\t\t$ForgetSpell(ThisAgent, "Regeneration_Elixer");
+\t\t\treturn;
+\t\tend
+
+\t$CreateEffector(thisagent, "Regeneration_elixer_effector", 0);
+\t$CreateEffector(
+\t\tthisagent,
+\t\t"Regeneration_elixer_icon",
+\t\t$GetSpellAttribute("Regeneration_Elixer", "effector_duration")
+\t);
+\t$AdjustAttribute(thisagent, #ATTRIB_HealingRateModifier, -5);
+\t$SetAttribute(thisagent, #ATTRIB_HasEffectRegeneration, 1);
+
+\t$DeleteInventoryItem(#Bazaar_Item_Four, ThisAgent);
+\t$ForgetSpell(ThisAgent, "Regeneration_Elixer");
+end
+
+function Healing_Wind ()
+
+declare
+\tagent palace,hero;
+\tlist heroes;
+
+begin
+\tpalace = $GetPlayerOnePalace();
+
+\t$ListObjects(
+\t\tpalace,
+\t\t"hero",
+\t\t-1,
+\t\theroes,
+\t\t#CheckSubTypes,
+\t\t"hero",
+\t\t#MyPlayer,
+\t\t#NoHiddenMap,
+\t\t#InsideOtherUnits
+\t);
+
+\tForeach hero in heroes do
+\t\tbegin
+\t\t\tIf (hero's "Title" != "Phantom")
+\t\t\t\tIf ($IsDead(hero) == False)
+\t\t\t\t\tIf ($GetAttribute(hero, #ATTRIB_HasEffectRegeneration) != 1)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t$CreateEffector(hero, "Regeneration_elixer_effector", 0);
+\t\t\t\t\t\t\t$CreateEffector(hero, "Regeneration_elixer_icon", 120000);
+\t\t\t\t\t\t\t$AdjustAttribute(hero, #ATTRIB_HealingRateModifier, -3);
+\t\t\t\t\t\t\t$SetAttribute(hero, #ATTRIB_HasEffectRegeneration, 1);
+\t\t\t\t\t\tend
+\t\tend
+end
+
+Function Eval_For_Healing(agent ThisAgent, integer Distance) is Agent
+
+Declare
+\tlist Heroes,Injured_Heroes;
+\tagent Hero,BestAgent;
+\tinteger Percent_HP,Temp_Distance,Temp_Score,Best_Score;
+
+Begin
+\t$ListObjects(ThisAgent, "Hero", Distance, Heroes);
+
+\tIf ($ListSize(Heroes) > 0)
+\t\tbegin
+\t\t\tForeach Hero in Heroes do
+\t\t\t\tbegin
+\t\t\t\t\tIf (Hero's "Title" != "Phantom")
+\t\t\t\t\t\tIf ($GetAttribute(Hero, #ATTRIB_HP) < $GetAttribute(Hero, #ATTRIB_MaxHP))
+\t\t\t\t\t\t\tIf ($GetPlayerTeamNumber(Hero) == $GetPlayerTeamNumber(ThisAgent))
+\t\t\t\t\t\t\t\tInjured_Heroes << Hero;
+\t\t\t\t\t\t\tElse If ($RandomNumber(100) > ThisAgent's "Loyalty")
+\t\t\t\t\t\t\t\tInjured_Heroes << Hero;
+\t\t\t\tend
+
+\t\t\tIf ($ListSize(Injured_Heroes) > 0)
+\t\t\t\tbegin
+\t\t\t\t\tBest_Score = 5000000;
+\t\t\t\t\tForeach Hero in Injured_Heroes do
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tTemp_Distance = $DistanceBetweenAgents(ThisAgent, Hero);
+\t\t\t\t\t\t\tPercent_HP = ($GetAttribute(Hero, #ATTRIB_HP) * 100) /
+\t\t\t\t\t\t\t\t$GetAttribute(Hero, #ATTRIB_MaxHP);
+\t\t\t\t\t\t\tTemp_Score = (Temp_Distance / 10) * Percent_HP;
+\t\t\t\t\t\t\tIf (Temp_Score < Best_Score)
+\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\tBest_Score = Temp_Score;
+\t\t\t\t\t\t\t\t\tBestAgent = Hero;
+\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\tend
+
+\t\t\t\t\tIf (Best_Score < ($GetAttribute(ThisAgent, #ATTRIB_Intelligence) * 150))
+\t\t\t\t\t\treturn BestAgent;
+\t\t\t\tend
+\t\tend
+
+\treturn $NullAgent();
+End
+
+function Healer_Heal_Effect(agent thisagent, agent target)
+
+declare
+\tagent AIRootAgent;
+\tinteger Healing;
+
+begin
+\tIf ($isdead(target))
+\t\treturn;
+
+\tIf (target's "Title" == "Phantom")
+\t\tbegin
+\t\t\t$Reset_Tasks(thisagent);
+\t\t\treturn;
+\t\tend
+
+\tIf ($isdead(thisagent) == False)
+\t\tbegin
+\t\t\t$CreateEffector(target, "healer_healing_effector", 0);
+\t\t\tAIRootAgent = $RetrieveAgent("GplAIRoot");
+
+\t\t\tIf ($HasAttribute("Deathmatch_Rules", AIRootAgent))
+\t\t\t\tbegin
+\t\t\t\t\tIf (AIRootAgent's "Deathmatch_Rules" == True)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tHealing = #Deathmatch_Agrella_Healing_Multiplier *
+\t\t\t\t\t\t\t\t$GetAttribute(ThisAgent, #ATTRIB_ExperienceLevel);
+\t\t\t\t\t\t\tIf (Healing > #Deathmatch_Agrella_Healing_Cap)
+\t\t\t\t\t\t\t\tHealing = #Deathmatch_Agrella_Healing_Cap;
+\t\t\t\t\t\tend
+\t\t\t\t\tElse
+\t\t\t\t\t\tHealing = #Agrella_Healing_Multiplier *
+\t\t\t\t\t\t\t$GetAttribute(ThisAgent, #ATTRIB_ExperienceLevel);
+\t\t\t\tend
+\t\t\tElse
+\t\t\t\tHealing = #Agrella_Healing_Multiplier *
+\t\t\t\t\t$GetAttribute(ThisAgent, #ATTRIB_ExperienceLevel);
+
+\t\t\t$Heal(ThisAgent, Target, Healing);
+\t\t\tIf (Target's "BackScript" == $Use_Building_Safe)
+\t\t\t\tIf ($haslowHP(Target) == False)
+\t\t\t\t\t$Reset_Tasks(Target);
+\t\tend
+end
+
+function Drain_Life_Hit(agent thisagent, agent target)
+
+declare
+\tinteger Effector_Duration,Healing_Needed,Temp_Healing_Needed,HP,MaxHP;
+\tlist Phantoms,My_Skeletons;
+\tagent Phantom,Best_Phantom,Skeleton,Best_Skeleton;
+
+begin
+\tIf ($isdead(target))
+\t\treturn;
+\tIf ($isdead(thisagent))
+\t\treturn;
+
+\tEffector_Duration = $GetSpellAttribute("Drain_Life", "effector_duration");
+
+\tIf (Target's "Type" != "Building" && Target's "Type" != "Lair")
+\t\tbegin
+\t\t\tIf ($GetAttribute(ThisAgent, #ATTRIB_HP) < $GetAttribute(ThisAgent, #ATTRIB_MaxHP))
+\t\t\t\tbegin
+\t\t\t\t\t$CreateEffector(ThisAgent, "life_drain_effector2", Effector_Duration);
+\t\t\t\t\t$Heal(ThisAgent, ThisAgent, 5);
+\t\t\t\tend
+\t\t\tElse
+\t\t\t\tbegin
+\t\t\t\t\tHealing_Needed = 0;
+\t\t\t\t\t$ListObjects(
+\t\t\t\t\t\tThisAgent,
+\t\t\t\t\t\t"Hero",
+\t\t\t\t\t\t$GetAttribute(ThisAgent, #ATTRIB_SightRange),
+\t\t\t\t\t\tPhantoms
+\t\t\t\t\t);
+\t\t\t\t\tPhantoms = $ListTitles(Phantoms, "Phantom");
+
+\t\t\t\t\tForeach Phantom in Phantoms do
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tIf ($GetPlayerTeamNumber(Phantom) == $GetPlayerTeamNumber(ThisAgent))
+\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\tHP = $GetAttribute(Phantom, #ATTRIB_HP);
+\t\t\t\t\t\t\t\t\tMaxHP = $GetAttribute(Phantom, #ATTRIB_MaxHP);
+\t\t\t\t\t\t\t\t\tIf (HP < MaxHP)
+\t\t\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\t\t\tTemp_Healing_Needed = MaxHP - HP;
+\t\t\t\t\t\t\t\t\t\t\tIf (Temp_Healing_Needed > Healing_Needed)
+\t\t\t\t\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\t\t\t\t\tHealing_Needed = Temp_Healing_Needed;
+\t\t\t\t\t\t\t\t\t\t\t\t\tBest_Phantom = Phantom;
+\t\t\t\t\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\tend
+
+\t\t\t\t\tIf ($IsValidGamePiece(Best_Phantom))
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t$CreateEffector(Best_Phantom, "life_drain_effector2", Effector_Duration);
+\t\t\t\t\t\t\t$Heal(ThisAgent, Best_Phantom, 5);
+\t\t\t\t\t\tend
+\t\t\t\t\tElse
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tHealing_Needed = 0;
+\t\t\t\t\t\t\t$ListObjects(
+\t\t\t\t\t\t\t\tThisAgent,
+\t\t\t\t\t\t\t\t"Hero",
+\t\t\t\t\t\t\t\t$GetAttribute(ThisAgent, #ATTRIB_SightRange),
+\t\t\t\t\t\t\t\tMy_Skeletons,
+\t\t\t\t\t\t\t\t#CheckSubtypes,
+\t\t\t\t\t\t\t\t"Controlled"
+\t\t\t\t\t\t\t);
+\t\t\t\t\t\t\tMy_Skeletons = $ListTitles(My_Skeletons, "Skeleton");
+
+\t\t\t\t\t\t\tForeach Skeleton in My_Skeletons do
+\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\tHP = $GetAttribute(Skeleton, #ATTRIB_HP);
+\t\t\t\t\t\t\t\t\tMaxHP = $GetAttribute(Skeleton, #ATTRIB_MaxHP);
+\t\t\t\t\t\t\t\t\tIf (HP < MaxHP)
+\t\t\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\t\t\tTemp_Healing_Needed = MaxHP - HP;
+\t\t\t\t\t\t\t\t\t\t\tIf (Temp_Healing_Needed > Healing_Needed)
+\t\t\t\t\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\t\t\t\t\tHealing_Needed = Temp_Healing_Needed;
+\t\t\t\t\t\t\t\t\t\t\t\t\tBest_Skeleton = Skeleton;
+\t\t\t\t\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\t\tend
+
+\t\t\t\t\t\t\tIf ($IsValidGamePiece(Best_Skeleton))
+\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\t$CreateEffector(Best_Skeleton, "life_drain_effector2", Effector_Duration);
+\t\t\t\t\t\t\t\t\t$Heal(ThisAgent, Best_Skeleton, 5);
+\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\tend
+\t\t\t\tend
+\t\tend
+
+\t$CreateEffector(Target, "life_drain_effector", Effector_Duration);
+\t$Spell_Attack(ThisAgent, Target, 15);
+end
 
 Function WizGuild_Check(agent ThisAgent, string Equipment, integer Bonus, list WizGuilds) is boolean
 

@@ -43,6 +43,10 @@ This currently builds:
 - A level-3 `Frost Armor` spell with a persistent crystal ward, one-hit damage
   negation against normal weapon and spell damage, a three-second retaliatory
   Freeze, and rest-to-recharge behavior.
+- Healers exclude Phantoms from ordinary healing. A Priestess's Drain Life
+  secondary heal treats allied Phantoms as undead: Priestess self-healing
+  remains first priority, followed by the most-injured Phantom, then controlled
+  Skeletons.
 
 The in-map animated hero sprite is currently based on the Priestess of Krypta
 sprite set with a Phantom recolor.
@@ -65,8 +69,8 @@ Confirmed working in-game:
   through appended tile records, without modifying the stock Wizard Guild art.
 - Occupied Haunts use an eight-frame full-building active animation so
   the cyan windows and arcane highlights pulse while heroes are inside.
-- `A Deal with the Demon` is patched for testing so it starts with both a
-  Phantoms Haunt and an Elven Bungalow.
+- `A Deal with the Demon` is patched for testing so it starts with a Phantoms
+  Haunt, an Elven Bungalow, and a Temple to Agrela.
 
 Next planned work:
 
@@ -212,6 +216,58 @@ The Magic Bazaar does not sell ordinary healing potions. Rangers have
 class-specific herb behavior, while several quests grant potions only to
 explicitly spawned Wizards, Paladins, or Elves. No generic stock quest grant
 was found that applies to a normally recruited Phantom.
+
+### Phantom healing compatibility
+
+Stock Healers use `Eval_For_Healing` for both their long-range rescue decision
+and their nearby combat heal. The replacement retains the stock loyalty,
+distance, injury, and intelligence scoring but omits heroes whose title is
+`Phantom`. `Healer_Heal_Effect` repeats the Phantom guard immediately before
+the effect and HP change, then resets the Healer's task. This second guard
+prevents a stale or externally assigned Phantom target from receiving natural
+healing or trapping the Healer in a repeated cast attempt.
+
+Priestess undead healing is the secondary effect of a successful Drain Life
+hit against a unit. The stock order is Priestess self-healing followed by a
+controlled Skeleton. The Phantom extension preserves the attack and its
+five-point stock heal while using this order:
+
+1. Heal the Priestess if she is injured.
+2. Otherwise heal the allied, in-sight Phantom missing the most HP.
+3. Otherwise heal the controlled, in-sight Skeleton missing the most HP.
+
+The implementation deliberately does not override global `Healing_Shared`;
+doing that would block the Priestess heal along with every other heal. Instead,
+the two stock entry points now carry narrow class rules:
+
+- `Heal` rejects a Phantom target unless the caster's title is `Priestess`.
+  This blocks Healers, healing potions acquired outside normal shopping, and
+  the Legendary Heroes Rune of Healing while preserving Drain Life's
+  five-point undead heal.
+- `Player_Heal` always rejects a Phantom target. Both the Agrela and Fervus
+  player-cast healing spells use this function, so their normal spell visuals
+  may still play but they restore no Phantom HP.
+
+The expansion's Regeneration Elixir bypasses both functions by modifying
+`HealingRateModifier`. The stock `Bazaar_Item_Check` replacement rejects only
+item four when the shopper is a Phantom, before assigning a destination,
+intent, or purchase task; all five other Bazaar items retain their stock
+logic. `Regeneration_elixer_effect` also consumes an externally granted elixir
+without applying its effect, preventing quest or scripted grants from
+bypassing the purchase check. The global `Healing_Wind` random event similarly
+skips Phantoms while retaining its stock effect for every other living hero.
+
+The healing audit intentionally preserves these separate mechanics:
+
+- full healing while resting in a guild, inn, gazebo, Royal Gardens, or other
+  lived-in building, which also drives Frost Armor recharge;
+- HP gained together with Max HP from leveling, the Shard of Health, or a
+  temporary transformation;
+- resurrection and reanimation, which operate on dead units rather than
+  healing a living Phantom;
+- class-self effects and building services that a Phantom's Wizard-derived
+  decision tree cannot normally request, including Meditation and Champion's
+  Vigor.
 
 Do not use the earlier birth-thread transfer approach for Phantom starter gear.
 Creating string-named custom inventory items through a delayed hero thread was

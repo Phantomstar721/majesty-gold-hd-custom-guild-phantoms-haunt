@@ -1900,6 +1900,272 @@ def validate_phantom_equipment_upgrade_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: runtime castingrange mutation is unsafe")
 
 
+def validate_phantom_healing_contract(output_root: Path) -> None:
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    contract = (
+        "Function Bazaar_Item_Check ( agent ThisAgent, integer item, list potentials, integer Item_cost ) is boolean",
+        'If (ThisAgent\'s "Title" == "Phantom" && item == #Bazaar_Item_Four)',
+        "Function Heal( Agent ThisAgent, Agent Target, integer Healing_Amount )",
+        'If (Target\'s "Title" == "Phantom")',
+        'If (ThisAgent\'s "Title" != "Priestess")',
+        "$Healing_Shared(Target, Healing_Amount);",
+        "Function Player_Heal( Agent Target, integer Healing_Amount )",
+        "function Regeneration_elixer_effect ( agent thisagent, agent target )",
+        "$DeleteInventoryItem(#Bazaar_Item_Four, ThisAgent);",
+        '$ForgetSpell(ThisAgent, "Regeneration_Elixer");',
+        "function Healing_Wind ()",
+        'If (hero\'s "Title" != "Phantom")',
+        "Function Eval_For_Healing(agent ThisAgent, integer Distance) is Agent",
+        'If (Hero\'s "Title" != "Phantom")',
+        "Injured_Heroes << Hero;",
+        "function Healer_Heal_Effect(agent thisagent, agent target)",
+        'If (target\'s "Title" == "Phantom")',
+        "$Reset_Tasks(thisagent);",
+        "$CreateEffector(target, \"healer_healing_effector\", 0);",
+        "$Heal(ThisAgent, Target, Healing);",
+        "function Drain_Life_Hit(agent thisagent, agent target)",
+        'Phantoms = $ListTitles(Phantoms, "Phantom");',
+        "If ($GetPlayerTeamNumber(Phantom) == $GetPlayerTeamNumber(ThisAgent))",
+        "Best_Phantom = Phantom;",
+        "If ($IsValidGamePiece(Best_Phantom))",
+        '$CreateEffector(Best_Phantom, "life_drain_effector2", Effector_Duration);',
+        "$Heal(ThisAgent, Best_Phantom, 5);",
+        'My_Skeletons = $ListTitles(My_Skeletons, "Skeleton");',
+        "If ($IsValidGamePiece(Best_Skeleton))",
+        "$Heal(ThisAgent, Best_Skeleton, 5);",
+        "$Spell_Attack(ThisAgent, Target, 15);",
+    )
+    missing = [value for value in contract if value not in gpl]
+    if missing:
+        fail(f"{gpl_path}: Phantom healing contract is missing {missing}")
+
+    for signature in (
+        "Function Bazaar_Item_Check ( agent ThisAgent, integer item, list potentials, integer Item_cost ) is boolean",
+        "Function Heal( Agent ThisAgent, Agent Target, integer Healing_Amount )",
+        "Function Player_Heal( Agent Target, integer Healing_Amount )",
+        "function Regeneration_elixer_effect ( agent thisagent, agent target )",
+        "function Healing_Wind ()",
+        "Function Eval_For_Healing(agent ThisAgent, integer Distance) is Agent",
+        "function Healer_Heal_Effect(agent thisagent, agent target)",
+        "function Drain_Life_Hit(agent thisagent, agent target)",
+    ):
+        if gpl.count(signature) != 1:
+            fail(f"{gpl_path}: exactly one override is required for {signature}")
+
+    bazaar_check = gpl.index(
+        "Function Bazaar_Item_Check ( agent ThisAgent, integer item, list potentials, integer Item_cost ) is boolean"
+    )
+    regeneration_purchase_guard = gpl.index(
+        'If (ThisAgent\'s "Title" == "Phantom" && item == #Bazaar_Item_Four)',
+        bazaar_check,
+    )
+    first_bazaar_task_assignment = gpl.index(
+        'ThisAgent\'s "TaskName" = $Get_Bazaar_Task_Name(item);',
+        regeneration_purchase_guard,
+    )
+    if not (
+        bazaar_check
+        < regeneration_purchase_guard
+        < first_bazaar_task_assignment
+    ):
+        fail(
+            f"{gpl_path}: the stock Bazaar item check must reject only Phantom "
+            "Regeneration Elixir purchases before assigning a shopping task"
+        )
+
+    heal = gpl.index(
+        "Function Heal( Agent ThisAgent, Agent Target, integer Healing_Amount )"
+    )
+    heal_target_guard = gpl.index('If (Target\'s "Title" == "Phantom")', heal)
+    priestess_exception = gpl.index(
+        'If (ThisAgent\'s "Title" != "Priestess")', heal_target_guard
+    )
+    blocked_heal_return = gpl.index("return;", priestess_exception)
+    shared_agent_heal = gpl.index(
+        "$Healing_Shared(Target, Healing_Amount);", blocked_heal_return
+    )
+    player_heal = gpl.index(
+        "Function Player_Heal( Agent Target, integer Healing_Amount )",
+        shared_agent_heal,
+    )
+    player_target_guard = gpl.index(
+        'If (Target\'s "Title" == "Phantom")', player_heal
+    )
+    blocked_player_return = gpl.index("return;", player_target_guard)
+    shared_player_heal = gpl.index(
+        "$Healing_Shared(Target, Healing_Amount);", blocked_player_return
+    )
+    if not (
+        heal
+        < heal_target_guard
+        < priestess_exception
+        < blocked_heal_return
+        < shared_agent_heal
+        < player_heal
+        < player_target_guard
+        < blocked_player_return
+        < shared_player_heal
+    ):
+        fail(
+            f"{gpl_path}: ordinary healing must reject Phantoms except when "
+            "cast by a Priestess, and player healing must always reject them"
+        )
+
+    regeneration = gpl.index(
+        "function Regeneration_elixer_effect ( agent thisagent, agent target )"
+    )
+    regeneration_guard = gpl.index(
+        'If (thisagent\'s "Title" == "Phantom")', regeneration
+    )
+    regeneration_delete = gpl.index(
+        "$DeleteInventoryItem(#Bazaar_Item_Four, ThisAgent);",
+        regeneration_guard,
+    )
+    regeneration_forget = gpl.index(
+        '$ForgetSpell(ThisAgent, "Regeneration_Elixer");',
+        regeneration_delete,
+    )
+    regeneration_return = gpl.index("return;", regeneration_forget)
+    regeneration_effect = gpl.index(
+        '$CreateEffector(thisagent, "Regeneration_elixer_effector", 0);',
+        regeneration_return,
+    )
+    if not (
+        regeneration
+        < regeneration_guard
+        < regeneration_delete
+        < regeneration_forget
+        < regeneration_return
+        < regeneration_effect
+    ):
+        fail(
+            f"{gpl_path}: a Phantom must consume a Regeneration Elixir without "
+            "receiving its regeneration effect"
+        )
+
+    healing_wind = gpl.index("function Healing_Wind ()")
+    wind_guard = gpl.index('If (hero\'s "Title" != "Phantom")', healing_wind)
+    wind_effect = gpl.index(
+        '$CreateEffector(hero, "Regeneration_elixer_effector", 0);',
+        wind_guard,
+    )
+    if not healing_wind < wind_guard < wind_effect:
+        fail(
+            f"{gpl_path}: Healing Wind must exclude Phantoms before applying "
+            "its regeneration effect"
+        )
+
+    evaluation = gpl.index(
+        "Function Eval_For_Healing(agent ThisAgent, integer Distance) is Agent"
+    )
+    phantom_exclusion = gpl.index('If (Hero\'s "Title" != "Phantom")', evaluation)
+    injured_append = gpl.index("Injured_Heroes << Hero;", phantom_exclusion)
+    healer_effect = gpl.index("function Healer_Heal_Effect(agent thisagent, agent target)")
+    healer_guard = gpl.index('If (target\'s "Title" == "Phantom")', healer_effect)
+    healer_reset = gpl.index("$Reset_Tasks(thisagent);", healer_guard)
+    healer_return = gpl.index("return;", healer_reset)
+    healer_visual = gpl.index(
+        '$CreateEffector(target, "healer_healing_effector", 0);', healer_return
+    )
+    healer_heal = gpl.index("$Heal(ThisAgent, Target, Healing);", healer_visual)
+    if not (
+        evaluation
+        < phantom_exclusion
+        < injured_append
+        < healer_effect
+        < healer_guard
+        < healer_reset
+        < healer_return
+        < healer_visual
+        < healer_heal
+    ):
+        fail(
+            f"{gpl_path}: Healers must reject Phantoms during selection and "
+            "again before applying their healing effect"
+        )
+
+    drain = gpl.index("function Drain_Life_Hit(agent thisagent, agent target)")
+    self_heal_check = gpl.index(
+        "If ($GetAttribute(ThisAgent, #ATTRIB_HP) < $GetAttribute(ThisAgent, #ATTRIB_MaxHP))",
+        drain,
+    )
+    self_heal = gpl.index("$Heal(ThisAgent, ThisAgent, 5);", self_heal_check)
+    phantom_list = gpl.index('Phantoms = $ListTitles(Phantoms, "Phantom");', self_heal)
+    phantom_target = gpl.index("Best_Phantom = Phantom;", phantom_list)
+    phantom_heal = gpl.index("$Heal(ThisAgent, Best_Phantom, 5);", phantom_target)
+    skeleton_list = gpl.index(
+        'My_Skeletons = $ListTitles(My_Skeletons, "Skeleton");', phantom_heal
+    )
+    skeleton_target = gpl.index("Best_Skeleton = Skeleton;", skeleton_list)
+    skeleton_heal = gpl.index(
+        "$Heal(ThisAgent, Best_Skeleton, 5);", skeleton_target
+    )
+    drain_damage = gpl.index("$Spell_Attack(ThisAgent, Target, 15);", skeleton_heal)
+    if not (
+        drain
+        < self_heal_check
+        < self_heal
+        < phantom_list
+        < phantom_target
+        < phantom_heal
+        < skeleton_list
+        < skeleton_target
+        < skeleton_heal
+        < drain_damage
+    ):
+        fail(
+            f"{gpl_path}: Drain Life healing priority must be Priestess self, "
+            "then allied Phantom, then controlled Skeleton"
+        )
+
+    if "Function Healing_Shared" in gpl:
+        fail(
+            f"{gpl_path}: Phantom healing rules must not override global "
+            "Healing_Shared and accidentally block Priestess healing"
+        )
+
+
+def validate_deal_demon_test_setup(output_root: Path) -> None:
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    contract = (
+        'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
+        'elf_guild = $SpawnUnit(palace, "Elven_Bungalow"',
+        'agrela_temple = $SpawnUnit(palace, "Temple_Agrela1"',
+        'agrela_temple\'s "SpecialScript" = $Hero_Generator;',
+        '$NewThread( agrela_temple\'s "SpecialScript", 60000 + $randomnumber(60000), agrela_temple );',
+    )
+    missing = [value for value in contract if value not in gpl]
+    if missing:
+        fail(
+            f"{gpl_path}: Deal with the Demon healing test setup is missing {missing}"
+        )
+
+    deal = gpl.index("function DEAL_DEMON()")
+    spawn = gpl.index(
+        'agrela_temple = $SpawnUnit(palace, "Temple_Agrela1"', deal
+    )
+    validity = gpl.index("If (agrela_temple != $NullAgent())", spawn)
+    generator = gpl.index(
+        'agrela_temple\'s "SpecialScript" = $Hero_Generator;', validity
+    )
+    thread = gpl.index(
+        '$NewThread( agrela_temple\'s "SpecialScript", 60000 + $randomnumber(60000), agrela_temple );',
+        generator,
+    )
+    if not deal < spawn < validity < generator < thread:
+        fail(
+            f"{gpl_path}: starting Temple to Agrela must be validated and "
+            "have its Hero Generator thread started"
+        )
+    if '$SpawnUnit(palace, "Temple_Agrela",' in gpl:
+        fail(
+            f"{gpl_path}: Temple_Agrela is a runtime title; scripted spawning "
+            "must use the level-one prototype Temple_Agrela1"
+        )
+
+
 def validate(output_root: Path) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
@@ -1912,6 +2178,8 @@ def validate(output_root: Path) -> None:
     validate_frost_armor_contract(output_root)
     validate_phantom_potion_purchase_contract(output_root)
     validate_phantom_equipment_upgrade_contract(output_root)
+    validate_phantom_healing_contract(output_root)
+    validate_deal_demon_test_setup(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:
