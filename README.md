@@ -15,8 +15,9 @@ This currently builds:
 - Custom Phantom starter special items:
   - `Frozen Cowl`, item ID `80`, grants `+2` physical armor using the same
     `AdjustAttribute(Armor_Basic_Damage)` path as Majesty's Ring of Protection.
-  - `Black Icerod`, item ID `81`, has been restored to its known-good `+8`
-    weapon-damage implementation while the Parry-related crash is isolated.
+  - `Black Icerod`, item ID `81`, uses its in-game-confirmed stable `+8`
+    weapon-damage implementation. The attempted `+5 Parry` versions crashed
+    and have been removed.
   - Phantom starter items are removed by `Phantom_death` before normal
     gravestone handling. Realm-exit item dropping is part of the desired
     Phantom design and should be preserved or implemented deliberately rather
@@ -132,6 +133,8 @@ used for `DEAL_DEMON`. The first check returns `False` when the buyer's title is
 The remainder of the function retains the stock checks and task setup for every
 other hero. Phantoms therefore continue using the unmodified stock
 `Wizard_tree` and never start a healing-potion shopping trip.
+In-game verification confirms that Phantoms continue normal decision-making,
+do not get stuck thinking, and do not enter the healing-potion purchase path.
 
 Two earlier attempts masked the Phantom's potion count through a copied Wizard
 tree and a custom equipment wrapper. Both left the hero permanently stuck in
@@ -423,10 +426,10 @@ automatically transfer XML attributes to their owner. Frozen Cowl therefore
 uses the stock Ring-of-Protection pattern to apply `+2` basic-damage armor when
 granted. The Cowl passed combat, treasure, and gold tests independently.
 Black Icerod Parry tests used both `AdjustAttribute` and
-`MagicalAdjustAttribute`, including a version deferred until after birth, and
-crashes have continued intermittently around the same development window. The
-rod is currently restored to its original known-good `+8` weapon-damage path
-as a focused isolation test. Stock `target_eval` divides enemy HP by
+`MagicalAdjustAttribute`, including a version deferred until after birth.
+Restoring the original `+8` weapon-damage path removed the in-game crash, so
+the Parry implementation is now treated as unsafe rather than an active item
+feature. Stock `target_eval` divides enemy HP by
 `hero_damage`. That helper totals basic, structural, and magical weapon damage,
 then adds integer `Strength / strength_div`. For the original Strength-2
 caster, every term was `0`, causing the crash on entering combat. Majesty's
@@ -435,9 +438,9 @@ damage `0`. Integer division supplies the required AI-evaluation floor of `1`
 without requiring a nonzero base weapon stat. The separate XML `Attack` value
 remains `30`, and Ice Lance damage remains its independent fixed value of `8`.
 With the restored Icerod equipped, the runtime weapon-damage component is `8`;
-this is intentionally temporary while crash behavior is compared against the
-Parry build. Package validation requires the safe Strength threshold and the
-known-good rod damage path.
+this is the current stable item design. Package validation requires the safe
+Strength threshold, the known-good rod damage path, and rejects the
+experimental `+5 Parry` mutation.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to
@@ -753,14 +756,11 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
   changing more offsets.
 - The current Phantom gravestone is a temporary first pass and is next in line
   for a complete visual redesign.
-- `Frost Armor` is packaged for its first full in-game stability and placement
-  pass. The current fixed-`240` combat-awareness trigger produced two
-  intermittent crashes in the latest test, followed by a longer run with no
-  crash. The cause is not yet isolated, so do not treat Frost Armor combat
-  entry as stable. A nested `GetAttribute` argument to `compile_enemies` was
-  removed because stock GPL never uses that form, but the later intermittent
-  crashes mean that change was not a complete diagnosis. `Blizzard` still
-  needs its dedicated implementation pass.
+- `Frost Armor` still needs its full behavior and placement pass. Crashes
+  previously observed during the same testing window stopped after Black
+  Icerod was restored from `+5 Parry` to `+8` damage, so there is no longer a
+  confirmed Frost Armor crash. `Blizzard` still needs its dedicated
+  implementation pass.
 - The Phantoms Haunt borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
   while the mod is active.
@@ -769,7 +769,7 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
 
 ## Next Session
 
-Checkpoint recorded July 25, 2026:
+Checkpoint recorded July 25 and verified through July 26, 2026:
 
 - The building, construction progression, destruction progression, cast
   shadows, shadow seams, and construction pit cleanup are working in game.
@@ -794,11 +794,11 @@ Checkpoint recorded July 25, 2026:
   review. The fixed modifiers deliberately describe a mild Chill rather than
   promising an exact percentage on every unit.
 - Frozen Cowl is a starter item that displays and grants `+2` physical armor.
-  Black Icerod is temporarily restored to its known-good displayed and
-  mechanical `+8` weapon damage while the Parry build's crash behavior is
-  isolated. Both are currently marked non-droppable, and death cleanup works.
-  Realm-exit dropping is a desired mechanic to formalize rather than a defect
-  to remove.
+  Black Icerod uses its in-game-confirmed stable displayed and mechanical `+8`
+  weapon damage; the crashing `+5 Parry` path has been removed and is rejected
+  by validation. Both are currently marked non-droppable, and death cleanup
+  works. Realm-exit dropping is a desired mechanic to formalize rather than a
+  defect to remove.
 - Phantom base weapon damage is intentionally `0`. Strength is `8`, producing
   the minimum safe stock `hero_damage` value of `1` through integer `8 / 8`.
   This prevents `target_eval` division by zero without restoring the Icerod's
@@ -809,11 +809,13 @@ Checkpoint recorded July 25, 2026:
   completed full-health rest at the Phantoms Haunt, an Inn, or a Gazebo. Its
   animated octahedral ward and three size-aware frozen casings are packaged
   from generated source art. Its auto-cast currently checks a fixed `240`
-  radius, but intermittent crashes during enemy entry remain unresolved.
-- Next: isolate Frost Armor's intermittent combat-entry crash before further
-  spell work, then retest attack detection, building consumption, ranged
-  retaliation, rest recharge, and effect placement before continuing to
-  Blizzard.
+  radius.
+- The Phantom-only stock `Potion_Check` replacement is verified in game:
+  Phantoms remain active, do not get stuck thinking, and skip healing-potion
+  purchases while retaining other shop decisions.
+- Next: retest Frost Armor attack detection, building consumption, ranged
+  retaliation, rest recharge, and effect placement with the stable Icerod
+  build before continuing to Blizzard.
 - Tomorrow's desired gameplay/mechanics checklist:
   - Preserve or deliberately implement Frozen Cowl and Black Icerod dropping
     when a Phantom leaves the realm through the palace.
