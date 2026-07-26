@@ -225,10 +225,10 @@ def phantom_units_xml() -> str:
 \t\t\t<Strength value="2"/>
 \t\t\t<MagicResistance value="25"/>
 \t\t\t<Attack value="30"/>
-\t\t\t<Parry value="20"/>
+\t\t\t<Parry value="25"/>
 \t\t\t<Dodge value="25"/>
 \t\t\t<WeaponBasicDamage value="0"/>
-\t\t\t<ArmorBasicDamage value="0"/>
+\t\t\t<ArmorBasicDamage value="1"/>
 \t\t\t<RecruitDelay value="1000"/>
 \t\t\t<PrimaryStat value="2"/>
 \t\t\t<NameGenType value="NM16"/>
@@ -765,13 +765,13 @@ begin
 \tIf ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_FrozenCowl, thisagent, #Allow_Cloned_Quest_Item);
-\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 2);
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);
 \t\tend
 
 \tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
-\t\t\t$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 5);
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
 \t\tend
 end
 
@@ -1228,8 +1228,8 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
     patched_quest_item_names = patch_indexed_strt_strings(
         quest_item_names.data,
         {
-            80: "Frozen Cowl\n\x01FFDDAA(+2 armor)",
-            81: "Black Icerod\n\x01FFDDAA(+5 parry)",
+            80: "Frozen Cowl\n\x01FFDDAA(+1 armor)",
+            81: "Black Icerod\n\x01FFDDAA(+8 damage)",
         },
     )
     patched_help_text = patch_strt_strings(

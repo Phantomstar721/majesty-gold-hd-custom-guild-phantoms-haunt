@@ -13,9 +13,12 @@ This currently builds:
 - Custom generated Phantoms Haunt world/building sprite frames, including
   inactive, active, damaged, destroyed, and build-progress variants.
 - Custom Phantom starter special items:
-  - `Frozen Cowl`, item ID `80`, grants `+2` physical armor.
-  - `Black Icerod`, item ID `81`, grants `+5` parry through Majesty's stock
-    magical-stat adjustment path.
+  - `Frozen Cowl`, item ID `80`, retains its stable `+1` armor item record.
+    Phantom unit data supplies another unexposed `+1`, producing the intended
+    effective starting physical armor of `2`.
+  - `Black Icerod`, item ID `81`, retains its stable `+8` weapon-damage item
+    record. Phantom unit data carries the intended unexposed `+5` Parry
+    enhancement (`25` total instead of `20`).
   - Phantom starter items are removed by `Phantom_death` before normal
     gravestone handling, and are marked non-droppable so leaving the realm
     through the palace deletes them instead of spawning them as ground loot.
@@ -93,7 +96,7 @@ pattern used by Majesty's quest and Bazaar inventory items:
    function:
 
    ```gpl
-   $adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 2);
+   $adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);
    ```
 
 5. Add the display name to `QITM` in `phantom_gpltext.cam`. `QITM` is an
@@ -377,10 +380,11 @@ Phantom's base casting range is `180`, below the Wizard's `240`. Majesty stores
 casting range on the hero rather than the individual spell, so this technically
 applies to the Phantom's complete spell kit; Frost Armor is self-targeted and
 Blizzard is caster-centered, making Ice Lance the only current spell materially
-affected. Black Icerod applies `+5` Parry with `MagicalAdjustAttribute`, matching
-the stock Ring of Protection's inventory implementation rather than using a
-custom hidden buff. Its short `(+5 parry)` item text remains within the
-known-good QITM record footprint.
+affected. Attempts to change the custom starter-item records caused repeatable
+crashes during unrelated combat and treasure/inventory updates. The item
+records therefore remain byte-for-byte compatible with the known-good build;
+the intended extra `+1` physical armor and `+5` Parry are encoded in Phantom
+unit data instead and are not exposed in the item tooltips.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to
