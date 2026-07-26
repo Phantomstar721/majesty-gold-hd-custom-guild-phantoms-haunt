@@ -19,7 +19,7 @@ This currently builds:
     gravestone handling, and are marked non-droppable so leaving the realm
     through the palace deletes them instead of spawning them as ground loot.
 - Phantom baseline balance: `8` Vitality, `25` Magic Resistance, `25` Dodge,
-  and `180` base casting range. Artifice remains `8`; Majesty uses it for
+  and `180` conceptual base casting range. Artifice remains `8`; Majesty uses it for
   equipment-shopping choices, stealing checks, and Gambling Hall fallback
   rolls, not spell damage, casting speed, range, or cooldown.
 - Generated placeholder voice/soundbite WAVs.
@@ -372,12 +372,16 @@ index `255` and magenta-like colors must be avoided when converting RGB pixels,
 or visible pixels can become transparent/keyed out in-game.
 
 Ice Lance deals `8` damage, compared with stock Energy Blast's `10`. The
-Phantom's base casting range is `180`; the Black Icerod adds `10`, bringing an
-equipped Phantom to `190`, below the Wizard's `240` and leaving room for later
-Icerod upgrades. Majesty stores casting range on the hero rather than the
-individual spell, so this technically applies to the Phantom's complete spell
-kit; Frost Armor is self-targeted and Blizzard is caster-centered, making Ice
-Lance the only current spell materially affected.
+Phantom's conceptual base casting range is `180`; the Black Icerod adds `10`,
+bringing an equipped Phantom to `190`, below the Wizard's `240` and leaving
+room for later Icerod upgrades. Because every Phantom receives the
+non-droppable Icerod, hero data safely stores the effective `190` directly.
+Majesty's stock scripts read `castingrange` during combat but never mutate it
+at runtime; attempting to apply the item with `castingrange += 10` caused an
+access violation when `attack_object` began. Majesty stores casting range on
+the hero rather than the individual spell, so this technically applies to the
+Phantom's complete spell kit; Frost Armor is self-targeted and Blizzard is
+caster-centered, making Ice Lance the only current spell materially affected.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to

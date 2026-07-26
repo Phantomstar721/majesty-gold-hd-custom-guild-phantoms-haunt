@@ -608,7 +608,7 @@ def phantom_hero_data() -> str:
 \t\t(PrimaryStat ATTRIB_Intelligence)
 \t\t(Friend\txx)
 \t\t(attacktype 1)
-\t\t(castingrange 180)
+\t\t(castingrange 190)
 \t\t(PercentageHPRetreat 0)
 \t\t(enemy_estimation 0.1)
 \t\t(self_estimation 10.0)
@@ -773,7 +773,6 @@ begin
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
 \t\t\t$adjustattribute(thisagent, #ATTRIB_Parry, 5);
-\t\t\tthisagent's "castingrange" += 10;
 \t\tend
 end
 
@@ -1000,7 +999,7 @@ begin
 \tIf ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
 \t\treturn;
 
-\tIf (thisagent's "Special_Boolean")
+\tIf (thisagent's "Special_Boolean" == True)
 \t\treturn;
 
 \t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);

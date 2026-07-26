@@ -1255,8 +1255,8 @@ def validate_ice_lance_contract(output_root: Path) -> None:
 
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     hero_data = hero_data_path.read_text(encoding="utf-8")
-    if "(castingrange 180)" not in hero_data:
-        fail(f"{hero_data_path}: Phantom base casting range is not 180")
+    if "(castingrange 190)" not in hero_data:
+        fail(f"{hero_data_path}: Phantom effective casting range is not 190")
 
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
@@ -1422,11 +1422,12 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     item_contract = (
         '#ATTRIB_Armor_Basic_Damage, 2',
         '#ATTRIB_Parry, 5',
-        'thisagent\'s "castingrange" += 10;',
     )
     missing_items = [value for value in item_contract if value not in gpl]
     if missing_items:
         fail(f"{gpl_path}: Phantom starter-item bonuses are missing {missing_items}")
+    if 'thisagent\'s "castingrange" +=' in gpl:
+        fail(f"{gpl_path}: unsafe runtime casting-range mutation is present")
 
 
 def validate(output_root: Path) -> None:
