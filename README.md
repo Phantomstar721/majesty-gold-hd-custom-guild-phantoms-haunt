@@ -129,8 +129,11 @@ Both Marketplaces and Trading Posts reach ordinary healing-potion purchases
 through the stock `Potion_Check` inside `Purchase_Equipment`. Phantoms use a
 local mirror of the expansion Wizard decision tree so its equipment step can
 call `Phantom_Purchase_Equipment`. That wrapper saves the Phantom's actual
-`NumHealingPotions`, temporarily sets it to `Max_Heal_Potions`, calls the
-complete stock equipment routine, then restores the saved value. Stock
+`NumHealingPotions`, temporarily adjusts it up to `Max_Heal_Potions`, calls the
+complete stock equipment routine, then subtracts exactly the temporary amount.
+The wrapper uses `AdjustAttribute`, matching every stock mutation of this
+counter; a direct `SetAttribute` attempt left Phantoms permanently stuck in
+their thinking state. Stock
 `Potion_Check` therefore sees a full potion inventory and declines the
 purchase, while weapon and armor upgrades, rings, level-three market items,
 Fairgrounds boosts, and all later Wizard decisions remain available.

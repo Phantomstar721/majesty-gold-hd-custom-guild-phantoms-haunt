@@ -1483,9 +1483,10 @@ def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
         "If ($Purchase_bazaar(thisagent, 70) == False)",
         "function Phantom_Purchase_Equipment(agent thisagent) is boolean",
         "stored_potions = $GetAttribute(thisagent, #ATTRIB_NumHealingPotions);",
-        "$SetAttribute(thisagent, #ATTRIB_NumHealingPotions, #Max_Heal_Potions);",
+        "potion_mask = #Max_Heal_Potions - stored_potions;",
+        "$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, potion_mask);",
         "purchased = $Purchase_equipment(thisagent);",
-        "$SetAttribute(thisagent, #ATTRIB_NumHealingPotions, stored_potions);",
+        "$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, -potion_mask);",
         "return purchased;",
     )
     missing = [value for value in contract if value not in gpl]
@@ -1505,13 +1506,17 @@ def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
         "stored_potions = $GetAttribute(thisagent, #ATTRIB_NumHealingPotions);",
         wrapper,
     )
+    calculate_mask = gpl.index(
+        "potion_mask = #Max_Heal_Potions - stored_potions;",
+        wrapper,
+    )
     mask = gpl.index(
-        "$SetAttribute(thisagent, #ATTRIB_NumHealingPotions, #Max_Heal_Potions);",
+        "$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, potion_mask);",
         wrapper,
     )
     purchase = gpl.index("purchased = $Purchase_equipment(thisagent);", wrapper)
     restore = gpl.index(
-        "$SetAttribute(thisagent, #ATTRIB_NumHealingPotions, stored_potions);",
+        "$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, -potion_mask);",
         wrapper,
     )
     returned = gpl.index("return purchased;", wrapper)
@@ -1522,6 +1527,7 @@ def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
         < bazaar
         < wrapper
         < save
+        < calculate_mask
         < mask
         < purchase
         < restore
@@ -1530,6 +1536,11 @@ def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: Phantom potion mask must wrap only the stock "
             "equipment decision and restore the real count before returning"
+        )
+    if "$SetAttribute(thisagent, #ATTRIB_NumHealingPotions" in gpl:
+        fail(
+            f"{gpl_path}: unsupported direct setter is used for the healing "
+            "potion counter"
         )
     if "$Wizard_tree(thisagent);" in gpl:
         fail(

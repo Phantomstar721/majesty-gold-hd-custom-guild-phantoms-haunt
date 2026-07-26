@@ -781,13 +781,20 @@ function Phantom_Purchase_Equipment(agent thisagent) is boolean
 
 declare
 \tinteger stored_potions;
+\tinteger potion_mask;
 \tboolean purchased;
 
 begin
 \tstored_potions = $GetAttribute(thisagent, #ATTRIB_NumHealingPotions);
-\t$SetAttribute(thisagent, #ATTRIB_NumHealingPotions, #Max_Heal_Potions);
+\tpotion_mask = #Max_Heal_Potions - stored_potions;
+\tIf (potion_mask > 0)
+\t\t$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, potion_mask);
+
 \tpurchased = $Purchase_equipment(thisagent);
-\t$SetAttribute(thisagent, #ATTRIB_NumHealingPotions, stored_potions);
+
+\tIf (potion_mask > 0)
+\t\t$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, -potion_mask);
+
 \treturn purchased;
 end
 
