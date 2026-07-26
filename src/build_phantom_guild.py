@@ -752,6 +752,7 @@ begin
 \tthisagent's "Reborn_Counter" = 0;
 \tthisagent's "QuestScript" = $Phantom_Frost_Armor_Watch;
 \t$NewThread(thisagent's "QuestScript", 100, thisagent);
+\t$RunThread($Phantom_Apply_Icerod_Parry, 1000, thisagent);
 end
 
 function Phantom_grant_starter_items (agent thisagent)
@@ -771,8 +772,21 @@ begin
 \tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
-\t\t\t$adjustattribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
 \t\tend
+end
+
+function Phantom_Apply_Icerod_Parry (agent thisagent)
+
+declare
+
+begin
+\tIf ($isdead(thisagent))
+\t\treturn;
+
+\tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
+\t\treturn;
+
+\t$AdjustAttribute (thisagent, #ATTRIB_Parry, 5);
 end
 
 function Ice_Lance_Cast(agent thisagent, agent target)
@@ -1229,7 +1243,7 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
         quest_item_names.data,
         {
             80: "Frozen Cowl\n\x01FFDDAA(+2 armor)",
-            81: "Black Icerod\n\x01FFDDAA(+8 damage)",
+            81: "Black Icerod\n\x01FFDDAA(+5 parry)",
         },
     )
     patched_help_text = patch_strt_strings(

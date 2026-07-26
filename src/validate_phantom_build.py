@@ -400,7 +400,7 @@ def validate_indexed_item_strings(path: Path, data: bytes) -> None:
         fail(f"{path}: STRT/QITM has {count} strings; item IDs 80 and 81 require at least 82")
     expected_items = (
         (80, b"Frozen Cowl\n\x01FFDDAA(+2 armor)"),
-        (81, b"Black Icerod\n\x01FFDDAA(+8 damage)"),
+        (81, b"Black Icerod\n\x01FFDDAA(+5 parry)"),
     )
     for item_id, expected_text in expected_items:
         offset = struct.unpack_from("<I", data, 4 + item_id * 4)[0]
@@ -1425,13 +1425,34 @@ def validate_frost_armor_contract(output_root: Path) -> None:
 
     item_contract = (
         '$AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);',
-        '#ATTRIB_Weapon_Basic_Damage, 8',
+        '$RunThread($Phantom_Apply_Icerod_Parry, 1000, thisagent);',
+        'function Phantom_Apply_Icerod_Parry (agent thisagent)',
+        'If ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)',
+        '$AdjustAttribute (thisagent, #ATTRIB_Parry, 5);',
     )
     missing_items = [value for value in item_contract if value not in gpl]
     if missing_items:
         fail(f"{gpl_path}: Phantom starter-item bonuses are missing {missing_items}")
-    if "#ATTRIB_Parry, 5" in gpl:
-        fail(f"{gpl_path}: unstable Black Icerod Parry adjustment is present")
+    grant = gpl.index("$Phantom_grant_starter_items(thisagent);")
+    delayed_parry = gpl.index("$RunThread($Phantom_Apply_Icerod_Parry, 1000, thisagent);")
+    parry_function = gpl.index("function Phantom_Apply_Icerod_Parry (agent thisagent)")
+    item_guard = gpl.index(
+        "If ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)",
+        parry_function,
+    )
+    parry_adjustment = gpl.index(
+        "$AdjustAttribute (thisagent, #ATTRIB_Parry, 5);",
+        parry_function,
+    )
+    if not grant < delayed_parry < parry_function < item_guard < parry_adjustment:
+        fail(
+            f"{gpl_path}: Black Icerod Parry must be applied by the guarded "
+            "one-shot thread after starter-item creation"
+        )
+    if "#ATTRIB_Weapon_Basic_Damage, 8" in gpl:
+        fail(f"{gpl_path}: old Black Icerod weapon-damage bonus is still present")
+    if "$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry" in gpl:
+        fail(f"{gpl_path}: unstable magical Black Icerod Parry path is present")
     if "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);" in gpl:
         fail(f"{gpl_path}: old Frozen Cowl +1 bonus is still present")
     if 'thisagent\'s "castingrange" +=' in gpl:

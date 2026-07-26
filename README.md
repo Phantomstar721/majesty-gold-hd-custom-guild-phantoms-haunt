@@ -15,9 +15,9 @@ This currently builds:
 - Custom Phantom starter special items:
   - `Frozen Cowl`, item ID `80`, grants `+2` physical armor using the same
     `AdjustAttribute(Armor_Basic_Damage)` path as Majesty's Ring of Protection.
-  - `Black Icerod`, item ID `81`, temporarily retains its stable `+8`
-    weapon-damage record. Applying Parry from the starter-item grant crashed
-    with both ordinary and magical attribute adjustment.
+  - `Black Icerod`, item ID `81`, displays `+5 parry`. Its bonus is applied by
+    a guarded one-shot thread one second after birth, after the inventory and
+    hero initialization paths have completed.
   - Phantom starter items are removed by `Phantom_death` before normal
     gravestone handling, and are marked non-droppable so leaving the realm
     through the palace deletes them instead of spawning them as ground loot.
@@ -385,9 +385,11 @@ uses the stock Ring-of-Protection pattern to apply `+2` basic-damage armor when
 granted. The Cowl passed combat, treasure, and gold tests independently.
 Black Icerod Parry tests crashed with both `AdjustAttribute` and
 `MagicalAdjustAttribute` when invoked during the birth-time item grant, so the
-Icerod remains on its known-good weapon-damage implementation while a deferred
-or equipment-tier approach is evaluated. Package validation rejects any
-birth-time `+5` Parry adjustment.
+Icerod now uses ordinary `AdjustAttribute` from a one-shot `RunThread` delayed
+by one second. The deferred function first verifies that the Phantom is alive
+and still owns the rod. Because it is scheduled only once by `Phantom_birth`,
+the bonus cannot recur or stack during normal hero behavior. Package validation
+also requires the delayed ordering and rejects the old weapon-damage bonus.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to
