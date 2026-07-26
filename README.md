@@ -98,6 +98,21 @@ pattern used by Majesty's quest and Bazaar inventory items:
    $AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);
    ```
 
+   Inventory entries are only IDs while held; the item XML does not
+   automatically add its stats to the owner. The current starter-item grant
+   therefore applies the two bonuses explicitly:
+
+   ```gpl
+   $AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);
+   $MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);
+   ```
+
+   Frozen Cowl uses the ordinary armor adjustment from the stock Ring of
+   Protection path. Black Icerod uses that ring's magical Parry-adjustment
+   path. Their `QITM` strings display `+2 armor` and `+5 parry`; Majesty does
+   not generate those descriptions from the GPL changes, so validation must
+   keep the displayed text and mechanical values synchronized.
+
 5. Add the display name to `QITM` in `phantom_gpltext.cam`. `QITM` is an
    indexed STRT table, so the table must physically extend to the item ID. For
    example, item ID `80` needs a real slot 80, not only a string record whose ID
@@ -387,13 +402,17 @@ Initial Black Icerod Parry tests appeared to implicate both `AdjustAttribute`
 and `MagicalAdjustAttribute`, including a version deferred until after birth.
 The actual common failure was removing the old `+8` weapon damage while the
 Phantom's base weapon damage was `0`. Stock `target_eval` divides enemy HP by
-`hero_damage`; for the original Strength-2 caster, `hero_damage` was also `0`,
-causing the crash on entering combat. Majesty's `strength_div` is `8`, so the
-Phantom now uses Strength `8` with base weapon damage `0`. Integer division
-therefore supplies the required `hero_damage` floor of `1` without a hidden
-weapon stat. Ice Lance damage remains its independent fixed value, and the
-Icerod itself grants only `+5` Parry. Package validation requires this safe
-Strength threshold and rejects the old rod weapon-damage bonus.
+`hero_damage`. That helper totals basic, structural, and magical weapon damage,
+then adds integer `Strength / strength_div`. For the original Strength-2
+caster, every term was `0`, causing the crash on entering combat. Majesty's
+`strength_div` is `8`, so the Phantom now uses Strength `8` with base weapon
+damage `0`. Integer division supplies the required AI-evaluation floor of `1`
+without a hidden weapon stat. The separate XML `Attack` value remains `30`;
+zero `WeaponBasicDamage` means the rod is not secretly adding physical damage,
+not that every engine attack-related field is zero. Ice Lance damage remains
+its independent fixed value of `8`, and the Icerod itself grants only `+5`
+Parry. Package validation requires the safe Strength threshold and rejects the
+old rod weapon-damage bonus.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to
@@ -710,7 +729,13 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
 - The current Phantom gravestone is a temporary first pass and is next in line
   for a complete visual redesign.
 - `Frost Armor` is packaged for its first full in-game stability and placement
-  pass; `Blizzard` still needs its dedicated implementation pass.
+  pass. The current fixed-`240` combat-awareness trigger produced two
+  intermittent crashes in the latest test, followed by a longer run with no
+  crash. The cause is not yet isolated, so do not treat Frost Armor combat
+  entry as stable. A nested `GetAttribute` argument to `compile_enemies` was
+  removed because stock GPL never uses that form, but the later intermittent
+  crashes mean that change was not a complete diagnosis. `Blizzard` still
+  needs its dedicated implementation pass.
 - The Phantoms Haunt borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
   while the mod is active.
@@ -743,14 +768,24 @@ Checkpoint recorded July 25, 2026:
   refresh, non-stacking, movement-slow, action-slow, duration, and status-icon
   review. The fixed modifiers deliberately describe a mild Chill rather than
   promising an exact percentage on every unit.
-- Frost Armor now auto-learns at level 3, casts at combat entry, persists until
-  the first attack attempt, negates ordinary weapon damage, consumes against
-  both units and buildings, Freezes unit attackers for three seconds, and only
-  recharges after a completed full-health rest at the Phantoms Haunt, an Inn,
-  or a Gazebo. Its animated octahedral ward and three size-aware frozen casings
-  are packaged from generated source art.
-- Next: exercise Frost Armor's attack detection, building consumption, ranged
-  retaliation, rest recharge, and effect placement in game, then continue to
+- Frozen Cowl is a non-droppable starter item that displays and grants `+2`
+  physical armor. Black Icerod is a non-droppable starter item that displays
+  and grants `+5` Parry through the stock magical Parry adjustment. Both are
+  cleaned up on death and realm exit.
+- Phantom base weapon damage is intentionally `0`. Strength is `8`, producing
+  the minimum safe stock `hero_damage` value of `1` through integer `8 / 8`.
+  This prevents `target_eval` division by zero without restoring the Icerod's
+  obsolete weapon-damage bonus. Ice Lance remains fixed at `8` spell damage.
+- Frost Armor learns at level 3, persists until the first qualified attack
+  attempt, negates ordinary weapon damage, consumes against units and
+  buildings, Freezes unit attackers for three seconds, and recharges after a
+  completed full-health rest at the Phantoms Haunt, an Inn, or a Gazebo. Its
+  animated octahedral ward and three size-aware frozen casings are packaged
+  from generated source art. Its auto-cast currently checks a fixed `240`
+  radius, but intermittent crashes during enemy entry remain unresolved.
+- Next: isolate Frost Armor's intermittent combat-entry crash before further
+  spell work, then retest attack detection, building consumption, ranged
+  retaliation, rest recharge, and effect placement before continuing to
   Blizzard.
 
 ## Build
