@@ -1352,6 +1352,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         '$createeffector(thisagent, "frost_armor_effector", 180000);',
         "#ATTRIB_Armor_Basic_Damage, 10000",
         '$clearlist(thisagent\'s "Hostiles");',
+        'targets = $compile_enemies(thisagent, $GetAttribute(thisagent, #ATTRIB_SightRange));',
         '$Frost_Armor_Begin(thisagent, thisagent);',
         '$PerformAction(thisagent, "Basic_Cast", thisagent);',
         "function Phantom_Arm_Frost_Armor_In_Combat(agent thisagent) is boolean",
@@ -1394,6 +1395,11 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: Frost Armor behavior contract is missing {missing_gpl}")
     if "$Phantom_Ensure_Frost_Armor_Passive" in gpl:
         fail(f"{gpl_path}: level-1 Frost Armor watcher still invokes passive armor")
+    if 'targets = $compile_enemies(thisagent, thisagent\'s "castingrange");' in gpl:
+        fail(
+            f"{gpl_path}: Frost Armor combat detection is incorrectly limited "
+            "to Ice Lance casting range"
+        )
 
     consume = gpl.index('thisagent\'s "Reborn_Counter" = 2;')
     incoming_filter = gpl.index('If (hostile\'s "Target" == thisagent)')
