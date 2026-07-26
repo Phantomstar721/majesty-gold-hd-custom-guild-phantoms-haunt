@@ -218,15 +218,15 @@ def phantom_units_xml() -> str:
 \t\t\t<SightRange value="240"/>
 \t\t\t<Speed value="4"/>
 \t\t\t<AttackRange min="1" max="240"/>
-\t\t\t<Vitality value="6"/>
+\t\t\t<Vitality value="8"/>
 \t\t\t<Artifice value="8"/>
 \t\t\t<WillPower value="22"/>
 \t\t\t<Intelligence value="24"/>
 \t\t\t<Strength value="2"/>
-\t\t\t<MagicResistance value="45"/>
+\t\t\t<MagicResistance value="25"/>
 \t\t\t<Attack value="30"/>
 \t\t\t<Parry value="20"/>
-\t\t\t<Dodge value="35"/>
+\t\t\t<Dodge value="25"/>
 \t\t\t<WeaponBasicDamage value="0"/>
 \t\t\t<ArmorBasicDamage value="0"/>
 \t\t\t<RecruitDelay value="1000"/>
@@ -608,7 +608,7 @@ def phantom_hero_data() -> str:
 \t\t(PrimaryStat ATTRIB_Intelligence)
 \t\t(Friend\txx)
 \t\t(attacktype 1)
-\t\t(castingrange 220)
+\t\t(castingrange 180)
 \t\t(PercentageHPRetreat 0)
 \t\t(enemy_estimation 0.1)
 \t\t(self_estimation 10.0)
@@ -747,6 +747,7 @@ declare
 begin
 \t$PlaySound(thisagent, "Phantom", "VFX_SPECIAL1");
 \t$hero_birth(thisagent);
+\tthisagent's "Special_Boolean" = False;
 \t$Phantom_grant_starter_items(thisagent);
 \t$LearnSpell(thisagent, "ice_lance");
 \tthisagent's "Reborn_Counter" = 0;
@@ -765,13 +766,14 @@ begin
 \tIf ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_FrozenCowl, thisagent, #Allow_Cloned_Quest_Item);
-\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 2);
 \t\tend
 
 \tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
-\t\t\t$adjustattribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Parry, 5);
+\t\t\tthisagent's "castingrange" += 10;
 \t\tend
 end
 
@@ -947,6 +949,7 @@ begin
 \t\tend
 
 \t$Phantom_Frost_Armor_Recharge_Check(thisagent);
+\t$Phantom_Ensure_Frost_Armor_Passive(thisagent);
 
 \tIf ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))
 \t\treturn;
@@ -987,6 +990,21 @@ begin
 \t\treturn;
 
 \t$Frost_Armor_Freeze(attacker);
+end
+
+function Phantom_Ensure_Frost_Armor_Passive(agent thisagent)
+
+declare
+
+begin
+\tIf ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
+\t\treturn;
+
+\tIf (thisagent's "Special_Boolean")
+\t\treturn;
+
+\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);
+\tthisagent's "Special_Boolean" = True;
 end
 
 function Phantom_Frost_Armor_Recharge_Check(agent thisagent)
@@ -1228,8 +1246,8 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
     patched_quest_item_names = patch_indexed_strt_strings(
         quest_item_names.data,
         {
-            80: "Frozen Cowl\n\x01FFDDAA(+1 armor)",
-            81: "Black Icerod\n\x01FFDDAA(+8 damage)",
+            80: "Frozen Cowl\n\x01FFDDAA(+2 physical armor)",
+            81: "Black Icerod\n\x01FFDDAA(+5 parry, +10 casting range)",
         },
     )
     patched_help_text = patch_strt_strings(

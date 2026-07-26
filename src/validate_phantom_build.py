@@ -1255,8 +1255,8 @@ def validate_ice_lance_contract(output_root: Path) -> None:
 
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     hero_data = hero_data_path.read_text(encoding="utf-8")
-    if "(castingrange 220)" not in hero_data:
-        fail(f"{hero_data_path}: Phantom casting range is not 220")
+    if "(castingrange 180)" not in hero_data:
+        fail(f"{hero_data_path}: Phantom base casting range is not 180")
 
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
@@ -1355,6 +1355,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         'thisagent\'s "BackScript" != $Attack_object',
         "function Phantom_Frost_Armor_Watch(agent thisagent)",
         "$Phantom_Frost_Armor_Recharge_Check(thisagent);",
+        "$Phantom_Ensure_Frost_Armor_Passive(thisagent);",
         "If ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))",
         'If (thisagent\'s "Reborn_Counter" != 1)',
         'If ($CheckEffector(thisagent, "frost_armor_effector") == False)',
@@ -1367,6 +1368,9 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         '$DeleteEffector(thisagent, "frost_armor_effector");',
         'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")',
         "$Frost_Armor_Freeze(attacker);",
+        "function Phantom_Ensure_Frost_Armor_Passive(agent thisagent)",
+        "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);",
+        'thisagent\'s "Special_Boolean" = True;',
         "$Freeze_Unit(target);",
         '$CreateEffector(target, "frost_armor_frozen_small", 3000);',
         '$CreateEffector(target, "frost_armor_frozen_medium", 3000);',
@@ -1403,6 +1407,26 @@ def validate_frost_armor_contract(output_root: Path) -> None:
             f"{gpl_path}: Frost Armor must validate an in-range incoming "
             "attacker, consume, then apply the building/lair freeze exclusion"
         )
+
+    units_path = output_root / "Data" / "phantom_units.xml"
+    units = units_path.read_text(encoding="utf-8")
+    stat_contract = (
+        '<Vitality value="8"/>',
+        '<MagicResistance value="25"/>',
+        '<Dodge value="25"/>',
+    )
+    missing_stats = [value for value in stat_contract if value not in units]
+    if missing_stats:
+        fail(f"{units_path}: Phantom rebalance stats are missing {missing_stats}")
+
+    item_contract = (
+        '#ATTRIB_Armor_Basic_Damage, 2',
+        '#ATTRIB_Parry, 5',
+        'thisagent\'s "castingrange" += 10;',
+    )
+    missing_items = [value for value in item_contract if value not in gpl]
+    if missing_items:
+        fail(f"{gpl_path}: Phantom starter-item bonuses are missing {missing_items}")
 
 
 def validate(output_root: Path) -> None:
