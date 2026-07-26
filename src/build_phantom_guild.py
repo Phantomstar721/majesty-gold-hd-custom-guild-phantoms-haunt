@@ -805,7 +805,7 @@ begin
 \tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
-\t\t\t$MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);
+\t\t\t$AdjustAttribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
 \t\tend
 end
 
@@ -1263,7 +1263,7 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
         quest_item_names.data,
         {
             80: "Frozen Cowl\n\x01FFDDAA(+2 armor)",
-            81: "Black Icerod\n\x01FFDDAA(+5 parry)",
+            81: "Black Icerod\n\x01FFDDAA(+8 damage)",
         },
     )
     patched_help_text = patch_strt_strings(

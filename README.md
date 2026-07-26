@@ -15,8 +15,8 @@ This currently builds:
 - Custom Phantom starter special items:
   - `Frozen Cowl`, item ID `80`, grants `+2` physical armor using the same
     `AdjustAttribute(Armor_Basic_Damage)` path as Majesty's Ring of Protection.
-  - `Black Icerod`, item ID `81`, displays and grants `+5 parry` through the
-    same `MagicalAdjustAttribute(Parry)` path as Majesty's Ring of Protection.
+  - `Black Icerod`, item ID `81`, has been restored to its known-good `+8`
+    weapon-damage implementation while the Parry-related crash is isolated.
   - Phantom starter items are removed by `Phantom_death` before normal
     gravestone handling. Realm-exit item dropping is part of the desired
     Phantom design and should be preserved or implemented deliberately rather
@@ -105,14 +105,15 @@ pattern used by Majesty's quest and Bazaar inventory items:
 
    ```gpl
    $AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);
-   $MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);
+   $AdjustAttribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
    ```
 
    Frozen Cowl uses the ordinary armor adjustment from the stock Ring of
-   Protection path. Black Icerod uses that ring's magical Parry-adjustment
-   path. Their `QITM` strings display `+2 armor` and `+5 parry`; Majesty does
-   not generate those descriptions from the GPL changes, so validation must
-   keep the displayed text and mechanical values synchronized.
+   Protection path. Black Icerod currently uses its earlier stable
+   weapon-damage adjustment. Their `QITM` strings display `+2 armor` and `+8
+   damage`; Majesty does not generate those descriptions from the GPL changes,
+   so validation must keep the displayed text and mechanical values
+   synchronized.
 
 5. Add the display name to `QITM` in `phantom_gpltext.cam`. `QITM` is an
    indexed STRT table, so the table must physically extend to the item ID. For
@@ -421,21 +422,22 @@ affected. Custom special items are stored as inventory IDs and do not
 automatically transfer XML attributes to their owner. Frozen Cowl therefore
 uses the stock Ring-of-Protection pattern to apply `+2` basic-damage armor when
 granted. The Cowl passed combat, treasure, and gold tests independently.
-Initial Black Icerod Parry tests appeared to implicate both `AdjustAttribute`
-and `MagicalAdjustAttribute`, including a version deferred until after birth.
-The actual common failure was removing the old `+8` weapon damage while the
-Phantom's base weapon damage was `0`. Stock `target_eval` divides enemy HP by
+Black Icerod Parry tests used both `AdjustAttribute` and
+`MagicalAdjustAttribute`, including a version deferred until after birth, and
+crashes have continued intermittently around the same development window. The
+rod is currently restored to its original known-good `+8` weapon-damage path
+as a focused isolation test. Stock `target_eval` divides enemy HP by
 `hero_damage`. That helper totals basic, structural, and magical weapon damage,
 then adds integer `Strength / strength_div`. For the original Strength-2
 caster, every term was `0`, causing the crash on entering combat. Majesty's
 `strength_div` is `8`, so the Phantom now uses Strength `8` with base weapon
 damage `0`. Integer division supplies the required AI-evaluation floor of `1`
-without a hidden weapon stat. The separate XML `Attack` value remains `30`;
-zero `WeaponBasicDamage` means the rod is not secretly adding physical damage,
-not that every engine attack-related field is zero. Ice Lance damage remains
-its independent fixed value of `8`, and the Icerod itself grants only `+5`
-Parry. Package validation requires the safe Strength threshold and rejects the
-old rod weapon-damage bonus.
+without requiring a nonzero base weapon stat. The separate XML `Attack` value
+remains `30`, and Ice Lance damage remains its independent fixed value of `8`.
+With the restored Icerod equipped, the runtime weapon-damage component is `8`;
+this is intentionally temporary while crash behavior is compared against the
+Parry build. Package validation requires the safe Strength threshold and the
+known-good rod damage path.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to
@@ -792,10 +794,11 @@ Checkpoint recorded July 25, 2026:
   review. The fixed modifiers deliberately describe a mild Chill rather than
   promising an exact percentage on every unit.
 - Frozen Cowl is a starter item that displays and grants `+2` physical armor.
-  Black Icerod is a starter item that displays and grants `+5` Parry through
-  the stock magical Parry adjustment. Both are currently marked non-droppable,
-  and death cleanup works. Realm-exit dropping is a desired mechanic to
-  formalize rather than a defect to remove.
+  Black Icerod is temporarily restored to its known-good displayed and
+  mechanical `+8` weapon damage while the Parry build's crash behavior is
+  isolated. Both are currently marked non-droppable, and death cleanup works.
+  Realm-exit dropping is a desired mechanic to formalize rather than a defect
+  to remove.
 - Phantom base weapon damage is intentionally `0`. Strength is `8`, producing
   the minimum safe stock `hero_damage` value of `1` through integer `8 / 8`.
   This prevents `target_eval` division by zero without restoring the Icerod's
