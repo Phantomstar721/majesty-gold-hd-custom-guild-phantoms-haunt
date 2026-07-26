@@ -399,7 +399,7 @@ def validate_indexed_item_strings(path: Path, data: bytes) -> None:
     if count <= 81:
         fail(f"{path}: STRT/QITM has {count} strings; item IDs 80 and 81 require at least 82")
     expected_items = (
-        (80, b"Frozen Cowl\n\x01FFDDAA(+1 armor)"),
+        (80, b"Frozen Cowl\n\x01FFDDAA(+2 armor)"),
         (81, b"Black Icerod\n\x01FFDDAA(+8 damage)"),
     )
     for item_id, expected_text in expected_items:
@@ -1415,16 +1415,16 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     stat_contract = (
         '<Vitality value="8"/>',
         '<MagicResistance value="25"/>',
-        '<Parry value="25"/>',
+        '<Parry value="20"/>',
         '<Dodge value="25"/>',
-        '<ArmorBasicDamage value="1"/>',
+        '<ArmorBasicDamage value="0"/>',
     )
     missing_stats = [value for value in stat_contract if value not in units]
     if missing_stats:
         fail(f"{units_path}: Phantom rebalance stats are missing {missing_stats}")
 
     item_contract = (
-        '#ATTRIB_Armor_Basic_Damage, 1',
+        '$AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);',
         '#ATTRIB_Weapon_Basic_Damage, 8',
     )
     missing_items = [value for value in item_contract if value not in gpl]
@@ -1432,8 +1432,8 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: Phantom starter-item bonuses are missing {missing_items}")
     if "#ATTRIB_Parry, 5" in gpl:
         fail(f"{gpl_path}: experimental Black Icerod Parry mutation is present")
-    if "#ATTRIB_Armor_Basic_Damage, 2" in gpl:
-        fail(f"{gpl_path}: experimental Frozen Cowl item mutation is present")
+    if "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);" in gpl:
+        fail(f"{gpl_path}: old Frozen Cowl +1 bonus is still present")
     if 'thisagent\'s "castingrange" +=' in gpl:
         fail(f"{gpl_path}: unsafe runtime casting-range mutation is present")
     if 'Special_Boolean' in gpl:
