@@ -18,8 +18,9 @@ This currently builds:
   - `Black Icerod`, item ID `81`, displays and grants `+5 parry` through the
     same `MagicalAdjustAttribute(Parry)` path as Majesty's Ring of Protection.
   - Phantom starter items are removed by `Phantom_death` before normal
-    gravestone handling, and are marked non-droppable so leaving the realm
-    through the palace deletes them instead of spawning them as ground loot.
+    gravestone handling. They are marked non-droppable, but current testing
+    still shows them spawning as ground loot when a Phantom leaves the realm
+    through the palace; realm-exit cleanup remains unresolved.
 - Phantom baseline balance: `8` Vitality, `8` Strength, `25` Magic Resistance,
   `25` Dodge, and `180` conceptual base casting range. Artifice remains `8`;
   Majesty uses it for equipment-shopping choices, stealing checks, and
@@ -138,9 +139,13 @@ Class gear that must never become loot also needs
 stock `flee_map` path calls `Hero_Drop_Quest_Items` after a departing hero
 enters the palace. `CanDropItem=1` makes that function delete the inventory
 entry and spawn its world-item agent beside the palace; `0` makes it delete the
-entry without spawning anything. This covers palace realm exit and other stock
-inventory-drain paths without replacing the global `flee_map` routine. Keep the
-explicit `Phantom_death` cleanup as a defensive, class-scoped death path.
+entry without spawning anything in the stock path. Despite that expected
+behavior, current in-game testing still shows Frozen Cowl and Black Icerod
+dropping when a Phantom leaves the realm. Either the custom numeric item path
+is bypassing that item-agent attribute or departure is reaching another drop
+path. Keep the explicit `Phantom_death` cleanup, which is working, and treat
+palace departure cleanup as an open issue rather than replacing global
+`flee_map` until the actual path is isolated.
 
 ## Implementation Notes
 
@@ -770,8 +775,9 @@ Checkpoint recorded July 25, 2026:
   promising an exact percentage on every unit.
 - Frozen Cowl is a non-droppable starter item that displays and grants `+2`
   physical armor. Black Icerod is a non-droppable starter item that displays
-  and grants `+5` Parry through the stock magical Parry adjustment. Both are
-  cleaned up on death and realm exit.
+  and grants `+5` Parry through the stock magical Parry adjustment. Death
+  cleanup works, but both items still drop on realm exit despite
+  `CanDropItem=0`.
 - Phantom base weapon damage is intentionally `0`. Strength is `8`, producing
   the minimum safe stock `hero_damage` value of `1` through integer `8 / 8`.
   This prevents `target_eval` division by zero without restoring the Icerod's
@@ -787,6 +793,17 @@ Checkpoint recorded July 25, 2026:
   spell work, then retest attack detection, building consumption, ranged
   retaliation, rest recharge, and effect placement before continuing to
   Blizzard.
+- Tomorrow's gameplay/mechanics checklist:
+  - Trace and fix Frozen Cowl and Black Icerod dropping when a Phantom leaves
+    the realm through the palace.
+  - Determine why ordinary healing and healing potions have no effect on
+    Phantoms.
+  - Stop Priestesses from selecting Phantoms for Heal while that healing is
+    ineffective, or make the heal resolve correctly if Phantoms should accept
+    allied healing.
+  - Find and remove the restriction that prevents Phantoms and Paladins from
+    existing in the same realm.
+  - Design and implement the Phantom spells `Icy Touch` and `Blizzard`.
 
 ## Build
 
