@@ -15,8 +15,9 @@ This currently builds:
 - Custom Phantom starter special items:
   - `Frozen Cowl`, item ID `80`, grants `+2` physical armor using the same
     `AdjustAttribute(Armor_Basic_Damage)` path as Majesty's Ring of Protection.
-  - `Black Icerod`, item ID `81`, retains its stable `+8` weapon-damage item
-    record while the Cowl is tested independently.
+  - `Black Icerod`, item ID `81`, grants `+5` Parry using ordinary
+    `AdjustAttribute`, matching the proven Cowl path and Majesty's native
+    Fairgrounds/level-gain Parry adjustments.
   - Phantom starter items are removed by `Phantom_death` before normal
     gravestone handling, and are marked non-droppable so leaving the realm
     through the palace deletes them instead of spawning them as ground loot.
@@ -381,8 +382,10 @@ Blizzard is caster-centered, making Ice Lance the only current spell materially
 affected. Custom special items are stored as inventory IDs and do not
 automatically transfer XML attributes to their owner. Frozen Cowl therefore
 uses the stock Ring-of-Protection pattern to apply `+2` basic-damage armor when
-granted. This focused test leaves Black Icerod and base Parry unchanged so the
-Cowl's inventory stability can be evaluated independently.
+granted. After the Cowl passed combat, treasure, and gold tests independently,
+Black Icerod moved from irrelevant weapon damage to `+5` Parry using the same
+ordinary adjustment family. The previously failed `MagicalAdjustAttribute`
+Icerod path remains explicitly excluded by package validation.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to
