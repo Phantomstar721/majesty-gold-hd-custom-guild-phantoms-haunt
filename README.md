@@ -551,7 +551,7 @@ Frost Armor's generated art sources are:
 
 ```text
 assets\source\frost-armor-crystal-source-v1.png
-assets\source\frost-armor-frozen-casing-source-v1.png
+assets\source\frost-armor-frozen-casing-source-v2.png
 ```
 
 Both sources are packaged through palette `161` into 29-frame animations. The
@@ -559,8 +559,10 @@ crystal simulates rotation around its vertical axis with horizontal
 compression, face reversal, a subtle pulse, and a small hover. The casing
 uses small (`58x72`), medium (`82x104`), and large (`116x144`) native TILE
 canvases chosen from the attacker's maximum HP, so the visual scales without
-editing every unit. The casing leaves its center transparent so the frozen
-sprite remains visible inside the faceted ice shell.
+editing every unit. The casing is a complete faceted block rather than a
+hollow arch. Since Majesty's indexed overlays have binary transparency, its
+pale inner planes use a fine transparency dither so the trapped sprite remains
+visible through the ice.
 
 Run `scripts\create_frost_armor_review.py` after a build to decode the actual
 packaged tiles into:

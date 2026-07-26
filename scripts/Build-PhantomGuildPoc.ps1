@@ -16,7 +16,7 @@ param(
     [string]$HeroCastGlow = ".\assets\source\phantom-cast-staff-glow-v2.png",
     [string]$IceLanceProjectileSource = ".\assets\source\ice-lance-projectile-source-v2.png",
     [string]$FrostArmorCrystalSource = ".\assets\source\frost-armor-crystal-source-v1.png",
-    [string]$FrostArmorFrozenCasingSource = ".\assets\source\frost-armor-frozen-casing-source-v1.png",
+    [string]$FrostArmorFrozenCasingSource = ".\assets\source\frost-armor-frozen-casing-source-v2.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
     [string]$GplCompiler = ""
 )

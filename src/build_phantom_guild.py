@@ -3674,6 +3674,28 @@ def generated_frost_armor_casing_tile(
     source.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
     source = ImageEnhance.Brightness(source).enhance(0.94 + 0.08 * (0.5 + 0.5 * math.sin(turn)))
 
+    # Majesty's indexed overlays have binary transparency. Dither the pale
+    # inner planes so the unit reads through a complete ice block without
+    # turning the silhouette back into a hollow archway.
+    source_pixels = source.load()
+    inner_left = round(source.width * 0.20)
+    inner_right = round(source.width * 0.80)
+    inner_top = round(source.height * 0.14)
+    inner_bottom = round(source.height * 0.84)
+    bayer = (
+        (0, 8, 2, 10),
+        (12, 4, 14, 6),
+        (3, 11, 1, 9),
+        (15, 7, 13, 5),
+    )
+    for y in range(inner_top, inner_bottom):
+        for x in range(inner_left, inner_right):
+            red, green, blue, alpha = source_pixels[x, y]
+            pale_ice = blue >= 170 and green >= 125 and red >= 55
+            hard_highlight = red >= 225 and green >= 225 and blue >= 225
+            if pale_ice and not hard_highlight and bayer[y % 4][x % 4] < 4:
+                source_pixels[x, y] = (red, green, blue, 0)
+
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     left = (width - source.width) // 2
     top = height - source.height - 1
