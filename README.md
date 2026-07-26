@@ -502,10 +502,17 @@ Frost Armor adds `10000` basic-damage armor while active, making the first
 ordinary weapon attack deal zero damage. The Phantom's existing `Hostiles`
 list acts as the local attack-attempt signal: the ward clears that list when
 cast, then its recurring watcher consumes the ward when the first valid
-attacker appears. This avoids modifying the global attack or damage functions
-and requires no changes to enemy definitions. It intentionally reacts to the
-first registered attack attempt, even when the engine's hit roll would
-otherwise miss.
+attacker appears. Majesty's `react(attacker, target)` adds the attacker just
+before the hit roll, but other AI paths can leave broader combat relationships
+in the same list. The watcher therefore also requires that the reported
+hostile currently targets the Phantom and is within its own maximum attack
+range (plus a small 24-unit movement/geometry tolerance). Nonqualifying entries
+are cleared so a later real attack can report itself again. This prevents the
+Phantom's first attack against a distant melee target from consuming the ward.
+The local filter avoids modifying global attack/damage functions and requires
+no changes to enemy definitions. It intentionally reacts to the first
+qualified attack attempt, even when the engine's hit roll would otherwise
+miss.
 
 Unit attackers are Frozen for three seconds through Majesty's native
 `HasEffectPetrify`, `Freeze_Unit`, `GetProperUnitArt`, and `UnFreeze_Unit`

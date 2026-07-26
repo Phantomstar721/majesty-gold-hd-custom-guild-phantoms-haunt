@@ -936,6 +936,8 @@ function Phantom_Frost_Armor_Watch(agent thisagent)
 
 declare
 \tagent attacker;
+\tagent hostile;
+\tinteger attack_range;
 
 begin
 \tIf ($isdead(thisagent))
@@ -958,7 +960,19 @@ begin
 \tIf ($ListSize(thisagent's "Hostiles") == 0)
 \t\treturn;
 
-\tattacker = $ListMember(thisagent's "Hostiles", 1);
+\tattacker = $NullAgent();
+\tForeach hostile in thisagent's "Hostiles" do
+\t\tbegin
+\t\t\tIf ($notvalid(attacker))
+\t\t\t\tIf ($isvalidgamepiece(hostile))
+\t\t\t\t\tIf (hostile's "Target" == thisagent)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tattack_range = $GetAttribute(hostile, #ATTRIB_MaxAttackRange);
+\t\t\t\t\t\t\tIf ($DistanceBetweenAgents(hostile, thisagent) <= attack_range + 24)
+\t\t\t\t\t\t\t\tattacker = hostile;
+\t\t\t\t\t\tend
+\t\tend
+
 \t$ClearList(thisagent's "Hostiles");
 
 \tIf ($notvalid(attacker))

@@ -1358,7 +1358,11 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         "If ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))",
         'If (thisagent\'s "Reborn_Counter" != 1)',
         'If ($CheckEffector(thisagent, "frost_armor_effector") == False)',
-        'attacker = $ListMember(thisagent\'s "Hostiles", 1);',
+        'Foreach hostile in thisagent\'s "Hostiles" do',
+        'If (hostile\'s "Target" == thisagent)',
+        'attack_range = $GetAttribute(hostile, #ATTRIB_MaxAttackRange);',
+        '$DistanceBetweenAgents(hostile, thisagent) <= attack_range + 24',
+        '$ClearList(thisagent\'s "Hostiles");',
         'thisagent\'s "Reborn_Counter" = 2;',
         '$DeleteEffector(thisagent, "frost_armor_effector");',
         'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")',
@@ -1386,14 +1390,18 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: Frost Armor behavior contract is missing {missing_gpl}")
 
     consume = gpl.index('thisagent\'s "Reborn_Counter" = 2;')
+    incoming_filter = gpl.index('If (hostile\'s "Target" == thisagent)')
+    range_filter = gpl.index(
+        '$DistanceBetweenAgents(hostile, thisagent) <= attack_range + 24'
+    )
     building_guard = gpl.index(
         'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")'
     )
     freeze = gpl.index("$Frost_Armor_Freeze(attacker);")
-    if not consume < building_guard < freeze:
+    if not incoming_filter < range_filter < consume < building_guard < freeze:
         fail(
-            f"{gpl_path}: Frost Armor must be consumed before the building/lair "
-            "freeze exclusion"
+            f"{gpl_path}: Frost Armor must validate an in-range incoming "
+            "attacker, consume, then apply the building/lair freeze exclusion"
         )
 
 
