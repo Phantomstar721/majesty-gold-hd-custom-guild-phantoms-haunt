@@ -20,10 +20,11 @@ This currently builds:
   - Phantom starter items are removed by `Phantom_death` before normal
     gravestone handling, and are marked non-droppable so leaving the realm
     through the palace deletes them instead of spawning them as ground loot.
-- Phantom baseline balance: `8` Vitality, `25` Magic Resistance, `25` Dodge,
-  and `180` conceptual base casting range. Artifice remains `8`; Majesty uses
-  it for equipment-shopping choices, stealing checks, and Gambling Hall
-  fallback rolls, not spell damage, casting speed, range, or cooldown.
+- Phantom baseline balance: `8` Vitality, `8` Strength, `25` Magic Resistance,
+  `25` Dodge, and `180` conceptual base casting range. Artifice remains `8`;
+  Majesty uses it for equipment-shopping choices, stealing checks, and
+  Gambling Hall fallback rolls, not spell damage, casting speed, range, or
+  cooldown.
 - Generated placeholder voice/soundbite WAVs.
 - Wizard-style hero stats and Wizard decision-tree behavior through
   `Phantom_tree`.
@@ -386,12 +387,13 @@ Initial Black Icerod Parry tests appeared to implicate both `AdjustAttribute`
 and `MagicalAdjustAttribute`, including a version deferred until after birth.
 The actual common failure was removing the old `+8` weapon damage while the
 Phantom's base weapon damage was `0`. Stock `target_eval` divides enemy HP by
-`hero_damage`; for this Strength-2 caster, `hero_damage` was also `0`, causing
-the crash on entering combat. The Phantom now has an internal base weapon
-damage floor of `1` solely to keep stock AI evaluation valid. Ice Lance damage
-remains its independent fixed value, and the Icerod itself grants only `+5`
-Parry. Package validation rejects a zero weapon-damage floor and the old rod
-weapon-damage bonus.
+`hero_damage`; for the original Strength-2 caster, `hero_damage` was also `0`,
+causing the crash on entering combat. Majesty's `strength_div` is `8`, so the
+Phantom now uses Strength `8` with base weapon damage `0`. Integer division
+therefore supplies the required `hero_damage` floor of `1` without a hidden
+weapon stat. Ice Lance damage remains its independent fixed value, and the
+Icerod itself grants only `+5` Parry. Package validation requires this safe
+Strength threshold and rejects the old rod weapon-damage bonus.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to

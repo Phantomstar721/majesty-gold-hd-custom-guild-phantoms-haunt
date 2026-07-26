@@ -1415,9 +1415,10 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     stat_contract = (
         '<Vitality value="8"/>',
         '<MagicResistance value="25"/>',
+        '<Strength value="8"/>',
         '<Parry value="20"/>',
         '<Dodge value="25"/>',
-        '<WeaponBasicDamage value="1"/>',
+        '<WeaponBasicDamage value="0"/>',
         '<ArmorBasicDamage value="0"/>',
     )
     missing_stats = [value for value in stat_contract if value not in units]
@@ -1446,10 +1447,10 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         )
     if "#ATTRIB_Weapon_Basic_Damage, 8" in gpl:
         fail(f"{gpl_path}: old Black Icerod weapon-damage bonus is still present")
-    if '<WeaponBasicDamage value="0"/>' in units:
+    if '<Strength value="8"/>' not in units:
         fail(
-            f"{units_path}: zero weapon damage makes stock target evaluation "
-            "divide by zero for the low-Strength Phantom"
+            f"{units_path}: Strength must be at least strength_div (8) when "
+            "weapon damage is zero, or stock target evaluation divides by zero"
         )
     if "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);" in gpl:
         fail(f"{gpl_path}: old Frozen Cowl +1 bonus is still present")

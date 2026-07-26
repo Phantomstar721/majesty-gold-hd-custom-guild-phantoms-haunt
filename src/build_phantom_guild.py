@@ -222,12 +222,12 @@ def phantom_units_xml() -> str:
 \t\t\t<Artifice value="8"/>
 \t\t\t<WillPower value="22"/>
 \t\t\t<Intelligence value="24"/>
-\t\t\t<Strength value="2"/>
+\t\t\t<Strength value="8"/>
 \t\t\t<MagicResistance value="25"/>
 \t\t\t<Attack value="30"/>
 \t\t\t<Parry value="20"/>
 \t\t\t<Dodge value="25"/>
-\t\t\t<WeaponBasicDamage value="1"/>
+\t\t\t<WeaponBasicDamage value="0"/>
 \t\t\t<ArmorBasicDamage value="0"/>
 \t\t\t<RecruitDelay value="1000"/>
 \t\t\t<PrimaryStat value="2"/>
