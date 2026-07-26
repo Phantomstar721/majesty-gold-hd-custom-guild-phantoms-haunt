@@ -479,13 +479,19 @@ The impact art must be palette-remapped into a palette included by
 
 Phantoms automatically learn Frost Armor at level 3. `Phantom_tree` checks for
 nearby enemies before entering the normal Wizard combat tree and casts the ward
-on itself whenever it is learned, unspent, and inactive. The active ward has an
-effectively scenario-long duration (`86400000` milliseconds, or 24 real hours)
-and displays a rotating octahedral ice crystal above the Phantom. Majesty does
-not treat effector duration `0` as infinite: it lets the overlay expire with
-its natural animation, which also removes the active/spent state and causes the
-AI to cast repeatedly. Every persistent Frost Armor effector therefore uses
-the same explicit non-zero duration.
+on itself whenever it is learned, unspent, and inactive. Ready, active, and
+spent are stored as `0`, `1`, and `2` in the Phantom's otherwise unused
+`Reborn_Counter` hero field. Stock code only changes that field for Healers, so
+it gives the custom hero durable per-agent state without tying spell selection
+to an overlay timer. The field is reset during Phantom birth and death; a
+future Phantom rebirth mechanic must migrate Frost Armor to a different field.
+
+The rotating octahedral crystal is visual-only. It receives the longest
+duration used by a stock action (`180000` milliseconds), and the Phantom-owned
+watcher recreates it if that animation expires while state is still active.
+Majesty does not treat effector duration `0` as infinite: it lets an overlay
+expire with its natural animation. Visual renewal therefore never decides
+whether the armor can be cast and never owns the armor-stat cleanup.
 
 Frost Armor adds `10000` basic-damage armor while active, making the first
 ordinary weapon attack deal zero damage. The Phantom's existing `Hostiles`
@@ -505,8 +511,8 @@ absorbed, but are not Frozen. Each size-specific casing is also explicitly
 given the same three-second lifetime as the controlling frozen timer; duration
 `0` is not used for persistent spell visuals.
 
-The spent state is a separate invisible, infinite-duration overlay. Entering a
-home building replaces the stock rest activity with a thin wrapper around
+The spent state is the durable state value `2`. Entering a home building
+replaces the stock rest activity with a thin wrapper around
 `Rest_At_Guild`; once the Phantom reaches full health, the wrapper deletes the
 spent marker. Inns and Gazebos share Majesty's `rest_at_inn` full-heal path, so
 the Phantom-owned watcher also recharges the armor when either finishes and

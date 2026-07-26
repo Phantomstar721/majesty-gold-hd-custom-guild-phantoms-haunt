@@ -1299,7 +1299,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     actions = actions_path.read_text(encoding="utf-8")
     action_contract = (
         'ID="WRa3" Name="frost_armor"',
-        '<EffectorDuration value="86400000"/>',
+        '<EffectorDuration value="21000"/>',
         '<SpellType value="CombatUtility"/>',
         '<CharacterLevel value="3"/>',
         '<ValidationScript value="Frost_Armor_Check"/>',
@@ -1319,7 +1319,6 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         'ID="PHo1" Name="frost_armor_effector"',
         '<ImageIDBase value="PHf1"/>',
         'ID="PHo2" Name="frost_armor_icon"',
-        'GPLFunction="Frost_Armor_End"',
         'ID="PHo6" Name="frost_armor_spent"',
         'ID="PHo7" Name="frost_armor_frozen_timer"',
         'GPLFunction="Frost_Armor_Frozen_End"',
@@ -1345,15 +1344,17 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         "If ($Phantom_Try_Frost_Armor(thisagent) == False)",
         "$Wizard_tree(thisagent);",
         "function Frost_Armor_Begin(agent thisagent, agent target)",
-        '$createeffector(thisagent, "frost_armor_effector", $GetSpellAttribute("frost_armor", "effector_duration"));',
-        '$createeffector(thisagent, "frost_armor_icon", $GetSpellAttribute("frost_armor", "effector_duration"));',
-        '$createeffector(thisagent, "frost_armor_spent", $GetSpellAttribute("frost_armor", "effector_duration"));',
+        'thisagent\'s "Reborn_Counter" = 1;',
+        '$createeffector(thisagent, "frost_armor_effector", 180000);',
         "#ATTRIB_Armor_Basic_Damage, 10000",
         '$clearlist(thisagent\'s "Hostiles");',
         "function Phantom_Frost_Armor_Watch(agent thisagent)",
         "$Phantom_Frost_Armor_Recharge_Check(thisagent);",
+        'If (thisagent\'s "Reborn_Counter" != 1)',
+        'If ($CheckEffector(thisagent, "frost_armor_effector") == False)',
         'attacker = $ListMember(thisagent\'s "Hostiles", 1);',
-        '$DeleteEffector(thisagent, "frost_armor_icon");',
+        'thisagent\'s "Reborn_Counter" = 2;',
+        '$DeleteEffector(thisagent, "frost_armor_effector");',
         'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")',
         "$Frost_Armor_Freeze(attacker);",
         "$Freeze_Unit(target);",
@@ -1363,18 +1364,19 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         '$CreateEffector(target, "frost_armor_frozen_timer", 3000);',
         "$UnFreeze_Unit(thisagent);",
         "function Phantom_Frost_Armor_Recharge_Check(agent thisagent)",
+        'If (thisagent\'s "Reborn_Counter" != 2)',
         "$InsideBuilding(thisagent) == False",
         'thisagent\'s "ActiveScript" == $Done_resting_inn',
         'thisagent\'s "ActiveScript" == $Done_resting_guild',
         "function Phantom_Rest_At_Guild(agent thisagent)",
         "$Rest_At_Guild(thisagent);",
-        '$DeleteEffector(thisagent, "frost_armor_spent");',
+        'thisagent\'s "Reborn_Counter" = 0;',
     )
     missing_gpl = [value for value in gpl_contract if value not in gpl]
     if missing_gpl:
         fail(f"{gpl_path}: Frost Armor behavior contract is missing {missing_gpl}")
 
-    consume = gpl.index('$DeleteEffector(thisagent, "frost_armor_icon");')
+    consume = gpl.index('thisagent\'s "Reborn_Counter" = 2;')
     building_guard = gpl.index(
         'If (attacker\'s "Type" == "Building" || attacker\'s "Type" == "Lair")'
     )

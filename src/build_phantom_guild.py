@@ -351,7 +351,7 @@ def phantom_actions_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<Flags value="IsSpell"/>
-\t\t\t<EffectorDuration value="86400000"/>
+\t\t\t<EffectorDuration value="21000"/>
 \t\t\t<TimeoutDuration value="1000"/>
 \t\t\t<SpellType value="CombatUtility"/>
 \t\t\t<CharacterLevel value="3"/>
@@ -435,7 +435,6 @@ def phantom_overlays_xml() -> str:
 \t\t\t<Info value="NotVisibleInISOView"/>
 \t\t\t<Menu value="11"/>
 \t\t\t<ImageIDBase value="PHo3"/>
-\t\t\t<Script type="0" cProc="0" GPLFunction="Frost_Armor_End"/>
 \t\t\t<DefaultSound value="0"/>
 \t\t</Engine>
 \t\t<Game version="1">
@@ -750,6 +749,7 @@ begin
 \t$hero_birth(thisagent);
 \t$Phantom_grant_starter_items(thisagent);
 \t$LearnSpell(thisagent, "ice_lance");
+\tthisagent's "Reborn_Counter" = 0;
 \tthisagent's "QuestScript" = $Phantom_Frost_Armor_Watch;
 \t$NewThread(thisagent's "QuestScript", 100, thisagent);
 end
@@ -834,6 +834,12 @@ function Phantom_death(agent thisagent)
 declare
 
 begin
+\tIf (thisagent's "Reborn_Counter" == 1)
+\t\tbegin
+\t\t\t$DeleteEffector(thisagent, "frost_armor_effector");
+\t\t\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);
+\t\tend
+\tthisagent's "Reborn_Counter" = 0;
 \t$Phantom_remove_starter_items(thisagent);
 \t$gravestone(thisagent);
 end
@@ -862,26 +868,13 @@ begin
 \tIf ($isdead(thisagent))
 \t\treturn;
 
-\tIf ($CheckEffector(thisagent, "frost_armor_icon"))
+\tIf (thisagent's "Reborn_Counter" != 0)
 \t\treturn;
 
-\tIf ($CheckEffector(thisagent, "frost_armor_spent"))
-\t\treturn;
-
-\t$createeffector(thisagent, "frost_armor_effector", $GetSpellAttribute("frost_armor", "effector_duration"));
-\t$createeffector(thisagent, "frost_armor_icon", $GetSpellAttribute("frost_armor", "effector_duration"));
-\t$createeffector(thisagent, "frost_armor_spent", $GetSpellAttribute("frost_armor", "effector_duration"));
+\tthisagent's "Reborn_Counter" = 1;
+\t$createeffector(thisagent, "frost_armor_effector", 180000);
 \t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10000);
 \t$clearlist(thisagent's "Hostiles");
-end
-
-function Frost_Armor_End(agent thisagent)
-
-declare
-
-begin
-\t$DeleteEffector(thisagent, "frost_armor_effector");
-\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);
 end
 
 function Frost_Armor_Check(agent thisagent) is integer
@@ -892,10 +885,7 @@ begin
 \tIf ($isdead(thisagent))
 \t\treturn 0;
 
-\tIf ($CheckEffector(thisagent, "frost_armor_icon"))
-\t\treturn 0;
-
-\tIf ($CheckEffector(thisagent, "frost_armor_spent"))
+\tIf (thisagent's "Reborn_Counter" != 0)
 \t\treturn 0;
 
 \treturn 1;
@@ -938,8 +928,11 @@ begin
 
 \t$Phantom_Frost_Armor_Recharge_Check(thisagent);
 
-\tIf ($CheckEffector(thisagent, "frost_armor_icon") == False)
+\tIf (thisagent's "Reborn_Counter" != 1)
 \t\treturn;
+
+\tIf ($CheckEffector(thisagent, "frost_armor_effector") == False)
+\t\t$CreateEffector(thisagent, "frost_armor_effector", 180000);
 
 \tIf ($ListSize(thisagent's "Hostiles") == 0)
 \t\treturn;
@@ -950,7 +943,9 @@ begin
 \tIf ($notvalid(attacker))
 \t\treturn;
 
-\t$DeleteEffector(thisagent, "frost_armor_icon");
+\tthisagent's "Reborn_Counter" = 2;
+\t$DeleteEffector(thisagent, "frost_armor_effector");
+\t$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);
 \t$CreateEffector(thisagent, "ice_lance_hit_effector", 0);
 
 \tIf (attacker's "Type" == "Building" || attacker's "Type" == "Lair")
@@ -964,7 +959,7 @@ function Phantom_Frost_Armor_Recharge_Check(agent thisagent)
 declare
 
 begin
-\tIf ($CheckEffector(thisagent, "frost_armor_spent") == False)
+\tIf (thisagent's "Reborn_Counter" != 2)
 \t\treturn;
 
 \tIf ($InsideBuilding(thisagent) == False)
@@ -975,7 +970,7 @@ begin
 
 \tIf (thisagent's "ActiveScript" == $Done_resting_inn ||
 \t\tthisagent's "ActiveScript" == $Done_resting_guild)
-\t\t$DeleteEffector(thisagent, "frost_armor_spent");
+\t\tthisagent's "Reborn_Counter" = 0;
 end
 
 function Frost_Armor_Freeze(agent target)
@@ -1043,8 +1038,8 @@ begin
 \t$Rest_At_Guild(thisagent);
 
 \tIf ($GetAttribute(thisagent, #ATTRIB_HP) == $GetAttribute(thisagent, #ATTRIB_MaxHP))
-\t\tIf ($CheckEffector(thisagent, "frost_armor_spent"))
-\t\t\t$DeleteEffector(thisagent, "frost_armor_spent");
+\t\tIf (thisagent's "Reborn_Counter" == 2)
+\t\t\tthisagent's "Reborn_Counter" = 0;
 end
 
 function Blizzard_Check(agent thisagent) is integer
