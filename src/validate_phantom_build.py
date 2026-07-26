@@ -400,7 +400,7 @@ def validate_indexed_item_strings(path: Path, data: bytes) -> None:
         fail(f"{path}: STRT/QITM has {count} strings; item IDs 80 and 81 require at least 82")
     expected_items = (
         (80, b"Frozen Cowl\n\x01FFDDAA(+2 armor)"),
-        (81, b"Black Icerod\n\x01FFDDAA(+5 parry)"),
+        (81, b"Black Icerod\n\x01FFDDAA(+8 damage)"),
     )
     for item_id, expected_text in expected_items:
         offset = struct.unpack_from("<I", data, 4 + item_id * 4)[0]
@@ -1425,15 +1425,13 @@ def validate_frost_armor_contract(output_root: Path) -> None:
 
     item_contract = (
         '$AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);',
-        '$AdjustAttribute (thisagent, #ATTRIB_Parry, 5);',
+        '#ATTRIB_Weapon_Basic_Damage, 8',
     )
     missing_items = [value for value in item_contract if value not in gpl]
     if missing_items:
         fail(f"{gpl_path}: Phantom starter-item bonuses are missing {missing_items}")
-    if "$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 5);" in gpl:
-        fail(f"{gpl_path}: Black Icerod still uses the failed magical Parry path")
-    if "#ATTRIB_Weapon_Basic_Damage, 8" in gpl:
-        fail(f"{gpl_path}: obsolete Black Icerod weapon damage is still present")
+    if "#ATTRIB_Parry, 5" in gpl:
+        fail(f"{gpl_path}: unstable Black Icerod Parry adjustment is present")
     if "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 1);" in gpl:
         fail(f"{gpl_path}: old Frozen Cowl +1 bonus is still present")
     if 'thisagent\'s "castingrange" +=' in gpl:
