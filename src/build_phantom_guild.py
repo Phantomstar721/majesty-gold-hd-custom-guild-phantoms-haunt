@@ -225,7 +225,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Strength value="2"/>
 \t\t\t<MagicResistance value="25"/>
 \t\t\t<Attack value="30"/>
-\t\t\t<Parry value="20"/>
+\t\t\t<Parry value="25"/>
 \t\t\t<Dodge value="25"/>
 \t\t\t<WeaponBasicDamage value="0"/>
 \t\t\t<ArmorBasicDamage value="0"/>
@@ -771,7 +771,6 @@ begin
 \tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
-\t\t\t$adjustattribute(thisagent, #ATTRIB_Parry, 5);
 \t\tend
 end
 

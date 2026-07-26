@@ -19,9 +19,9 @@ This currently builds:
     gravestone handling, and are marked non-droppable so leaving the realm
     through the palace deletes them instead of spawning them as ground loot.
 - Phantom baseline balance: `8` Vitality, `25` Magic Resistance, `25` Dodge,
-  and `180` conceptual base casting range. Artifice remains `8`; Majesty uses it for
-  equipment-shopping choices, stealing checks, and Gambling Hall fallback
-  rolls, not spell damage, casting speed, range, or cooldown.
+  and `180` conceptual base casting range. Artifice remains `8`; Majesty uses
+  it for equipment-shopping choices, stealing checks, and Gambling Hall
+  fallback rolls, not spell damage, casting speed, range, or cooldown.
 - Generated placeholder voice/soundbite WAVs.
 - Wizard-style hero stats and Wizard decision-tree behavior through
   `Phantom_tree`.
@@ -382,6 +382,11 @@ access violation when `attack_object` began. Majesty stores casting range on
 the hero rather than the individual spell, so this technically applies to the
 Phantom's complete spell kit; Frost Armor is self-targeted and Blizzard is
 caster-centered, making Ice Lance the only current spell materially affected.
+
+Black Icerod's conceptual `+5` Parry is represented by an effective `25` in
+the Phantom's unit data. As with casting range, every Phantom receives the
+non-droppable item, so storing the equipped total directly avoids an additional
+birth-time attribute mutation while preserving the intended starting value.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to

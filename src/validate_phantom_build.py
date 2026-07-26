@@ -1414,6 +1414,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     stat_contract = (
         '<Vitality value="8"/>',
         '<MagicResistance value="25"/>',
+        '<Parry value="25"/>',
         '<Dodge value="25"/>',
     )
     missing_stats = [value for value in stat_contract if value not in units]
@@ -1422,11 +1423,12 @@ def validate_frost_armor_contract(output_root: Path) -> None:
 
     item_contract = (
         '#ATTRIB_Armor_Basic_Damage, 2',
-        '#ATTRIB_Parry, 5',
     )
     missing_items = [value for value in item_contract if value not in gpl]
     if missing_items:
         fail(f"{gpl_path}: Phantom starter-item bonuses are missing {missing_items}")
+    if "#ATTRIB_Parry, 5" in gpl:
+        fail(f"{gpl_path}: Black Icerod still mutates Parry at runtime")
     if 'thisagent\'s "castingrange" +=' in gpl:
         fail(f"{gpl_path}: unsafe runtime casting-range mutation is present")
 
