@@ -1346,7 +1346,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     gpl = gpl_path.read_text(encoding="utf-8")
     gpl_contract = (
         "If ($Phantom_Try_Frost_Armor(thisagent) == False)",
-        "$Phantom_Wizard_Tree(thisagent);",
+        "$Wizard_tree(thisagent);",
         "function Frost_Armor_Begin(agent thisagent, agent target)",
         'thisagent\'s "Reborn_Counter" = 1;',
         '$createeffector(thisagent, "frost_armor_effector", 180000);',
@@ -1395,6 +1395,10 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: Frost Armor behavior contract is missing {missing_gpl}")
     if "$Phantom_Ensure_Frost_Armor_Passive" in gpl:
         fail(f"{gpl_path}: level-1 Frost Armor watcher still invokes passive armor")
+    if "$Phantom_Wizard_Tree" in gpl or "$Phantom_Purchase_Equipment" in gpl:
+        fail(
+            f"{gpl_path}: unstable local Wizard-tree potion wrapper is still present"
+        )
     if 'targets = $compile_enemies(thisagent, thisagent\'s "castingrange");' in gpl:
         fail(
             f"{gpl_path}: Frost Armor combat detection is incorrectly limited "
@@ -1474,81 +1478,6 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: experimental passive-armor item state is still present")
 
 
-def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
-    gpl_path = output_root / "GPL" / "Phantom.gpl"
-    gpl = gpl_path.read_text(encoding="utf-8")
-    contract = (
-        "function Phantom_Wizard_Tree(agent thisagent)",
-        "If ($Phantom_Purchase_Equipment(thisagent) == False)",
-        "If ($Purchase_bazaar(thisagent, 70) == False)",
-        "function Phantom_Purchase_Equipment(agent thisagent) is boolean",
-        "stored_potions = $GetAttribute(thisagent, #ATTRIB_NumHealingPotions);",
-        "potion_mask = #Max_Heal_Potions - stored_potions;",
-        "$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, potion_mask);",
-        "purchased = $Purchase_equipment(thisagent);",
-        "$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, -potion_mask);",
-        "return purchased;",
-    )
-    missing = [value for value in contract if value not in gpl]
-    if missing:
-        fail(f"{gpl_path}: Phantom potion-purchase exclusion is missing {missing}")
-
-    tree = gpl.index("function Phantom_Wizard_Tree(agent thisagent)")
-    rest = gpl.index("If ($rest(thisagent) == False)", tree)
-    wrapped_equipment = gpl.index(
-        "If ($Phantom_Purchase_Equipment(thisagent) == False)", tree
-    )
-    bazaar = gpl.index("If ($Purchase_bazaar(thisagent, 70) == False)", tree)
-    wrapper = gpl.index(
-        "function Phantom_Purchase_Equipment(agent thisagent) is boolean"
-    )
-    save = gpl.index(
-        "stored_potions = $GetAttribute(thisagent, #ATTRIB_NumHealingPotions);",
-        wrapper,
-    )
-    calculate_mask = gpl.index(
-        "potion_mask = #Max_Heal_Potions - stored_potions;",
-        wrapper,
-    )
-    mask = gpl.index(
-        "$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, potion_mask);",
-        wrapper,
-    )
-    purchase = gpl.index("purchased = $Purchase_equipment(thisagent);", wrapper)
-    restore = gpl.index(
-        "$AdjustAttribute(thisagent, #ATTRIB_NumHealingPotions, -potion_mask);",
-        wrapper,
-    )
-    returned = gpl.index("return purchased;", wrapper)
-    if not (
-        tree
-        < rest
-        < wrapped_equipment
-        < bazaar
-        < wrapper
-        < save
-        < calculate_mask
-        < mask
-        < purchase
-        < restore
-        < returned
-    ):
-        fail(
-            f"{gpl_path}: Phantom potion mask must wrap only the stock "
-            "equipment decision and restore the real count before returning"
-        )
-    if "$SetAttribute(thisagent, #ATTRIB_NumHealingPotions" in gpl:
-        fail(
-            f"{gpl_path}: unsupported direct setter is used for the healing "
-            "potion counter"
-        )
-    if "$Wizard_tree(thisagent);" in gpl:
-        fail(
-            f"{gpl_path}: Phantom still calls the unwrapped Wizard tree and "
-            "can purchase healing potions"
-        )
-
-
 def validate(output_root: Path) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
@@ -1559,7 +1488,6 @@ def validate(output_root: Path) -> None:
     validate_phantom_item_cleanup(output_root)
     validate_ice_lance_contract(output_root)
     validate_frost_armor_contract(output_root)
-    validate_phantom_potion_purchase_contract(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:

@@ -27,8 +27,8 @@ This currently builds:
   Gambling Hall fallback rolls, not spell damage, casting speed, range, or
   cooldown.
 - Generated placeholder voice/soundbite WAVs.
-- Wizard-style hero stats and a Phantom-local copy of the Wizard decision tree
-  through `Phantom_tree`.
+- Wizard-style hero stats and Wizard decision-tree behavior through
+  `Phantom_tree`.
 - A Phantom-only `Ice Lance` spell entry, generated-source directional
   projectile and icon art, a copied Frost Field hit overlay, and a timed Chill
   debuff.
@@ -123,26 +123,16 @@ The current generator handles step 5 in `write_gpltext_cam()` by extending
 `QITM` through `patch_indexed_strt_strings()`. This was required to avoid
 `Unknown Item` in the hero Items panel.
 
-### Healing-potion purchase exclusion
-
-Both Marketplaces and Trading Posts reach ordinary healing-potion purchases
-through the stock `Potion_Check` inside `Purchase_Equipment`. Phantoms use a
-local mirror of the expansion Wizard decision tree so its equipment step can
-call `Phantom_Purchase_Equipment`. That wrapper saves the Phantom's actual
-`NumHealingPotions`, temporarily adjusts it up to `Max_Heal_Potions`, calls the
-complete stock equipment routine, then subtracts exactly the temporary amount.
-The wrapper uses `AdjustAttribute`, matching every stock mutation of this
-counter; a direct `SetAttribute` attempt left Phantoms permanently stuck in
-their thinking state. Stock
-`Potion_Check` therefore sees a full potion inventory and declines the
-purchase, while weapon and armor upgrades, rings, level-three market items,
-Fairgrounds boosts, and all later Wizard decisions remain available.
-
-The Magic Bazaar does not sell ordinary healing potions. Rangers have
-class-specific herb behavior, and a few quest scripts grant potions directly,
-but neither is part of normal Phantom behavior. This change intentionally
-blocks Marketplace and Trading Post purchasing; it does not yet make healing
-or potion use mechanically ineffective if a quest gives a Phantom potions.
+Healing-potion shopping is centralized in stock `Potion_Check`, called from
+`Purchase_Equipment` for both Marketplaces and Trading Posts. Two attempts to
+mask the Phantom's potion count through a copied Wizard tree and a custom
+equipment wrapper left the hero permanently stuck in its thinking state. The
+second attempt used the stock `AdjustAttribute` counter mutation and still
+failed, proving that the custom tree/wrapper interception itself is unsafe.
+The current build has fully restored the stock `Wizard_tree`; do not retry
+that interception. A future exclusion must operate through a verified
+class-aware stock hook or a safely compiled replacement of the specific stock
+purchase function.
 
 Do not use the earlier birth-thread transfer approach for Phantom starter gear.
 Creating string-named custom inventory items through a delayed hero thread was
@@ -815,9 +805,9 @@ Checkpoint recorded July 25, 2026:
 - Tomorrow's desired gameplay/mechanics checklist:
   - Preserve or deliberately implement Frozen Cowl and Black Icerod dropping
     when a Phantom leaves the realm through the palace.
-  - Healing-potion purchasing at Marketplaces and Trading Posts is now blocked;
-    next make ordinary healing and any externally granted healing potions
-    ineffective on Phantoms.
+  - Prevent Phantoms from buying healing potions at Marketplaces and Trading
+    Posts, then make ordinary healing and any externally granted healing
+    potions ineffective on Phantoms.
   - Allow Priestess healing casts to heal Phantoms as the intended exception.
   - Prevent Phantoms and Paladins from existing in the same realm.
   - Design and implement the Phantom spells `Icy Touch` and `Blizzard`.
