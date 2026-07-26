@@ -15,9 +15,8 @@ This currently builds:
 - Custom Phantom starter special items:
   - `Frozen Cowl`, item ID `80`, grants `+2` physical armor using the same
     `AdjustAttribute(Armor_Basic_Damage)` path as Majesty's Ring of Protection.
-  - `Black Icerod`, item ID `81`, displays `+5 parry`. Its bonus is applied by
-    a guarded one-shot thread one second after birth, after the inventory and
-    hero initialization paths have completed.
+  - `Black Icerod`, item ID `81`, displays and grants `+5 parry` through the
+    same `MagicalAdjustAttribute(Parry)` path as Majesty's Ring of Protection.
   - Phantom starter items are removed by `Phantom_death` before normal
     gravestone handling, and are marked non-droppable so leaving the realm
     through the palace deletes them instead of spawning them as ground loot.
@@ -383,13 +382,16 @@ affected. Custom special items are stored as inventory IDs and do not
 automatically transfer XML attributes to their owner. Frozen Cowl therefore
 uses the stock Ring-of-Protection pattern to apply `+2` basic-damage armor when
 granted. The Cowl passed combat, treasure, and gold tests independently.
-Black Icerod Parry tests crashed with both `AdjustAttribute` and
-`MagicalAdjustAttribute` when invoked during the birth-time item grant, so the
-Icerod now uses ordinary `AdjustAttribute` from a one-shot `RunThread` delayed
-by one second. The deferred function first verifies that the Phantom is alive
-and still owns the rod. Because it is scheduled only once by `Phantom_birth`,
-the bonus cannot recur or stack during normal hero behavior. Package validation
-also requires the delayed ordering and rejects the old weapon-damage bonus.
+Initial Black Icerod Parry tests appeared to implicate both `AdjustAttribute`
+and `MagicalAdjustAttribute`, including a version deferred until after birth.
+The actual common failure was removing the old `+8` weapon damage while the
+Phantom's base weapon damage was `0`. Stock `target_eval` divides enemy HP by
+`hero_damage`; for this Strength-2 caster, `hero_damage` was also `0`, causing
+the crash on entering combat. The Phantom now has an internal base weapon
+damage floor of `1` solely to keep stock AI evaluation valid. Ice Lance damage
+remains its independent fixed value, and the Icerod itself grants only `+5`
+Parry. Package validation rejects a zero weapon-damage floor and the old rod
+weapon-damage bonus.
 
 On a non-building target, `Ice_Lance_Hit` creates the original invisible
 `ice_lance_chill_icon` timer for three seconds and adds `50` to

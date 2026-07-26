@@ -227,7 +227,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Attack value="30"/>
 \t\t\t<Parry value="20"/>
 \t\t\t<Dodge value="25"/>
-\t\t\t<WeaponBasicDamage value="0"/>
+\t\t\t<WeaponBasicDamage value="1"/>
 \t\t\t<ArmorBasicDamage value="0"/>
 \t\t\t<RecruitDelay value="1000"/>
 \t\t\t<PrimaryStat value="2"/>
@@ -752,7 +752,6 @@ begin
 \tthisagent's "Reborn_Counter" = 0;
 \tthisagent's "QuestScript" = $Phantom_Frost_Armor_Watch;
 \t$NewThread(thisagent's "QuestScript", 100, thisagent);
-\t$RunThread($Phantom_Apply_Icerod_Parry, 1000, thisagent);
 end
 
 function Phantom_grant_starter_items (agent thisagent)
@@ -772,21 +771,8 @@ begin
 \tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
 \t\tbegin
 \t\t\t$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
+\t\t\t$MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);
 \t\tend
-end
-
-function Phantom_Apply_Icerod_Parry (agent thisagent)
-
-declare
-
-begin
-\tIf ($isdead(thisagent))
-\t\treturn;
-
-\tIf ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent) == False)
-\t\treturn;
-
-\t$AdjustAttribute (thisagent, #ATTRIB_Parry, 5);
 end
 
 function Ice_Lance_Cast(agent thisagent, agent target)
