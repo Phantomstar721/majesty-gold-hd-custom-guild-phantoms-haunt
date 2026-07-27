@@ -574,7 +574,7 @@ aligned.
 
 Casting range belongs to the hero rather than the individual spell, so the
 Icerod technically affects the Phantom's complete spell kit; Frost Armor is
-self-targeted and Blizzard is caster-centered. Icy Touch deliberately uses its
+self-targeted and Endless Winter is caster-centered. Icy Touch deliberately uses its
 fixed `24`-unit melee gate, so the Icerod's casting-range bonus affects Ice
 Lance but does not extend Icy Touch. Custom special items are stored as
 inventory IDs and do not automatically transfer XML attributes to their owner.
@@ -1157,7 +1157,7 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
 - `Frost Armor` still needs its remaining balance and placement pass. Earlier
   crashes overlapped an Icerod version that removed its stable weapon damage;
   the current Icerod keeps that damage while adding Parry through the stock
-  Ring of Protection mutation. `Blizzard` still needs its dedicated
+  Ring of Protection mutation. `Endless Winter` still needs its dedicated
   implementation pass.
 - The Phantoms Haunt borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
@@ -1186,6 +1186,14 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   records were too short.
 - Phantom retreat and combat estimates are temporarily set to a fearless
   testing profile so spell behavior can be exercised without frequent retreat.
+  Threat selection now uses stock `eval_enemies_nearby`, so Phantoms no longer
+  inherit the Wizard's unconditional fear of targets above `60` Magic
+  Resistance or targets protected by Magic Mirror. Stock
+  `spell_extra_value` retains all eight stock weights and adds Phantom-only
+  confidence for learned custom spells: Ice Lance `10`, Frost Armor `10`, Icy
+  Touch `25`, Call to Grave `10`, and Endless Winter `30`. Eternal Soul's
+  future level-6 weight is reserved as `25` but is not queried until its real
+  action exists.
 - Ice Lance now has final-path generated-source projectile/icon art, 32 packaged
   directions, `8` damage, `180` conceptual base / `190` Icerod-equipped Phantom
   casting range, native impact animation, and a centralized three-second
@@ -1250,7 +1258,7 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   purchases while retaining other shop decisions.
 - Next: retest Frost Armor attack detection, building consumption, ranged
   retaliation, rest recharge, and effect placement with the stable Icerod
-  build before continuing to Blizzard.
+  build before continuing to Endless Winter.
 - Tomorrow's desired gameplay/mechanics checklist:
   - Verify Frozen Cowl, Black Icerod, and the Frost Armor marker are destroyed
     rather than dropped when a Phantom leaves through the palace.
@@ -1260,7 +1268,7 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
     Phantoms.
   - Allow Priestess healing casts to heal Phantoms as the intended exception.
   - Prevent Phantoms and Paladins from existing in the same realm.
-  - Design and implement `Blizzard`.
+  - Design and implement `Endless Winter`.
 
 ## Build
 

@@ -1474,10 +1474,13 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
         "(PercentageHPRetreat 0)",
         "(enemy_estimation 0.1)",
         "(self_estimation 10.0)",
+        "(evaluationScript\teval_enemies_nearby)",
     )
     missing = [value for value in fearless_values if value not in hero_data]
     if missing:
         fail(f"{hero_data_path}: fearless testing profile is missing {missing}")
+    if "(evaluationScript\twizard_eval_nearby)" in hero_data:
+        fail(f"{hero_data_path}: Phantom still uses the Wizard threat evaluator")
 
     generated_text = "\n".join((manifest, units, sounds, building_data, hero_data))
     for stale_name in ("Phantoms Guild", "Phantoms_Guild", "Phantom_Guild"):
@@ -1724,7 +1727,7 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         '<Description type="Action" subType="Standard" ID="WRa4" Name="icy_touch"'
     )
     blizzard_start = actions.index(
-        '<Description type="Action" subType="Standard" ID="WRa5" Name="blizzard"',
+        '<Description type="Action" subType="Standard" ID="WRa5" Name="endless_winter"',
         icy_start,
     )
     icy_action = actions[icy_start:blizzard_start]
@@ -2376,6 +2379,98 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: experimental passive-armor item state is still present")
 
 
+def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    confidence_start = gpl.index(
+        "function spell_extra_value(agent thisagent) is integer"
+    )
+    confidence_end = gpl.index("\nfunction DEAL_DEMON()", confidence_start)
+    confidence = gpl[confidence_start:confidence_end]
+
+    expressions = (
+        "expression #Phantom_Ice_Lance_Confidence 10",
+        "expression #Phantom_Frost_Armor_Confidence 10",
+        "expression #Phantom_Icy_Touch_Confidence 25",
+        "expression #Phantom_Call_To_Grave_Confidence 10",
+        "expression #Phantom_Eternal_Soul_Confidence 25",
+        "expression #Phantom_Endless_Winter_Confidence 30",
+    )
+    missing_expressions = [value for value in expressions if value not in gpl]
+    if missing_expressions:
+        fail(
+            f"{gpl_path}: Phantom spell-confidence weights are missing "
+            f"{missing_expressions}"
+        )
+
+    stock_contract = (
+        ("energy_blast", "10"),
+        ("fire_blast", "30"),
+        ("fire_ball", "30"),
+        ("teleport", "5"),
+        ("resist_magic", "5"),
+        ("meteor_storm", "30"),
+        ("drain_life", "30"),
+        ("sun_scorch", "30"),
+    )
+    missing_stock = [
+        spell
+        for spell, value in stock_contract
+        if (
+            f'if ($isspellavailable(thisagent,"{spell}",1))\n'
+            f"\t\tvalue += {value};"
+        )
+        not in confidence
+    ]
+    if missing_stock:
+        fail(
+            f"{gpl_path}: stock spell-confidence behavior changed for "
+            f"{missing_stock}"
+        )
+
+    phantom_contract = (
+        ("ice_lance", "#Phantom_Ice_Lance_Confidence"),
+        ("frost_armor", "#Phantom_Frost_Armor_Confidence"),
+        ("icy_touch", "#Phantom_Icy_Touch_Confidence"),
+        ("call_to_grave", "#Phantom_Call_To_Grave_Confidence"),
+        ("endless_winter", "#Phantom_Endless_Winter_Confidence"),
+    )
+    phantom_guard = confidence.index('if (thisagent\'s "Title" == "Phantom")')
+    for spell, value in phantom_contract:
+        check = f'if ($isspellavailable(thisagent,"{spell}",1))'
+        check_index = confidence.index(check)
+        value_index = confidence.index(f"value += {value};", check_index)
+        if not phantom_guard < check_index < value_index:
+            fail(
+                f"{gpl_path}: {spell} confidence is not contained in the "
+                "Phantom-only branch"
+            )
+
+    if '$isspellavailable(thisagent,"eternal_soul",1)' in confidence:
+        fail(
+            f"{gpl_path}: Eternal Soul availability is queried before its "
+            "level-6 action exists"
+        )
+
+    actions_path = output_root / "Data" / "phantom_actions.xml"
+    actions = actions_path.read_text(encoding="utf-8")
+    if (
+        'ID="WRa5" Name="endless_winter" Description="Endless Winter"'
+        not in actions
+    ):
+        fail(f"{actions_path}: level-7 placeholder is not named Endless Winter")
+    if 'Name="blizzard"' in actions:
+        fail(f"{actions_path}: obsolete Blizzard action name is still present")
+
+    units_path = output_root / "Data" / "phantom_units.xml"
+    units = units_path.read_text(encoding="utf-8")
+    if 'Value="endless_winter"' in units:
+        fail(
+            f"{units_path}: unfinished Endless Winter placeholder must not be "
+            "learnable before its implementation pass"
+        )
+
+
 def validate_call_to_grave_contract(output_root: Path) -> None:
     actions_path = output_root / "Data" / "phantom_actions.xml"
     actions = actions_path.read_text(encoding="utf-8")
@@ -2985,6 +3080,7 @@ def validate(output_root: Path) -> None:
     validate_ice_lance_contract(output_root)
     validate_icy_touch_contract(output_root)
     validate_frost_armor_contract(output_root)
+    validate_phantom_spell_confidence_contract(output_root)
     validate_call_to_grave_contract(output_root)
     validate_phantom_flee_home_contract(output_root)
     validate_phantom_potion_purchase_contract(output_root)

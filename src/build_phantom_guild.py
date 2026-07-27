@@ -472,7 +472,7 @@ def phantom_actions_xml() -> str:
 \t\t\t<ValidationScript value="Icy_Touch_Check"/>
 \t\t</Game>
 \t</Description>
-\t<Description type="Action" subType="Standard" ID="WRa5" Name="blizzard" Description="Blizzard">
+\t<Description type="Action" subType="Standard" ID="WRa5" Name="endless_winter" Description="Endless Winter">
 \t\t<Engine version="1">
 \t\t\t<ImageSet value="Cast"/>
 \t\t\t<CompletionImageSet value="Stand"/>
@@ -775,7 +775,7 @@ def phantom_hero_data() -> str:
 \t\t(Upgrade_Armor_Chance\t100)
 \t\t(Upgrade_Weapon_Chance\t100)
 \t\t(Poison_Weapon_Chance\t0)
-\t\t(evaluationScript\twizard_eval_nearby)
+\t\t(evaluationScript\teval_enemies_nearby)
 \t\t(activeScript\tPhantom_tree)
 \t\t(basicscript\tPhantom_tree)
 \t\t(StartingScript\tPhantom_tree)
@@ -847,7 +847,65 @@ def phantom_gpl() -> str:
     item_expressions += "\nexpression #Phantom_Icy_Touch_Range 24\n"
     item_expressions += "\nexpression #Phantom_Call_To_Grave_Range 50000\n"
     item_expressions += "\nexpression #Phantom_Call_To_Grave_Min_Distance 500\n"
+    item_expressions += "\nexpression #Phantom_Ice_Lance_Confidence 10\n"
+    item_expressions += "expression #Phantom_Frost_Armor_Confidence 10\n"
+    item_expressions += "expression #Phantom_Icy_Touch_Confidence 25\n"
+    item_expressions += "expression #Phantom_Call_To_Grave_Confidence 10\n"
+    item_expressions += "expression #Phantom_Eternal_Soul_Confidence 25\n"
+    item_expressions += "expression #Phantom_Endless_Winter_Confidence 30\n"
     return item_expressions + """
+
+function spell_extra_value(agent thisagent) is integer
+
+declare
+\tinteger value;
+
+begin
+\tif ($isspellavailable(thisagent,"energy_blast",1))
+\t\tvalue += 10;
+
+\tif ($isspellavailable(thisagent,"fire_blast",1))
+\t\tvalue += 30;
+
+\tif ($isspellavailable(thisagent,"fire_ball",1))
+\t\tvalue += 30;
+
+\tif ($isspellavailable(thisagent,"teleport",1))
+\t\tvalue += 5;
+
+\tif ($isspellavailable(thisagent,"resist_magic",1))
+\t\tvalue += 5;
+
+\tif ($isspellavailable(thisagent,"meteor_storm",1))
+\t\tvalue += 30;
+
+\tif ($isspellavailable(thisagent,"drain_life",1))
+\t\tvalue += 30;
+
+\tif ($isspellavailable(thisagent,"sun_scorch",1))
+\t\tvalue += 30;
+
+\tif (thisagent's "Title" == "Phantom")
+\t\tbegin
+\t\t\tif ($isspellavailable(thisagent,"ice_lance",1))
+\t\t\t\tvalue += #Phantom_Ice_Lance_Confidence;
+
+\t\t\tif ($isspellavailable(thisagent,"frost_armor",1))
+\t\t\t\tvalue += #Phantom_Frost_Armor_Confidence;
+
+\t\t\tif ($isspellavailable(thisagent,"icy_touch",1))
+\t\t\t\tvalue += #Phantom_Icy_Touch_Confidence;
+
+\t\t\tif ($isspellavailable(thisagent,"call_to_grave",1))
+\t\t\t\tvalue += #Phantom_Call_To_Grave_Confidence;
+
+\t\t\t// Eternal Soul is not queried until its level-6 action exists.
+\t\t\tif ($isspellavailable(thisagent,"endless_winter",1))
+\t\t\t\tvalue += #Phantom_Endless_Winter_Confidence;
+\t\tend
+
+\treturn value;
+end
 
 function DEAL_DEMON()
 
@@ -2431,7 +2489,7 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
             fourcc_id("WRa2"): "Ice Lance",
             fourcc_id("WRa3"): "Frost Armor",
             fourcc_id("WRa4"): "Icy Touch",
-            fourcc_id("WRa5"): "Blizzard",
+            fourcc_id("WRa5"): "Endless Winter",
             fourcc_id("WRa6"): "Call to Grave",
         },
     )
