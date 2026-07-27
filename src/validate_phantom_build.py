@@ -106,9 +106,12 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
             b"WRa2Ice Lance",
             b"PHp1fire_blast_M",
             b"WRa3Frost Armor",
-            b"WRa4Blizzard",
+            b"WRa4Icy Touch",
+            b"WRa5Blizzard",
             b"PHo3Ice Lance Hit",
             b"PHo4chill_icon",
+            b"PHg1Gravechill",
+            b"PHg2Gravechill Hit",
             b"PHf1Frost Crystal",
             b"PHf2Frozen Small",
             b"PHf3Frozen Medium",
@@ -146,6 +149,7 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Action", "WRa2"),
         ("Action", "WRa3"),
         ("Action", "WRa4"),
+        ("Action", "WRa5"),
     },
     "phantom_projectiles.xml": {("Unit", "PHp1")},
     "phantom_overlays.xml": {
@@ -159,6 +163,8 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHo8"),
         ("Unit", "PHo9"),
         ("Unit", "PH10"),
+        ("Unit", "PHg1"),
+        ("Unit", "PHg2"),
     },
     "phantom_sounds.xml": {
         ("Sound", "PH01"),
@@ -176,6 +182,8 @@ CUSTOM_TILE_OWNERS = {
     b"PHM1CastGlow": (b"PHM1Phantom", "low16"),
     b"PHo3IceTile": (b"PHo3Ice Lance Hit", "u32"),
     b"PHc1ChillTile": (b"PHo4chill_icon", "u32"),
+    b"PHg1Skull": (b"PHg1Gravechill", "u32"),
+    b"PHg2SkullHit": (b"PHg2Gravechill Hit", "u32"),
     b"PHf1Crystal": (b"PHf1Frost Crystal", "u32"),
     b"PHf2Frozen": (b"PHf2Frozen Small", "u32"),
     b"PHf3Frozen": (b"PHf3Frozen Medium", "u32"),
@@ -192,6 +200,8 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHM1CastGlow": 32,
     b"PHo3IceTile": 6,
     b"PHc1ChillTile": 29,
+    b"PHg1Skull": 29,
+    b"PHg2SkullHit": 6,
     b"PHf1Crystal": 29,
     b"PHf2Frozen": 29,
     b"PHf3Frozen": 29,
@@ -1123,6 +1133,7 @@ def validate_phantom_cast_tile_geometry(
 ) -> None:
     for direction in range(8):
         geometry: list[tuple[int, int, int]] = []
+        glow_centers_x2: list[tuple[int, int]] = []
         for stage in range(4):
             body_name = f"PHM1PhantomTile{4746 + direction * 4 + stage - 4586}".encode("ascii")
             body_tile = captured.get((b"TILE", body_name))
@@ -1143,6 +1154,9 @@ def validate_phantom_cast_tile_geometry(
             if glow_bounds is None:
                 fail(f"{path}: cast glow TILE {glow_name!r} has no visible glow pixels")
             glow_left, glow_top, glow_right, glow_bottom = glow_bounds
+            glow_centers_x2.append(
+                (glow_left + glow_right, glow_top + glow_bottom)
+            )
             _version, glow_height, glow_width = struct.unpack_from("<HHH", glow_tile, 0)
             if (
                 glow_left < 1
@@ -1156,6 +1170,12 @@ def validate_phantom_cast_tile_geometry(
             fail(
                 f"{path}: Phantom Cast direction {direction} changes body geometry "
                 f"across frames: {geometry}"
+            )
+        center_y_values = [center_y for _center_x, center_y in glow_centers_x2]
+        if max(center_y_values) - min(center_y_values) > 2:
+            fail(
+                f"{path}: Phantom Cast direction {direction} glow anchor bounces "
+                f"vertically across frames: {glow_centers_x2}"
             )
 
 
@@ -1393,14 +1413,16 @@ def validate_ice_lance_contract(output_root: Path) -> None:
     gpl_contract = (
         "$spell_attack(thisagent, target, 8);",
         '$createeffector(target, "ice_lance_hit_effector", 0);',
+        '$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));',
+        "function Phantom_Apply_Chill(agent target, integer duration)",
         'If ($CheckEffector(target, "ice_lance_chill_icon"))',
         '$DeleteEffector(target, "ice_lance_chill_icon");',
         "#ATTRIB_MovementRateModifier, 50",
         "#ATTRIB_ActionRateModifier, 500",
-        '$CreateEffector(target, "ice_lance_chill_icon", $GetSpellAttribute("ice_lance", "effector_duration"));',
+        '$CreateEffector(target, "ice_lance_chill_icon", duration);',
         'If ($CheckEffector(target, "ice_lance_chill_visual"))',
         '$DeleteEffector(target, "ice_lance_chill_visual");',
-        '$CreateEffector(target, "ice_lance_chill_visual", $GetSpellAttribute("ice_lance", "effector_duration"));',
+        '$CreateEffector(target, "ice_lance_chill_visual", duration);',
         "function Ice_Lance_Chill_End(agent thisagent)",
         "#ATTRIB_MovementRateModifier, -50",
         "#ATTRIB_ActionRateModifier, -500",
@@ -1408,19 +1430,259 @@ def validate_ice_lance_contract(output_root: Path) -> None:
     missing_gpl = [value for value in gpl_contract if value not in gpl]
     if missing_gpl:
         fail(f"{gpl_path}: Ice Lance behavior contract is missing {missing_gpl}")
-    centered_unit_impact = gpl.index(
+    hit_start = gpl.index("function Ice_Lance_Hit(agent thisagent, agent target)")
+    helper_start = gpl.index(
+        "function Phantom_Apply_Chill(agent target, integer duration)",
+        hit_start,
+    )
+    hit_gpl = gpl[hit_start:helper_start]
+    centered_unit_impact = hit_gpl.index(
         '$createeffector(target, "ice_lance_hit_effector", 0);'
     )
-    building_branch = gpl.index(
+    building_branch = hit_gpl.index(
         'If (target\'s "Type" == "Building" || target\'s "Type" == "Lair")'
     )
-    chill_application = gpl.index(
-        'If ($CheckEffector(target, "ice_lance_chill_icon"))'
+    chill_application = hit_gpl.index(
+        '$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));'
     )
     if not centered_unit_impact < building_branch < chill_application:
         fail(
             f"{gpl_path}: native hit overlay must apply before the "
             "building/lair Chill guard"
+        )
+
+
+def validate_icy_touch_contract(output_root: Path) -> None:
+    actions_path = output_root / "Data" / "phantom_actions.xml"
+    actions = actions_path.read_text(encoding="utf-8")
+    icy_start = actions.index(
+        '<Description type="Action" subType="Standard" ID="WRa4" Name="icy_touch"'
+    )
+    blizzard_start = actions.index(
+        '<Description type="Action" subType="Standard" ID="WRa5" Name="blizzard"',
+        icy_start,
+    )
+    icy_action = actions[icy_start:blizzard_start]
+    action_contract = (
+        '<ImageSet value="Attack"/>',
+        '<CompletionImageSet value="Stand"/>',
+        '<Sound value="Fire_Blast"/>',
+        '<SoundPhase begin="Begin"/>',
+        'GPLFunction="Icy_Touch_Cast"',
+        '<TimeoutDuration value="4000"/>',
+        '<SpellType value="Attack"/>',
+        '<CharacterLevel value="4"/>',
+        '<SpellRank value="3"/>',
+        '<ValidationScript value="Icy_Touch_Check"/>',
+    )
+    missing_action = [value for value in action_contract if value not in icy_action]
+    if missing_action:
+        fail(f"{actions_path}: Icy Touch action is missing {missing_action}")
+    forbidden_action = (
+        '<ImageSet value="Cast"/>',
+        '<EffectorDuration value="3000"/>',
+        'GPLFunction="Icy_Touch_Hit"',
+    )
+    present_forbidden_action = [
+        value for value in forbidden_action if value in icy_action
+    ]
+    if present_forbidden_action:
+        fail(
+            f"{actions_path}: Icy Touch still contains old custom action "
+            f"fields {present_forbidden_action}"
+        )
+
+    units_path = output_root / "Data" / "phantom_units.xml"
+    units = units_path.read_text(encoding="utf-8")
+    if '<Spell ID="2" Value="icy_touch"/>' not in units:
+        fail(f"{units_path}: Phantom does not list Icy Touch as an allowed spell")
+
+    projectiles_path = output_root / "Data" / "phantom_projectiles.xml"
+    projectiles = projectiles_path.read_text(encoding="utf-8")
+    forbidden_projectile = (
+        "icy_touch_missile",
+        'ID="PHp2"',
+        '<ImageIDBase value="PHp2"/>',
+    )
+    present_projectile = [
+        value for value in forbidden_projectile if value in projectiles
+    ]
+    if present_projectile:
+        fail(
+            f"{projectiles_path}: obsolete Icy Touch projectile remains "
+            f"{present_projectile}"
+        )
+
+    overlays_path = output_root / "Data" / "phantom_overlays.xml"
+    overlays = overlays_path.read_text(encoding="utf-8")
+    overlay_contract = (
+        'ID="PHg1" Name="gravechill_icon"',
+        '<ImageIDBase value="PHg1"/>',
+        'GPLFunction="Gravechill_End"',
+        '<StackPriority value="1"/>',
+    )
+    missing_overlay = [value for value in overlay_contract if value not in overlays]
+    if missing_overlay:
+        fail(
+            f"{overlays_path}: Gravechill status overlay is missing "
+            f"{missing_overlay}"
+        )
+    hit_overlay_contract = (
+        'ID="PHg2" Name="gravechill_hit_effector"',
+        '<ImageIDBase value="PHg2"/>',
+        '<AttachmentPointID value="2"/>',
+        '<StackPriority value="0"/>',
+        '<Flags value="TransparentToMouse"/>',
+    )
+    missing_hit_overlay = [
+        value for value in hit_overlay_contract if value not in overlays
+    ]
+    if missing_hit_overlay:
+        fail(
+            f"{overlays_path}: Gravechill hit overlay is missing "
+            f"{missing_hit_overlay}"
+        )
+    if "icy_touch_cooldown" in overlays:
+        fail(f"{overlays_path}: obsolete Icy Touch cooldown overlay remains")
+
+    maindata_path = output_root / "Data" / "phantom_maindata.cam"
+    sections, captured = validate_archive(maindata_path)
+    custom_tiles = sections[b"TILE"]
+    gravechill_tiles = [
+        entry
+        for entry in custom_tiles
+        if entry.name.startswith(b"PHg1Skull")
+    ]
+    for entry in gravechill_tiles:
+        tile = captured.get((b"TILE", entry.name))
+        if tile is None or indexed_v3_body_bounds(tile) is None:
+            fail(f"{maindata_path}: {entry.label} is an empty Gravechill icon frame")
+    gravechill_hit_tiles = [
+        entry
+        for entry in custom_tiles
+        if entry.name.startswith(b"PHg2SkullHit")
+    ]
+    for entry in gravechill_hit_tiles:
+        tile = captured.get((b"TILE", entry.name))
+        if tile is None or indexed_v3_body_bounds(tile) is None:
+            fail(f"{maindata_path}: {entry.label} is an empty Gravechill hit frame")
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    obsolete_symbols = (
+        "Icy_Touch_Disabled",
+        "Phantom_Try_Icy_Touch",
+        "icy_touch_cooldown",
+        "icy_touch_hit_effector",
+        "icy_touch_missile",
+    )
+    present_obsolete = [value for value in obsolete_symbols if value in gpl]
+    if present_obsolete:
+        fail(
+            f"{gpl_path}: obsolete custom Icy Touch machinery remains "
+            f"{present_obsolete}"
+        )
+
+    icy_start = gpl.index("function Icy_Touch_Check(agent thisagent) is integer")
+    icy_end = gpl.index("function Blizzard_Check(agent thisagent) is integer", icy_start)
+    icy_gpl = gpl[icy_start:icy_end]
+    baseline_contract = (
+        "function Icy_Touch_Check(agent thisagent) is integer",
+        'target = thisagent\'s "Target";',
+        "If ($NotValid(target))",
+        "If ($IsDead(target))",
+        'If (target\'s "Type" == "Building" || target\'s "Type" == "Lair")',
+        "distance = $DistanceBetweenAgents(thisagent, target);",
+        "If (distance <= #Phantom_Icy_Touch_Range)",
+        "return 1;",
+        "return 0;",
+        "function Icy_Touch_Cast(agent thisagent, agent action_target)",
+        "agent target;",
+        'target = thisagent\'s "Target";',
+        "$make_attack(thisagent, target);",
+        "If ($NotValid(target))",
+        "If ($IsDead(target))",
+        "$spell_attack(thisagent, target, 30);",
+        '$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));',
+        '$CreateEffector(target, "gravechill_hit_effector", 0);',
+        'If ($CheckEffector(target, "gravechill_icon"))',
+        '$DeleteEffector(target, "gravechill_icon");',
+        '$CreateEffector(target, "gravechill_icon", 8000);',
+        "$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);",
+        "$MagicalAdjustAttribute(target, #ATTRIB_Parry, -2);",
+        "$MagicalAdjustAttribute(target, #ATTRIB_MagicResistance, -2);",
+        "function Gravechill_End(agent thisagent)",
+        "$MagicalAdjustAttribute(thisagent, #ATTRIB_Strength, 5);",
+        "$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 2);",
+        "$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, 2);",
+    )
+    missing_baseline = [value for value in baseline_contract if value not in icy_gpl]
+    if missing_baseline:
+        fail(
+            f"{gpl_path}: stock monster-style Icy Touch callback is "
+            f"missing {missing_baseline}"
+        )
+    if "$createmissile" in icy_gpl:
+        fail(f"{gpl_path}: Icy Touch must not depend on a missile callback")
+    if icy_gpl.count("$make_attack(thisagent, target);") != 1:
+        fail(f"{gpl_path}: Icy Touch must resolve exactly one stock weapon attack")
+    if icy_gpl.count("$spell_attack(thisagent, target, 30);") != 1:
+        fail(f"{gpl_path}: Icy Touch must resolve exactly one inline magic attack")
+    if icy_gpl.count('$CreateEffector(target, "gravechill_hit_effector", 0);') != 1:
+        fail(f"{gpl_path}: Icy Touch must create exactly one skull hit animation")
+    if icy_gpl.count('$CreateEffector(target, "gravechill_icon", 8000);') != 1:
+        fail(f"{gpl_path}: Gravechill must have exactly one duration-owning icon")
+    forbidden_helpers = (
+        "function Icy_Touch_Hit",
+        "$Icy_Touch_Hit",
+        "function Phantom_Apply_Gravechill",
+        "$Phantom_Apply_Gravechill",
+        "$Does_Resist_Fire",
+        "wither_effector",
+        "$AdjustAttribute(target, #ATTRIB_Armor_Basic_Damage, -2);",
+        "$AdjustAttribute(target, #ATTRIB_Armor_Magic_Bonus, -2);",
+        "$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 2);",
+        "$AdjustAttribute(thisagent, #ATTRIB_Armor_Magic_Bonus, 2);",
+    )
+    present_helpers = [value for value in forbidden_helpers if value in icy_gpl]
+    if present_helpers:
+        fail(
+            f"{gpl_path}: Icy Touch still contains intermediary or "
+            f"player-spell machinery {present_helpers}"
+        )
+    delete_icon = icy_gpl.index('$DeleteEffector(target, "gravechill_icon");')
+    create_icon = icy_gpl.index('$CreateEffector(target, "gravechill_icon", 8000);')
+    apply_strength = icy_gpl.index(
+        "$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);"
+    )
+    if not delete_icon < create_icon < apply_strength:
+        fail(
+            f"{gpl_path}: Gravechill must refresh and apply in stock monster "
+            "debuff order"
+        )
+    if "expression #Phantom_Icy_Touch_Range 24" not in gpl:
+        fail(f"{gpl_path}: Icy Touch melee range must be the stock-style 24 units")
+    forbidden_behavior = (
+        "$compile_enemies",
+        "$listmember",
+        "target1",
+        "target2",
+        "target3",
+        "$hit(",
+        "$damage(",
+        "$spelldamage(",
+        "#Multiple_Unit_Attack_Range",
+        "$move(",
+        "$travel_to",
+        "$PerformAction",
+    )
+    present_forbidden_behavior = [
+        value for value in forbidden_behavior if value in icy_gpl
+    ]
+    if present_forbidden_behavior:
+        fail(
+            f"{gpl_path}: Icy Touch contains obsolete multi-target, melee, "
+            f"or weapon behavior {present_forbidden_behavior}"
         )
 
 
@@ -1564,7 +1826,17 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: unstable local Wizard-tree potion wrapper is still present"
         )
-    if 'targets = $compile_enemies(thisagent, thisagent\'s "castingrange");' in gpl:
+    frost_arm_start = gpl.index(
+        "function Phantom_Arm_Frost_Armor_In_Combat(agent thisagent) is boolean"
+    )
+    frost_arm_end = gpl.index(
+        "function Phantom_Frost_Armor_Watch(agent thisagent)", frost_arm_start
+    )
+    frost_arm_gpl = gpl[frost_arm_start:frost_arm_end]
+    if (
+        'targets = $compile_enemies(thisagent, thisagent\'s "castingrange");'
+        in frost_arm_gpl
+    ):
         fail(
             f"{gpl_path}: Frost Armor combat detection is incorrectly limited "
             "to Ice Lance casting range"
@@ -1572,7 +1844,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     if (
         "targets = $compile_enemies("
         "thisagent, $GetAttribute(thisagent, #ATTRIB_SightRange));"
-    ) in gpl:
+    ) in frost_arm_gpl:
         fail(
             f"{gpl_path}: unsafe nested native call is present in Frost Armor "
             "combat detection"
@@ -2133,31 +2405,64 @@ def validate_deal_demon_test_setup(output_root: Path) -> None:
         'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
         'elf_guild = $SpawnUnit(palace, "Elven_Bungalow"',
         'agrela_temple = $SpawnUnit(palace, "Temple_Agrela1"',
-        'agrela_temple\'s "SpecialScript" = $Hero_Generator;',
-        '$NewThread( agrela_temple\'s "SpecialScript", 60000 + $randomnumber(60000), agrela_temple );',
+        "Foreach Guild in Guilds do",
+        'Guild\'s "SpecialScript" = $Hero_Generator;',
+        '$NewThread( Guild\'s "SpecialScript", 60000 + $randomnumber(60000), Guild );',
     )
     missing = [value for value in contract if value not in gpl]
     if missing:
         fail(
-            f"{gpl_path}: Deal with the Demon healing test setup is missing {missing}"
+            f"{gpl_path}: Deal with the Demon test setup is missing {missing}"
         )
 
     deal = gpl.index("function DEAL_DEMON()")
-    spawn = gpl.index(
-        'agrela_temple = $SpawnUnit(palace, "Temple_Agrela1"', deal
+    deal_end = gpl.index("Function Potion_Check", deal)
+    deal_gpl = gpl[deal:deal_end]
+    forbidden_player_generators = (
+        'phantoms_haunt\'s "SpecialScript"',
+        'elf_guild\'s "SpecialScript"',
+        'agrela_temple\'s "SpecialScript"',
     )
-    validity = gpl.index("If (agrela_temple != $NullAgent())", spawn)
-    generator = gpl.index(
-        'agrela_temple\'s "SpecialScript" = $Hero_Generator;', validity
-    )
-    thread = gpl.index(
-        '$NewThread( agrela_temple\'s "SpecialScript", 60000 + $randomnumber(60000), agrela_temple );',
-        generator,
-    )
-    if not deal < spawn < validity < generator < thread:
+    present_forbidden = [
+        value for value in forbidden_player_generators if value in deal_gpl
+    ]
+    if present_forbidden:
         fail(
-            f"{gpl_path}: starting Temple to Agrela must be validated and "
-            "have its Hero Generator thread started"
+            f"{gpl_path}: player-owned Deal with the Demon test guilds must "
+            f"not auto-recruit through Hero_Generator: {present_forbidden}"
+        )
+    stock_loop = deal_gpl.index("Foreach Guild in Guilds do")
+    stock_generator = deal_gpl.index(
+        'Guild\'s "SpecialScript" = $Hero_Generator;',
+        stock_loop,
+    )
+    stock_thread = deal_gpl.index(
+        '$NewThread( Guild\'s "SpecialScript", 60000 + $randomnumber(60000), Guild );',
+        stock_generator,
+    )
+    phantom_spawn = deal_gpl.index(
+        'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
+        stock_thread,
+    )
+    elf_spawn = deal_gpl.index(
+        'elf_guild = $SpawnUnit(palace, "Elven_Bungalow"',
+        phantom_spawn,
+    )
+    agrela_spawn = deal_gpl.index(
+        'agrela_temple = $SpawnUnit(palace, "Temple_Agrela1"',
+        elf_spawn,
+    )
+    if not (
+        stock_loop
+        < stock_generator
+        < stock_thread
+        < phantom_spawn
+        < elf_spawn
+        < agrela_spawn
+    ):
+        fail(
+            f"{gpl_path}: stock enemy guild generation and player test "
+            "building spawn order are malformed"
         )
     if '$SpawnUnit(palace, "Temple_Agrela",' in gpl:
         fail(
@@ -2175,6 +2480,7 @@ def validate(output_root: Path) -> None:
     validate_phantoms_haunt_identity(output_root)
     validate_phantom_item_cleanup(output_root)
     validate_ice_lance_contract(output_root)
+    validate_icy_touch_contract(output_root)
     validate_frost_armor_contract(output_root)
     validate_phantom_potion_purchase_contract(output_root)
     validate_phantom_equipment_upgrade_contract(output_root)

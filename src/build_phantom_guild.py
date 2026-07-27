@@ -30,6 +30,7 @@ SOURCE_BUILDING_IMAGE = b"ABQ1Temple, Fervus1"
 SOURCE_ICE_LANCE_ICON = b"XL15PowerShock"
 SOURCE_ICE_LANCE_PROJECTILE = b"WPc2fire_blast_M"
 SOURCE_FROST_ARMOR_ICON = b"WRb2fireshield_IC"
+SOURCE_ICY_TOUCH_ICON = b"WRc1fire_blast_e"
 SOURCE_BLIZZARD_ICON = b"WRg2meteor_blast"
 PHANTOM_HERO_IMAGE = b"PHM1Phantom"
 PHANTOM_BUILDING_IMAGE = b"PHG1Phantom Guild"
@@ -38,11 +39,14 @@ PHANTOM_RAW_TEXTURES_IMAGE = b"PHTIraw textures"
 PHANTOM_ICE_LANCE_ICON = b"WRa2Ice Lance"
 PHANTOM_ICE_LANCE_PROJECTILE = b"PHp1fire_blast_M"
 PHANTOM_FROST_ARMOR_ICON = b"WRa3Frost Armor"
-PHANTOM_BLIZZARD_ICON = b"WRa4Blizzard"
+PHANTOM_ICY_TOUCH_ICON = b"WRa4Icy Touch"
+PHANTOM_BLIZZARD_ICON = b"WRa5Blizzard"
 FROST_FIELD_HIT_IMAGE = b"XR30frost_fld_hit"
 CHILL_ICON_TEMPLATE_IMAGE = b"XR25plague_icon"
 PHANTOM_ICE_LANCE_HIT_IMAGE = b"PHo3Ice Lance Hit"
 PHANTOM_CHILL_ICON_IMAGE = b"PHo4chill_icon"
+PHANTOM_GRAVECHILL_ICON_IMAGE = b"PHg1Gravechill"
+PHANTOM_GRAVECHILL_HIT_IMAGE = b"PHg2Gravechill Hit"
 PHANTOM_FROST_ARMOR_CRYSTAL_IMAGE = b"PHf1Frost Crystal"
 PHANTOM_FROZEN_SMALL_IMAGE = b"PHf2Frozen Small"
 PHANTOM_FROZEN_MEDIUM_IMAGE = b"PHf3Frozen Medium"
@@ -79,7 +83,9 @@ WEAPON_ICON_IMAGE = b"INBwicons weapons"
 ARMOR_ICON_IMAGE = b"INBaarmor icons"
 ICE_LANCE_SPELL_ICON_TILES = (344,)
 FROST_ARMOR_SPELL_ICON_TILES = (345,)
-BLIZZARD_SPELL_ICON_TILES = (346,)
+ICY_TOUCH_SPELL_ICON_TILES = (346,)
+FIRE_BLAST_SPELL_ICON_TILE = 357
+BLIZZARD_SPELL_ICON_TILES = (347,)
 STAFF_ICON_TILES: tuple[int, ...] = ()
 STAFF_SMALL_ICON_TILES: tuple[int, ...] = ()
 MX_STAFF_ICON_TILES: tuple[int, ...] = ()
@@ -134,6 +140,7 @@ def main() -> int:
     parser.add_argument("--building-dialog-panel-rgb", type=Path)
     parser.add_argument("--ice-lance-icon-rgb", type=Path)
     parser.add_argument("--ice-lance-projectile-source-png", type=Path)
+    parser.add_argument("--icy-touch-impact-source-png", type=Path)
     parser.add_argument("--frost-armor-crystal-source-png", type=Path)
     parser.add_argument("--frost-armor-frozen-casing-source-png", type=Path)
     parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
@@ -183,6 +190,7 @@ def main() -> int:
         args.interface_panel_rgb,
         args.ice_lance_icon_rgb,
         args.ice_lance_projectile_source_png,
+        args.icy_touch_impact_source_png,
         args.frost_armor_crystal_source_png,
         args.frost_armor_frozen_casing_source_png,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
@@ -340,6 +348,7 @@ def phantom_units_xml() -> str:
 \t\t\t<AllowedSpells>
 \t\t\t\t<Spell ID="0" Value="ice_lance"/>
 \t\t\t\t<Spell ID="1" Value="frost_armor"/>
+\t\t\t\t<Spell ID="2" Value="icy_touch"/>
 \t\t\t</AllowedSpells>
 \t\t</Game>
 \t</Description>
@@ -437,7 +446,24 @@ def phantom_actions_xml() -> str:
 \t\t\t<ValidationScript value="Frost_Armor_Check"/>
 \t\t</Game>
 \t</Description>
-\t<Description type="Action" subType="Standard" ID="WRa4" Name="blizzard" Description="Blizzard">
+\t<Description type="Action" subType="Standard" ID="WRa4" Name="icy_touch" Description="Icy Touch">
+\t\t<Engine version="1">
+\t\t\t<ImageSet value="Attack"/>
+\t\t\t<CompletionImageSet value="Stand"/>
+\t\t\t<Sound value="Fire_Blast"/>
+\t\t\t<SoundPhase begin="Begin"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Icy_Touch_Cast"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<Flags value="IsSpell"/>
+\t\t\t<TimeoutDuration value="4000"/>
+\t\t\t<SpellType value="Attack"/>
+\t\t\t<CharacterLevel value="4"/>
+\t\t\t<SpellRank value="3"/>
+\t\t\t<ValidationScript value="Icy_Touch_Check"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Action" subType="Standard" ID="WRa5" Name="blizzard" Description="Blizzard">
 \t\t<Engine version="1">
 \t\t\t<ImageSet value="Cast"/>
 \t\t\t<CompletionImageSet value="Stand"/>
@@ -483,6 +509,35 @@ def phantom_overlays_xml() -> str:
 \t\t\t<Info value="DontBlock"/>
 \t\t\t<Menu value="11"/>
 \t\t\t<ImageIDBase value="PHo3"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="0"/>
+\t\t\t<Flags value="TransparentToMouse"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHg1" Name="gravechill_icon" Description="Gravechill">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHg1"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Gravechill_End"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="1"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHg2" Name="gravechill_hit_effector" Description="Gravechill Hit">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHg2"/>
 \t\t\t<AttachmentPointID value="2"/>
 \t\t\t<DefaultSound value="0"/>
 \t\t</Engine>
@@ -765,6 +820,7 @@ def phantom_gpl() -> str:
     item_expressions += (
         f"\nexpression #Phantom_Item_FrostArmorBonus {PHANTOM_FROST_ARMOR_ITEM_ID}\n"
     )
+    item_expressions += "\nexpression #Phantom_Icy_Touch_Range 24\n"
     return item_expressions + """
 
 function DEAL_DEMON()
@@ -794,25 +850,10 @@ begin
 \t\tend
 
 \tphantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt", $RandomCoord(palace, 275, 475), "MaxHP");
-\tIf (phantoms_haunt != $NullAgent())
-\t\tbegin
-\t\t\tphantoms_haunt's "SpecialScript" = $Hero_Generator;
-\t\t\t$NewThread( phantoms_haunt's "SpecialScript", 60000 + $randomnumber(60000), phantoms_haunt );
-\t\tend
 
 \telf_guild = $SpawnUnit(palace, "Elven_Bungalow", $RandomCoord(palace, 275, 475), "MaxHP");
-\tIf (elf_guild != $NullAgent())
-\t\tbegin
-\t\t\telf_guild's "SpecialScript" = $Hero_Generator;
-\t\t\t$NewThread( elf_guild's "SpecialScript", 60000 + $randomnumber(60000), elf_guild );
-\t\tend
 
 \tagrela_temple = $SpawnUnit(palace, "Temple_Agrela1", $RandomCoord(palace, 275, 475), "MaxHP");
-\tIf (agrela_temple != $NullAgent())
-\t\tbegin
-\t\t\tagrela_temple's "SpecialScript" = $Hero_Generator;
-\t\t\t$NewThread( agrela_temple's "SpecialScript", 60000 + $randomnumber(60000), agrela_temple );
-\t\tend
 
 \t$listobjects(palace,"lair",-1,lairs,#NoHiddenMap);
 \tforeach lair in lairs do
@@ -1696,16 +1737,30 @@ begin
 \tIf (target's "Type" == "Building" || target's "Type" == "Lair")
 \t\treturn;
 
+\t$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));
+end
+
+function Phantom_Apply_Chill(agent target, integer duration)
+
+declare
+
+begin
+\tIf ($isdead(target))
+\t\treturn;
+
+\tIf (target's "Type" == "Building" || target's "Type" == "Lair")
+\t\treturn;
+
 \tIf ($CheckEffector(target, "ice_lance_chill_icon"))
 \t\t$DeleteEffector(target, "ice_lance_chill_icon");
 
 \t$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
 \t$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
-\t$CreateEffector(target, "ice_lance_chill_icon", $GetSpellAttribute("ice_lance", "effector_duration"));
+\t$CreateEffector(target, "ice_lance_chill_icon", duration);
 
 \tIf ($CheckEffector(target, "ice_lance_chill_visual"))
 \t\t$DeleteEffector(target, "ice_lance_chill_visual");
-\t$CreateEffector(target, "ice_lance_chill_visual", $GetSpellAttribute("ice_lance", "effector_duration"));
+\t$CreateEffector(target, "ice_lance_chill_visual", duration);
 end
 
 function Ice_Lance_Chill_End(agent thisagent)
@@ -2019,6 +2074,81 @@ begin
 \t\tthisagent's "Reborn_Counter" = 0;
 end
 
+function Icy_Touch_Check(agent thisagent) is integer
+
+declare
+\tagent target;
+\tinteger distance;
+
+begin
+\ttarget = thisagent's "Target";
+
+\tIf ($NotValid(target))
+\t\treturn 0;
+
+\tIf ($IsDead(target))
+\t\treturn 0;
+
+\tIf (target's "Type" == "Building" || target's "Type" == "Lair")
+\t\treturn 0;
+
+\tdistance = $DistanceBetweenAgents(thisagent, target);
+
+\tIf (distance <= #Phantom_Icy_Touch_Range)
+\t\treturn 1;
+
+\treturn 0;
+end
+
+function Icy_Touch_Cast(agent thisagent, agent action_target)
+
+declare
+\tagent target;
+
+begin
+\ttarget = thisagent's "Target";
+
+\tIf ($NotValid(target))
+\t\treturn;
+
+\tIf ($IsDead(target))
+\t\treturn;
+
+\tIf (target's "Type" == "Building" || target's "Type" == "Lair")
+\t\treturn;
+
+\t$make_attack(thisagent, target);
+
+\tIf ($IsDead(target))
+\t\treturn;
+
+\t$spell_attack(thisagent, target, 30);
+
+\tIf ($IsDead(target))
+\t\treturn;
+
+\t$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));
+\t$CreateEffector(target, "gravechill_hit_effector", 0);
+
+\tIf ($CheckEffector(target, "gravechill_icon"))
+\t\t$DeleteEffector(target, "gravechill_icon");
+
+\t$CreateEffector(target, "gravechill_icon", 8000);
+\t$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);
+\t$MagicalAdjustAttribute(target, #ATTRIB_Parry, -2);
+\t$MagicalAdjustAttribute(target, #ATTRIB_MagicResistance, -2);
+end
+
+function Gravechill_End(agent thisagent)
+
+declare
+
+begin
+\t$MagicalAdjustAttribute(thisagent, #ATTRIB_Strength, 5);
+\t$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 2);
+\t$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, 2);
+end
+
 function Blizzard_Check(agent thisagent) is integer
 
 declare
@@ -2121,6 +2251,9 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
         action_names.data,
         {
             fourcc_id("WRa2"): "Ice Lance",
+            fourcc_id("WRa3"): "Frost Armor",
+            fourcc_id("WRa4"): "Icy Touch",
+            fourcc_id("WRa5"): "Blizzard",
         },
     )
     cloned_guild_menu = (
@@ -2278,6 +2411,7 @@ def write_maindata_cam(
     interface_panel_rgb: Path | None,
     ice_lance_icon_rgb: Path | None,
     ice_lance_projectile_source_png: Path | None,
+    icy_touch_impact_source_png: Path | None,
     frost_armor_crystal_source_png: Path | None,
     frost_armor_frozen_casing_source_png: Path | None,
     ice_effect_maindata: Path | None,
@@ -2288,6 +2422,7 @@ def write_maindata_cam(
     ice_lance_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICE_LANCE_ICON).data
     ice_lance_projectile = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICE_LANCE_PROJECTILE).data
     frost_armor_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_FROST_ARMOR_ICON).data
+    icy_touch_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICY_TOUCH_ICON).data
     blizzard_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_BLIZZARD_ICON).data
     tiles = read_cam_entries(source_maindata, b"TILE")
     palettes = read_cam_entries(source_maindata, b"SPLT")
@@ -2295,6 +2430,9 @@ def write_maindata_cam(
     ice_effect_tiles: list[bytes] = []
     source_ice_tile_indices: list[int] = []
     chill_icon_image: bytes | None = None
+    gravechill_icon_image: bytes | None = None
+    gravechill_hit_image: bytes | None = None
+    gravechill_hit_template_tiles: list[bytes] = []
     chill_icon_template_tiles: list[bytes] = []
     source_chill_icon_tile_indices: list[int] = []
     frost_armor_crystal_image: bytes | None = None
@@ -2327,6 +2465,8 @@ def write_maindata_cam(
                     )
                     for index in source_ice_tile_indices
                 ]
+        gravechill_hit_image = source_ice_lance_hit_effect
+        gravechill_hit_template_tiles = ice_effect_tiles
         chill_icon_image = read_cam_entry(
             ice_effect_maindata,
             b"IMAG",
@@ -2339,6 +2479,7 @@ def write_maindata_cam(
             source_ice_effect_tiles[source_tile_index].data
             for source_tile_index in source_chill_icon_tile_indices
         ]
+        gravechill_icon_image = chill_icon_image
         frost_armor_crystal_image = chill_icon_image
         frozen_small_image = chill_icon_image
         frozen_medium_image = chill_icon_image
@@ -2376,6 +2517,7 @@ def write_maindata_cam(
     tile_indices.update(referenced_tile_indices(ice_lance_icon, len(tiles)))
     tile_indices.update(referenced_tile_indices(ice_lance_projectile, len(tiles)))
     tile_indices.update(referenced_tile_indices(frost_armor_icon, len(tiles)))
+    tile_indices.update(referenced_tile_indices(icy_touch_icon, len(tiles)))
     tile_indices.update(referenced_tile_indices(blizzard_icon, len(tiles)))
     tile_indices.update((HERO_PORTRAIT_TILE, HERO_ICON_TILE, BUILDING_PROFILE_TILE, BUILDING_ICON_TILE, ICE_LANCE_ICON_TILE))
     max_tile_index = max(tile_indices)
@@ -2579,6 +2721,16 @@ def write_maindata_cam(
         if len(hero_cast_glow_paths) == 4:
             cast_glow_indices: dict[tuple[int, int], int] = {}
             for direction in range(8):
+                # Detect the staff crystal once from the brightest cast phase.
+                # Re-detecting it from every brightness-ramped body frame made
+                # the glow's calculated anchor bounce vertically.
+                anchor_body_tile = phantom_sprite_tiles_by_source.get(
+                    4746 + direction * 4 + 3
+                )
+                if anchor_body_tile is None:
+                    raise ValueError(
+                        f"Missing generated cast anchor TILE for direction {direction}"
+                    )
                 for stage, glow_path in enumerate(hero_cast_glow_paths):
                     body_source_tile = 4746 + direction * 4 + stage
                     body_tile = phantom_sprite_tiles_by_source.get(body_source_tile)
@@ -2600,6 +2752,7 @@ def write_maindata_cam(
                                 glow_path,
                                 direction,
                                 stage,
+                                anchor_body_tile=anchor_body_tile,
                             ),
                         )
                     )
@@ -2649,6 +2802,70 @@ def write_maindata_cam(
         chill_icon_image = remap_imag_animation_tiles(
             chill_icon_image,
             chill_tile_replacements,
+        )
+
+    if (
+        gravechill_icon_image
+        and chill_icon_template_tiles
+        and source_chill_icon_tile_indices
+        and icy_touch_impact_source_png
+    ):
+        gravechill_tile_replacements: dict[int, int] = {}
+        frame_count = len(source_chill_icon_tile_indices)
+        for frame_index, (source_tile_index, template_tile) in enumerate(
+            zip(source_chill_icon_tile_indices, chill_icon_template_tiles)
+        ):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            gravechill_tile_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHg1Skull{frame_index:02d}".encode("ascii")),
+                    data=generated_gravechill_skull_tile(
+                        template_tile,
+                        palettes,
+                        icy_touch_impact_source_png,
+                        frame_index,
+                        frame_count,
+                    ),
+                )
+            )
+        gravechill_icon_image = remap_imag_animation_tiles(
+            gravechill_icon_image,
+            gravechill_tile_replacements,
+        )
+
+    if (
+        gravechill_hit_image
+        and gravechill_hit_template_tiles
+        and source_ice_tile_indices
+        and icy_touch_impact_source_png
+    ):
+        gravechill_hit_replacements: dict[int, int] = {}
+        frame_count = len(source_ice_tile_indices)
+        for frame_index, source_tile_index in enumerate(source_ice_tile_indices):
+            # Frost Field's first two impact canvases are only 10x10 and
+            # 22x22. That is useful for its growing ground burst, but it
+            # crushes the skull's spectral formation stages into specks. Keep
+            # the same six-frame one-shot record while flooring those two
+            # canvases at the readable third-frame size.
+            template_tile = gravechill_hit_template_tiles[max(2, frame_index)]
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            gravechill_hit_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHg2SkullHit{frame_index:02d}".encode("ascii")),
+                    data=generated_gravechill_hit_tile(
+                        template_tile,
+                        palettes,
+                        icy_touch_impact_source_png,
+                        frame_index,
+                        frame_count,
+                    ),
+                )
+            )
+        gravechill_hit_image = remap_imag_animation_tiles(
+            gravechill_hit_image,
+            gravechill_hit_replacements,
         )
 
     if (
@@ -2763,12 +2980,21 @@ def write_maindata_cam(
         CamEntry(name=pad_name(PHANTOM_ICE_LANCE_ICON), data=ice_lance_icon),
         CamEntry(name=pad_name(PHANTOM_ICE_LANCE_PROJECTILE), data=ice_lance_projectile),
         CamEntry(name=pad_name(PHANTOM_FROST_ARMOR_ICON), data=frost_armor_icon),
+        CamEntry(name=pad_name(PHANTOM_ICY_TOUCH_ICON), data=icy_touch_icon),
         CamEntry(name=pad_name(PHANTOM_BLIZZARD_ICON), data=blizzard_icon),
     ]
     if ice_lance_hit_effect:
         image_entries.append(CamEntry(name=pad_name(PHANTOM_ICE_LANCE_HIT_IMAGE), data=ice_lance_hit_effect))
     if chill_icon_image:
         image_entries.append(CamEntry(name=pad_name(PHANTOM_CHILL_ICON_IMAGE), data=chill_icon_image))
+    if gravechill_icon_image:
+        image_entries.append(
+            CamEntry(name=pad_name(PHANTOM_GRAVECHILL_ICON_IMAGE), data=gravechill_icon_image)
+        )
+    if gravechill_hit_image:
+        image_entries.append(
+            CamEntry(name=pad_name(PHANTOM_GRAVECHILL_HIT_IMAGE), data=gravechill_hit_image)
+        )
     if frost_armor_crystal_image:
         image_entries.append(
             CamEntry(name=pad_name(PHANTOM_FROST_ARMOR_CRYSTAL_IMAGE), data=frost_armor_crystal_image)
@@ -2854,6 +3080,8 @@ def write_interfacedata_cam(
     for tile_index in FROST_ARMOR_SPELL_ICON_TILES:
         if frost_armor_spell_icon_rgb:
             replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], frost_armor_spell_icon_rgb.read_bytes())
+    for tile_index in ICY_TOUCH_SPELL_ICON_TILES:
+        replacement_tiles[tile_index] = tiles[FIRE_BLAST_SPELL_ICON_TILE].data
     for tile_index in BLIZZARD_SPELL_ICON_TILES:
         if blizzard_spell_icon_rgb:
             replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], blizzard_spell_icon_rgb.read_bytes())
@@ -3184,7 +3412,10 @@ def hero_sprite_scale_multiplier(source_tile_index: int) -> float:
     if 4723 <= source_tile_index <= 4740 or 4779 <= source_tile_index <= 4787:
         return 1.0
     if 4746 <= source_tile_index <= 4777:
-        return 1.0
+        # Cast bodies previously bypassed the 1.12 multiplier used by Stand,
+        # Hover, Attack, and Special, making the Phantom visibly contract when
+        # a spell began.
+        return 1.12
     return 1.12
 
 
@@ -3557,6 +3788,8 @@ def cast_staff_glow_overlay_tile(
     glow_png_path: Path,
     direction: int,
     stage: int,
+    *,
+    anchor_body_tile: bytes | None = None,
 ) -> bytes:
     from PIL import Image
 
@@ -3565,9 +3798,19 @@ def cast_staff_glow_overlay_tile(
     if decoded is None or colors is None:
         raise ValueError("Expected a readable indexed cast body TILE")
     height, width, body_pixels = decoded
+    anchor_pixels = body_pixels
+    if anchor_body_tile is not None:
+        anchor_decoded = decode_indexed_v3_tile(anchor_body_tile)
+        if anchor_decoded is None:
+            raise ValueError("Expected a readable indexed cast anchor TILE")
+        anchor_height, anchor_width, anchor_pixels = anchor_decoded
+        if (anchor_width, anchor_height) != (width, height):
+            raise ValueError(
+                "Cast anchor TILE geometry does not match the glow output TILE"
+            )
 
     candidates: list[tuple[int, int]] = []
-    for y, row in enumerate(body_pixels):
+    for y, row in enumerate(anchor_pixels):
         if y > int(height * 0.62):
             continue
         for x, palette_index in enumerate(row):
@@ -3598,8 +3841,32 @@ def cast_staff_glow_overlay_tile(
     diameter = (11, 14, 18, 11)[stage]
     glow.thumbnail((diameter, diameter), Image.Resampling.LANCZOS)
 
-    left = max(1, min(width - glow.width - 1, center_x - glow.width // 2))
-    top = max(1, min(height - glow.height - 1, center_y - glow.height // 2))
+    visible_alpha = glow.getchannel("A").point(
+        lambda alpha: 255 if alpha >= 18 else 0
+    )
+    visible_bbox = visible_alpha.getbbox()
+    if visible_bbox is None:
+        raise ValueError(f"Cast glow stage {stage} has no visible alpha")
+    visible_left, visible_top, visible_right, visible_bottom = visible_bbox
+    # Align the center of the pixels that survive TILE alpha thresholding,
+    # rather than the outer PNG rectangle. Differently shaped/pulsed sources
+    # otherwise appear to bounce despite sharing the same staff coordinate.
+    left = round(
+        (
+            2 * center_x
+            - (visible_left + visible_right - 1)
+        )
+        / 2
+    )
+    top = round(
+        (
+            2 * center_y
+            - (visible_top + visible_bottom - 1)
+        )
+        / 2
+    )
+    left = max(1, min(width - glow.width - 1, left))
+    top = max(1, min(height - glow.height - 1, top))
     pixels = [[0 for _x in range(width)] for _y in range(height)]
     for glow_y in range(glow.height):
         for glow_x in range(glow.width):
@@ -4356,6 +4623,126 @@ def projectile_direction_frame_for_source_tile(tile_index: int) -> tuple[int, in
 def projectile_angle_for_direction(direction_index: int) -> float:
     direction = direction_index % ICE_LANCE_PROJECTILE_DIRECTIONS
     return -math.pi / 2.0 + (2.0 * math.pi * direction / ICE_LANCE_PROJECTILE_DIRECTIONS)
+
+
+def blank_indexed_v3_tile(template_tile: bytes) -> bytes:
+    """Preserve a projectile frame's native geometry while drawing nothing."""
+    decoded = decode_indexed_v3_tile(template_tile)
+    if decoded is None:
+        return template_tile
+    height, width, _pixels = decoded
+    return encode_indexed_v3_tile_like_original(
+        template_tile,
+        [[0 for _ in range(width)] for _ in range(height)],
+    )
+
+
+def generated_gravechill_hit_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+) -> bytes:
+    """Render the six source skull stages as a one-shot target impact."""
+    from PIL import Image
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        sheet = loaded.convert("RGBA")
+
+    source_frame_count = 6
+    stage = min(
+        source_frame_count - 1,
+        round(frame_index * (source_frame_count - 1) / max(1, frame_count - 1)),
+    )
+    left = round(sheet.width * stage / source_frame_count)
+    right = round(sheet.width * (stage + 1) / source_frame_count)
+    source = sheet.crop((left, 0, right, sheet.height))
+    alpha_bbox = source.getchannel("A").getbbox()
+    if alpha_bbox is None:
+        return blank_indexed_v3_tile(template_tile)
+    source = source.crop(alpha_bbox)
+
+    scale = min(
+        width * 0.92 / max(1, source.width),
+        height * 0.92 / max(1, source.height),
+    )
+    target_width = max(1, round(source.width * scale))
+    target_height = max(1, round(source.height * scale))
+    source = source.resize(
+        (target_width, target_height),
+        Image.Resampling.LANCZOS,
+    )
+
+    canvas = Image.new("RGB", (width, height), (0, 0, 0))
+    x = (width - source.width) // 2
+    y = (height - source.height) // 2
+    canvas.paste(source.convert("RGB"), (x, y), source.getchannel("A"))
+
+    palette_tile = remap_tile_palette_index(
+        template_tile,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+    )
+    return tile_from_rgb(palette_tile, palettes, canvas.tobytes())
+
+
+def generated_gravechill_skull_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+) -> bytes:
+    """Render the formed icy skull as a pulsing floating debuff symbol."""
+    from PIL import Image, ImageEnhance
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        sheet = loaded.convert("RGBA")
+
+    source_frame_count = 6
+    formed_frame_index = 2
+    left = round(sheet.width * formed_frame_index / source_frame_count)
+    right = round(sheet.width * (formed_frame_index + 1) / source_frame_count)
+    source = sheet.crop((left, 0, right, sheet.height))
+    source = remove_small_detached_alpha_components(source)
+    alpha_bbox = source.getchannel("A").getbbox()
+    if alpha_bbox is None:
+        return blank_indexed_v3_tile(template_tile)
+    source = source.crop(alpha_bbox)
+
+    phase = frame_index / max(1, frame_count)
+    turn = phase * math.tau
+    pulse = 0.98 + 0.035 * math.sin(turn * 2.0)
+    target_height = max(10, round(min(width, height) * 0.72 * pulse))
+    target_width = max(
+        7,
+        round(source.width * target_height / max(1, source.height)),
+    )
+    source = source.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+    # A restrained horizontal compression suggests a hovering crystal turning
+    # about its vertical axis without ever making the small icon disappear.
+    yaw_width = max(6, round(target_width * (0.78 + 0.22 * abs(math.cos(turn)))))
+    source = source.resize((yaw_width, target_height), Image.Resampling.LANCZOS)
+    source = ImageEnhance.Brightness(source).enhance(
+        0.96 + 0.06 * math.sin(turn * 2.0)
+    )
+
+    canvas = Image.new("RGB", (width, height), (0, 0, 0))
+    bob = round(math.sin(turn) * 0.8)
+    x = (width - source.width) // 2
+    y = (height - source.height) // 2 + bob
+    canvas.paste(source.convert("RGB"), (x, y), source.getchannel("A"))
+
+    palette_tile = remap_tile_palette_index(
+        template_tile,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+    )
+    return tile_from_rgb(palette_tile, palettes, canvas.tobytes())
 
 
 def generated_ice_lance_impact_tile(

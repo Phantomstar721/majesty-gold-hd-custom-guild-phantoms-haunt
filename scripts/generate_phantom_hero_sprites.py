@@ -200,7 +200,10 @@ def animated_frame(
         return transform_action(image, rotate=cycle[stage], scale=1.0 + (0.01 if stage in (2, 3) else 0.0))
     if label == "attack":
         rotations = (-4.0, -1.5, 1.0, 2.5)
-        scales = (0.91, 0.96, 1.0, 1.03)
+        # Keep the Phantom's body at its standing scale throughout the strike.
+        # The old 0.91 -> 1.03 ramp made the hero visibly shrink before every
+        # Icy Touch weapon hit.
+        scales = (1.0, 1.0, 1.0, 1.0)
         return transform_action(image, rotate=rotations[stage], scale=scales[stage])
     if label == "cast":
         brightness = (0.72, 0.84, 0.94, 1.08)

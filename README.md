@@ -43,6 +43,8 @@ This currently builds:
 - A level-3 `Frost Armor` spell with a persistent crystal ward, one-hit damage
   negation against normal weapon and spell damage, a three-second retaliatory
   Freeze, and rest-to-recharge behavior.
+- A level-4, melee-gated `Icy Touch` which combines one normal weapon attack
+  with `30` spell power, refreshes Chill, and applies Gravechill.
 - Healers exclude Phantoms from ordinary healing. A Priestess's Drain Life
   secondary heal treats allied Phantoms as undead: Priestess self-healing
   remains first priority, followed by the most-injured Phantom, then controlled
@@ -70,7 +72,10 @@ Confirmed working in-game:
 - Occupied Haunts use an eight-frame full-building active animation so
   the cyan windows and arcane highlights pulse while heroes are inside.
 - `A Deal with the Demon` is patched for testing so it starts with a Phantoms
-  Haunt, an Elven Bungalow, and a Temple to Agrela.
+  Haunt, an Elven Bungalow, and a Temple to Agrela. These player-owned test
+  buildings do not run `Hero_Generator`; their heroes must be recruited
+  manually. The stock generator remains attached only to the quest's
+  `#NotMyPlayer` guild list.
 
 Next planned work:
 
@@ -265,9 +270,10 @@ The healing audit intentionally preserves these separate mechanics:
   temporary transformation;
 - resurrection and reanimation, which operate on dead units rather than
   healing a living Phantom;
-- class-self effects and building services that a Phantom's Wizard-derived
-  decision tree cannot normally request, including Meditation and Champion's
-  Vigor.
+- class-self effects that a Phantom's Wizard-derived decision tree cannot
+  normally request, including Meditation;
+- Hall of Champions `Champion's Vigor` regeneration, intentionally treated as
+  an internal champion power rather than an external healing effect.
 
 Do not use the earlier birth-thread transfer approach for Phantom starter gear.
 Creating string-named custom inventory items through a delayed hero thread was
@@ -566,8 +572,9 @@ aligned.
 
 Casting range belongs to the hero rather than the individual spell, so the
 Icerod technically affects the Phantom's complete spell kit; Frost Armor is
-self-targeted and Blizzard is caster-centered, making Ice Lance the only
-current spell materially affected. Custom special items are stored as
+self-targeted and Blizzard is caster-centered. Icy Touch deliberately uses its
+fixed `24`-unit melee gate, so the Icerod's casting-range bonus affects Ice
+Lance but does not extend Icy Touch. Custom special items are stored as
 inventory IDs and do not automatically transfer XML attributes to their owner.
 Frozen Cowl therefore uses the stock Ring-of-Protection pattern to apply `+2`
 basic-damage armor when granted. The Cowl passed combat, treasure, and gold
@@ -648,6 +655,10 @@ stack. The three-second duration lives on the `ice_lance` action as
 `EffectorDuration`; both effectors read it through `$GetSpellAttribute`, so the
 timer and icon cannot silently drift apart.
 
+`Phantom_Apply_Chill` owns that refresh sequence for both Ice Lance and Icy
+Touch, keeping the three-second duration, refresh behavior, and non-stacking
+modifiers identical between the two attacks.
+
 For floating buff/debuff symbols, cloning an existing animated status-image
 layout is more reliable than inventing overlay geometry. Chill clones the
 29-frame `XR25plague_icon` image record, appends custom remapped TILE records,
@@ -692,6 +703,91 @@ PHo3Ice Lance Hit
 
 The impact art must be palette-remapped into a palette included by
 `phantom_maindata.cam`; the current build remaps it into palette `32`.
+
+### Icy Touch
+
+Phantoms learn Icy Touch at level 4 as a melee-gated Attack spell. Its action
+follows the stock scripted-attack-spell presentation used by
+abilities such as Double Attack and Super Strike: the Phantom's directional
+`Attack` animation drives the existing GPL callback. It retains the stock
+`Fire_Blast` sound, rank `3`, and four-second timeout.
+
+`Icy_Touch_Cast` is now one self-contained monster-style action callback. It
+re-reads the Phantom's current `"Target"` into a local agent instead of relying
+on the callback's supplied target argument, validates that current target, and
+invokes one stock `$make_attack(thisagent, target)`, matching the established
+Double Attack and Super Strike weapon pattern. This performs a complete
+ordinary weapon attack with the Phantom's current hit chance, Strength, weapon
+damage/upgrades/enchantment, and the target's dodge, parry, and armor. If the
+target survives, the same callback performs the magic hit and applies both
+debuffs directly. It does not rebuild an enemy list, invoke a secondary hit
+helper, or depend on a missile-arrival callback. The earlier invisible PHp2
+carrier still allowed the weapon half to execute but never called its hit
+script in game, which was why every impact and debuff experiment appeared
+inert. PHp2 and its 128 blank tiles have been removed. The profile and
+spell-list icons still copy stock Fire Blast art.
+
+Icy Touch uses a stock-style Attack-spell validation callback modeled on the
+expansion's `Multiple_Attack_Check`. `Icy_Touch_Check` copies the Phantom's
+current target into a local agent, rejects invalid/dead targets and
+buildings/lairs, and returns available only when that specific target is
+within the fixed `24`-unit `Phantom_Icy_Touch_Range`. This check runs inside
+`getbestspell` before `attack_object` chooses its movement range. Outside
+melee range Icy Touch is therefore excluded and the Phantom continues using
+Ice Lance at its ordinary casting range; Icy Touch never requests movement
+toward its target.
+
+After the weapon strike, `Icy_Touch_Cast` directly calls
+`$spell_attack(thisagent, target, 30)` and the same `Phantom_Apply_Chill`
+helper used by Ice Lance with Ice Lance's three-second duration. The inherited
+Fire Blast `Does_Resist_Fire` gate and player-cast Wither impact have been
+removed: neither belongs in a frost attack, and both obscured whether the
+monster action callback itself was applying the effect. The Chill helper
+removes and recreates the existing Chill effectors before applying their
+modifiers, so subsequent hits refresh Chill without stacking.
+
+The hit also applies the custom `Gravechill` debuff for eight seconds.
+Gravechill now reproduces the monster-side Medusa Slow structure within that
+same executing callback: it directly creates the timed visible icon and then
+adjusts the target's attributes, without a player spell or secondary callback
+between them. The `gravechill_icon` owns the duration and calls
+`Gravechill_End` when it expires or is deleted. Application reduces Strength
+by `5` through `MagicalAdjustAttribute`, Defence by `2` through
+`ATTRIB_Parry`, and Resistance by `2` through `ATTRIB_MagicResistance`. The end
+callback restores those exact values.
+Reapplication first deletes the existing icon, allowing its end callback to
+restore the old modifiers, and then creates the fresh icon before applying the
+fresh modifiers, matching stock monster debuff ordering. The result refreshes
+duration across any number of Phantoms without stacking.
+
+The weapon half may miss, be dodged, or be parried while the directly invoked
+magic half still resolves through `$spell_attack`; the magic/debuff half is
+skipped only if the weapon hit has already killed the target. The callback
+creates a separate zero-duration `gravechill_hit_effector` using PHg2, a
+six-frame one-shot animation which runs through every source stage from the
+ghostly skull forming to the completed crystal skull cracking into flying
+shards. It has no end callback and owns no modifiers. The animated PHg1 status
+symbol remains the persistent cyan crystalline skull and sole owner of the
+eight-second cleanup timer. Both use:
+
+```text
+assets\source\icy-touch-impact-skull-source-v1-transparent.png
+```
+
+The icon uses the fully formed skull stage, removes detached source shards,
+and packages it through the same 29-frame animation structure as the proven
+Chill symbol. It has a subtle pulse, hover, and vertical-axis turn. There is
+currently no custom cooldown effector, Phantom watcher trigger, or
+modification to global combat/travel logic.
+
+After a build, decode the actual packaged palette art with:
+
+```powershell
+.\scripts\create_gravechill_review.py
+```
+
+This writes
+`artifacts\reviews\gravechill-icon-packaged-review.png`.
 
 ### Frost Armor
 
@@ -960,6 +1056,20 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   refresh, non-stacking, movement-slow, action-slow, duration, and status-icon
   review. The fixed modifiers deliberately describe a mild Chill rather than
   promising an exact percentage on every unit.
+- Icy Touch is level 4, rank 3, and uses a 4-second cooldown with the
+  Phantom's scale-stable directional attack animation and a persistent animated
+  cyan Gravechill skull. Its single monster-style action callback re-reads the
+  scheduler-selected current target, resolves one complete stock `$make_attack`
+  weapon strike, then directly invokes `$spell_attack(..., 30)` and refreshes
+  the established three-second non-stacking Chill. In that same callback it
+  directly creates and applies a refreshable, non-stacking eight-second
+  `-5 Strength` / `-2 Defence` / `-2 Resistance` Gravechill debuff, following
+  the stock Medusa Slow path. A separate six-frame PHg2 skull
+  formation-and-shatter overlay plays once on each successful application.
+  Its stock-style validation callback makes
+  it available only when that specific unit target is within the fixed
+  24-unit melee radius, allowing Ice Lance to remain selected at range without
+  making the Phantom move closer for Icy Touch.
 - Frozen Cowl is a starter item that displays and grants `+2` physical armor.
   Black Icerod retains its in-game-confirmed displayed and mechanical `+8`
   weapon damage and now adds a displayed and mechanical `+5 Parry` through the
@@ -1000,7 +1110,7 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
     Phantoms.
   - Allow Priestess healing casts to heal Phantoms as the intended exception.
   - Prevent Phantoms and Paladins from existing in the same realm.
-  - Design and implement the Phantom spells `Icy Touch` and `Blizzard`.
+  - Design and implement `Blizzard`.
 
 ## Build
 
