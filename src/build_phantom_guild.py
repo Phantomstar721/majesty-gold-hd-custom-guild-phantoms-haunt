@@ -46,6 +46,7 @@ FROST_FIELD_HIT_IMAGE = b"XR30frost_fld_hit"
 CHILL_ICON_TEMPLATE_IMAGE = b"XR25plague_icon"
 PHANTOM_ICE_LANCE_HIT_IMAGE = b"PHo3Ice Lance Hit"
 PHANTOM_CHILL_ICON_IMAGE = b"PHo4chill_icon"
+PHANTOM_EMPOWERED_CHILL_ICON_IMAGE = b"PHc3emp_chill_icon"
 PHANTOM_GRAVECHILL_ICON_IMAGE = b"PHg1Gravechill"
 PHANTOM_GRAVECHILL_HIT_IMAGE = b"PHg2Gravechill Hit"
 PHANTOM_FROST_ARMOR_CRYSTAL_IMAGE = b"PHf1Frost Crystal"
@@ -53,6 +54,8 @@ PHANTOM_FROZEN_SMALL_IMAGE = b"PHf2Frozen Small"
 PHANTOM_FROZEN_MEDIUM_IMAGE = b"PHf3Frozen Medium"
 PHANTOM_FROZEN_LARGE_IMAGE = b"PHf4Frozen Large"
 PHANTOM_CALL_TO_GRAVE_IMAGE = b"PHc2Call to Grave"
+PHANTOM_ETERNAL_SOUL_ICON_IMAGE = b"PHe1Soul Flame Icon"
+PHANTOM_ETERNAL_SOUL_CAST_IMAGE = b"PHe2Soul Flame"
 PHANTOM_APPROVED_STAND_BODY_HEIGHTS = (61, 55, 52, 50, 50, 56, 60, 61)
 HERO_PORTRAIT_TILE = 6293
 HERO_ICON_TILE = 6299
@@ -90,6 +93,7 @@ ICY_TOUCH_SPELL_ICON_TILES = (346,)
 FIRE_BLAST_SPELL_ICON_TILE = 357
 BLIZZARD_SPELL_ICON_TILES = (347,)
 CALL_TO_GRAVE_SPELL_ICON_TILES = (348,)
+ETERNAL_SOUL_SPELL_ICON_TILES = (349,)
 STAFF_ICON_TILES: tuple[int, ...] = ()
 STAFF_SMALL_ICON_TILES: tuple[int, ...] = ()
 MX_STAFF_ICON_TILES: tuple[int, ...] = ()
@@ -148,6 +152,7 @@ def main() -> int:
     parser.add_argument("--frost-armor-crystal-source-png", type=Path)
     parser.add_argument("--frost-armor-frozen-casing-source-png", type=Path)
     parser.add_argument("--call-to-grave-portal-source-png", type=Path)
+    parser.add_argument("--eternal-soul-flame-source-png", type=Path)
     parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
     parser.add_argument("--frost-armor-spell-icon-rgb", type=Path)
     parser.add_argument("--blizzard-spell-icon-rgb", type=Path)
@@ -200,6 +205,7 @@ def main() -> int:
         args.frost_armor_crystal_source_png,
         args.frost_armor_frozen_casing_source_png,
         args.call_to_grave_portal_source_png,
+        args.eternal_soul_flame_source_png,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
     )
     write_interfacedata_cam(
@@ -358,6 +364,7 @@ def phantom_units_xml() -> str:
 \t\t\t\t<Spell ID="1" Value="frost_armor"/>
 \t\t\t\t<Spell ID="2" Value="icy_touch"/>
 \t\t\t\t<Spell ID="3" Value="call_to_grave"/>
+\t\t\t\t<Spell ID="4" Value="eternal_soul"/>
 \t\t\t</AllowedSpells>
 \t\t</Game>
 \t</Description>
@@ -465,7 +472,7 @@ def phantom_actions_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<Flags value="IsSpell"/>
-\t\t\t<TimeoutDuration value="4000"/>
+\t\t\t<TimeoutDuration value="5000"/>
 \t\t\t<SpellType value="Attack"/>
 \t\t\t<CharacterLevel value="4"/>
 \t\t\t<SpellRank value="3"/>
@@ -504,6 +511,23 @@ def phantom_actions_xml() -> str:
 \t\t\t<CharacterLevel value="5"/>
 \t\t\t<SpellRank value="4"/>
 \t\t\t<ValidationScript value="Call_To_Grave_Check"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Action" subType="Standard" ID="WRa7" Name="eternal_soul" Description="Eternal Soul">
+\t\t<Engine version="1">
+\t\t\t<ImageSet value="Cast"/>
+\t\t\t<CompletionImageSet value="Stand"/>
+\t\t\t<Sound value="Shield_of_Light"/>
+\t\t\t<SoundPhase begin="Begin"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Eternal_Soul_Begin"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<Flags value="IsSpell"/>
+\t\t\t<EffectorDuration value="25000"/>
+\t\t\t<TimeoutDuration value="30000"/>
+\t\t\t<SpellType value="Attack"/>
+\t\t\t<CharacterLevel value="6"/>
+\t\t\t<SpellRank value="5"/>
 \t\t</Game>
 \t</Description>
 </Majesty>
@@ -581,7 +605,7 @@ def phantom_overlays_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="0"/>
-\t\t\t<StackPriority value="0"/>
+\t\t\t<StackPriority value="1"/>
 \t\t\t<Flags value="TransparentToMouse"/>
 \t\t</Game>
 \t</Description>
@@ -686,6 +710,19 @@ def phantom_overlays_xml() -> str:
 \t\t\t<StackPriority value="1"/>
 \t\t</Game>
 \t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PH11" Name="ice_lance_empowered_chill_icon" Description="Empowered Chill">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHc3"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="1"/>
+\t\t</Game>
+\t</Description>
 \t<Description type="Unit" subType="Overlay" ID="PHc2" Name="call_to_grave_effector" Description="Call to Grave">
 \t\t<Engine version="1">
 \t\t\t<Info value="Directionless"/>
@@ -694,6 +731,35 @@ def phantom_overlays_xml() -> str:
 \t\t\t<ImageIDBase value="PHc2"/>
 \t\t\t<AttachmentPointID value="3"/>
 \t\t\t<DefaultSound value="Teleport"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="0"/>
+\t\t\t<Flags value="TransparentToMouse"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHe1" Name="eternal_soul_icon" Description="Eternal Soul">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHe1"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Eternal_Soul_End"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="1"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHe2" Name="eternal_soul_effector" Description="Eternal Soul">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHe2"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="0"/>
@@ -899,7 +965,9 @@ begin
 \t\t\tif ($isspellavailable(thisagent,"call_to_grave",1))
 \t\t\t\tvalue += #Phantom_Call_To_Grave_Confidence;
 
-\t\t\t// Eternal Soul is not queried until its level-6 action exists.
+\t\t\tif ($isspellavailable(thisagent,"eternal_soul",1))
+\t\t\t\tvalue += #Phantom_Eternal_Soul_Confidence;
+
 \t\t\tif ($isspellavailable(thisagent,"endless_winter",1))
 \t\t\t\tvalue += #Phantom_Endless_Winter_Confidence;
 \t\tend
@@ -1889,6 +1957,99 @@ begin
 \t$createmissile("ice_lance_missile", thisagent, target);
 end
 
+function Phantom_Eternal_Soul_Active(agent thisagent) is boolean
+
+declare
+
+begin
+\tIf ($NotValid(thisagent))
+\t\treturn False;
+
+\tIf ($IsValidGamePiece(thisagent) == False)
+\t\treturn False;
+
+\tIf ($HasAttribute("PhantomEternalSoulActive", thisagent) == False)
+\t\treturn False;
+
+\tIf (thisagent's "PhantomEternalSoulActive" == False)
+\t\treturn False;
+
+\treturn True;
+end
+
+function Eternal_Soul_Begin(agent thisagent, agent target)
+
+declare
+\tinteger base_max_hp, current_hp, bonus_max_hp, boosted_max_hp, boosted_hp;
+
+begin
+\tIf ($isdead(thisagent))
+\t\treturn;
+
+\tIf ($HasAttribute("PhantomEternalSoulActive", thisagent) == False)
+\t\tbegin
+\t\t\t$AddAttribute(thisagent, "PhantomEternalSoulActive", "boolean", False);
+\t\t\t$AddAttribute(thisagent, "PhantomEternalSoulMaxHPBonus", "integer", 0);
+\t\tend
+
+\tIf (thisagent's "PhantomEternalSoulActive")
+\t\treturn;
+
+\tbase_max_hp = $GetAttribute(thisagent, #ATTRIB_MaxHP);
+\tcurrent_hp = $GetAttribute(thisagent, #ATTRIB_HP);
+\tbonus_max_hp = (base_max_hp * 30) / 100;
+\tIf (bonus_max_hp < 1)
+\t\tbonus_max_hp = 1;
+
+\tboosted_max_hp = base_max_hp + bonus_max_hp;
+\tboosted_hp = ((current_hp * boosted_max_hp) + (base_max_hp / 2)) / base_max_hp;
+
+\tthisagent's "PhantomEternalSoulActive" = True;
+\tthisagent's "PhantomEternalSoulMaxHPBonus" = bonus_max_hp;
+\t$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 15);
+\t$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, 15);
+\t$AdjustAttribute(thisagent, #ATTRIB_MaxHP, bonus_max_hp);
+\t$SetAttribute(thisagent, #ATTRIB_HP, boosted_hp);
+\t$CreateEffector(thisagent, "eternal_soul_icon", $GetSpellAttribute("eternal_soul", "effector_duration"));
+\t$CreateEffector(thisagent, "eternal_soul_effector", 0);
+end
+
+function Eternal_Soul_End(agent thisagent)
+
+declare
+\tinteger boosted_max_hp, current_hp, bonus_max_hp, base_max_hp, restored_hp;
+
+begin
+\tIf ($HasAttribute("PhantomEternalSoulActive", thisagent) == False)
+\t\treturn;
+
+\tIf (thisagent's "PhantomEternalSoulActive" == False)
+\t\treturn;
+
+\tthisagent's "PhantomEternalSoulActive" = False;
+\tbonus_max_hp = thisagent's "PhantomEternalSoulMaxHPBonus";
+\tthisagent's "PhantomEternalSoulMaxHPBonus" = 0;
+
+\t$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, -15);
+\t$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, -15);
+
+\tboosted_max_hp = $GetAttribute(thisagent, #ATTRIB_MaxHP);
+\tbase_max_hp = boosted_max_hp - bonus_max_hp;
+\tIf (base_max_hp < 1)
+\t\tbase_max_hp = 1;
+
+\tcurrent_hp = $GetAttribute(thisagent, #ATTRIB_HP);
+\t$AdjustAttribute(thisagent, #ATTRIB_MaxHP, -bonus_max_hp);
+
+\tIf ($IsDead(thisagent))
+\t\treturn;
+
+\trestored_hp = ((current_hp * base_max_hp) + (boosted_max_hp / 2)) / boosted_max_hp;
+\tIf (restored_hp > base_max_hp)
+\t\trestored_hp = base_max_hp;
+\t$SetAttribute(thisagent, #ATTRIB_HP, restored_hp);
+end
+
 function Ice_Lance_Hit(agent thisagent, agent target)
 
 declare
@@ -1905,12 +2066,13 @@ begin
 \tIf (target's "Type" == "Building" || target's "Type" == "Lair")
 \t\treturn;
 
-\t$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));
+\t$Phantom_Apply_Chill(thisagent, target, $GetSpellAttribute("ice_lance", "effector_duration"));
 end
 
-function Phantom_Apply_Chill(agent target, integer duration)
+function Phantom_Apply_Chill(agent source, agent target, integer duration)
 
 declare
+\tinteger desired_tier;
 
 begin
 \tIf ($isdead(target))
@@ -1923,22 +2085,87 @@ begin
 \t\tbegin
 \t\t\t$AddAttribute(target, "PhantomChillRemaining", "integer", duration);
 \t\t\t$AddAttribute(target, "PhantomChillActive", "boolean", False);
+\t\t\t$AddAttribute(target, "PhantomChillTier", "integer", 0);
 \t\t\t$AddAttribute(target, "PhantomChillWatch", "function", $Phantom_Chill_Watch);
 \t\tend
-\ttarget's "PhantomChillRemaining" = duration;
+\tIf ($HasAttribute("PhantomChillIconDelay", target) == False)
+\t\t$AddAttribute(target, "PhantomChillIconDelay", "integer", 0);
+
+\tdesired_tier = 1;
+\tIf ($Phantom_Eternal_Soul_Active(source))
+\t\tdesired_tier = 2;
 
 \tIf (target's "PhantomChillActive" == False)
 \t\tbegin
 \t\t\ttarget's "PhantomChillActive" = True;
-\t\t\t$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
-\t\t\t$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
+\t\t\ttarget's "PhantomChillTier" = desired_tier;
+\t\t\ttarget's "PhantomChillRemaining" = duration;
+\t\t\tIf (desired_tier == 2)
+\t\t\t\tbegin
+\t\t\t\t\t$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 100);
+\t\t\t\t\t$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 1000);
+\t\t\t\tend
+\t\t\tElse
+\t\t\t\tbegin
+\t\t\t\t\t$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
+\t\t\t\t\t$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
+\t\t\t\tend
+\t\tend
+\tElse If (desired_tier == 2)
+\t\tbegin
+\t\t\tIf (target's "PhantomChillTier" == 1)
+\t\t\t\tbegin
+\t\t\t\t\t$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
+\t\t\t\t\t$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
+\t\t\t\tend
+\t\t\ttarget's "PhantomChillTier" = 2;
+\t\t\ttarget's "PhantomChillRemaining" = duration;
+\t\tend
+\tElse
+\t\tbegin
+\t\t\tIf (target's "PhantomChillTier" != 2)
+\t\t\t\tbegin
+\t\t\t\t\ttarget's "PhantomChillTier" = 1;
+\t\t\t\t\ttarget's "PhantomChillRemaining" = duration;
+\t\t\t\tend
 \t\tend
 
-\tIf ($CheckEffector(target, "ice_lance_chill_icon") == False)
-\t\t$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");
+\t$Phantom_Chill_Sync_Icon(target);
 
 \tIf ($IsRunning(target's "PhantomChillWatch") == False)
 \t\t$NewThread(target's "PhantomChillWatch", 100, target);
+end
+
+function Phantom_Chill_Sync_Icon(agent target)
+
+declare
+
+begin
+\tIf (target's "PhantomChillIconDelay" > 0)
+\t\treturn;
+
+\tIf (target's "PhantomChillTier" == 2)
+\t\tbegin
+\t\t\tIf ($CheckEffector(target, "ice_lance_chill_icon"))
+\t\t\t\tbegin
+\t\t\t\t\t$DeleteEffector(target, "ice_lance_chill_icon");
+\t\t\t\t\ttarget's "PhantomChillIconDelay" = 200;
+\t\t\t\t\treturn;
+\t\t\t\tend
+\t\t\tIf ($CheckEffector(target, "ice_lance_empowered_chill_icon") == False)
+\t\t\t\t$CreateEffector(target, "ice_lance_empowered_chill_icon", 1, "infinite");
+\t\tend
+\tElse
+\t\tbegin
+\t\t\tIf ($CheckEffector(target, "ice_lance_empowered_chill_icon"))
+\t\t\t\tbegin
+\t\t\t\t\t$DeleteEffector(target, "ice_lance_empowered_chill_icon");
+\t\t\t\t\ttarget's "PhantomChillIconDelay" = 200;
+\t\t\t\t\treturn;
+\t\t\t\tend
+\t\t\tIf ($CheckEffector(target, "ice_lance_chill_icon") == False)
+\t\t\t\t$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");
+\t\tend
 end
 
 function Phantom_Chill_Watch(agent thisagent)
@@ -1955,16 +2182,32 @@ begin
 \t\t\treturn;
 \t\tend
 
+\tIf (thisagent's "PhantomChillIconDelay" > 0)
+\t\tthisagent's "PhantomChillIconDelay" -= 100;
+\t$Phantom_Chill_Sync_Icon(thisagent);
+
 \tthisagent's "PhantomChillRemaining" -= 100;
 \tIf (thisagent's "PhantomChillRemaining" > 0)
 \t\treturn;
 
 \t$KillThread(thisagent's "PhantomChillWatch");
 \tthisagent's "PhantomChillActive" = False;
-\t$AdjustAttribute(thisagent, #ATTRIB_MovementRateModifier, -50);
-\t$AdjustAttribute(thisagent, #ATTRIB_ActionRateModifier, -500);
+\tIf (thisagent's "PhantomChillTier" == 2)
+\t\tbegin
+\t\t\t$AdjustAttribute(thisagent, #ATTRIB_MovementRateModifier, -100);
+\t\t\t$AdjustAttribute(thisagent, #ATTRIB_ActionRateModifier, -1000);
+\t\tend
+\tElse
+\t\tbegin
+\t\t\t$AdjustAttribute(thisagent, #ATTRIB_MovementRateModifier, -50);
+\t\t\t$AdjustAttribute(thisagent, #ATTRIB_ActionRateModifier, -500);
+\t\tend
+\tthisagent's "PhantomChillTier" = 0;
+\tthisagent's "PhantomChillIconDelay" = 0;
 \tIf ($CheckEffector(thisagent, "ice_lance_chill_icon"))
 \t\t$DeleteEffector(thisagent, "ice_lance_chill_icon");
+\tIf ($CheckEffector(thisagent, "ice_lance_empowered_chill_icon"))
+\t\t$DeleteEffector(thisagent, "ice_lance_empowered_chill_icon");
 end
 
 function Phantom_death(agent thisagent)
@@ -2319,7 +2562,7 @@ begin
 \tIf ($IsDead(target))
 \t\treturn;
 
-\t$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));
+\t$Phantom_Apply_Chill(thisagent, target, $GetSpellAttribute("ice_lance", "effector_duration"));
 \t$CreateEffector(target, "gravechill_hit_effector", 0);
 \t$Phantom_Apply_Gravechill(target, 8000);
 end
@@ -2491,6 +2734,7 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
             fourcc_id("WRa4"): "Icy Touch",
             fourcc_id("WRa5"): "Endless Winter",
             fourcc_id("WRa6"): "Call to Grave",
+            fourcc_id("WRa7"): "Eternal Soul",
         },
     )
     cloned_guild_menu = (
@@ -2652,6 +2896,7 @@ def write_maindata_cam(
     frost_armor_crystal_source_png: Path | None,
     frost_armor_frozen_casing_source_png: Path | None,
     call_to_grave_portal_source_png: Path | None,
+    eternal_soul_flame_source_png: Path | None,
     ice_effect_maindata: Path | None,
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
@@ -2673,9 +2918,13 @@ def write_maindata_cam(
     ice_effect_tiles: list[bytes] = []
     source_ice_tile_indices: list[int] = []
     chill_icon_image: bytes | None = None
+    empowered_chill_icon_image: bytes | None = None
     gravechill_icon_image: bytes | None = None
     gravechill_hit_image: bytes | None = None
     gravechill_hit_template_tiles: list[bytes] = []
+    eternal_soul_icon_image: bytes | None = None
+    eternal_soul_cast_image: bytes | None = None
+    eternal_soul_cast_template_tiles: list[bytes] = []
     chill_icon_template_tiles: list[bytes] = []
     source_chill_icon_tile_indices: list[int] = []
     frost_armor_crystal_image: bytes | None = None
@@ -2711,6 +2960,8 @@ def write_maindata_cam(
                 ]
         gravechill_hit_image = source_ice_lance_hit_effect
         gravechill_hit_template_tiles = ice_effect_tiles
+        eternal_soul_cast_image = source_ice_lance_hit_effect
+        eternal_soul_cast_template_tiles = ice_effect_tiles
         chill_icon_image = read_cam_entry(
             ice_effect_maindata,
             b"IMAG",
@@ -2723,7 +2974,9 @@ def write_maindata_cam(
             source_ice_effect_tiles[source_tile_index].data
             for source_tile_index in source_chill_icon_tile_indices
         ]
+        empowered_chill_icon_image = chill_icon_image
         gravechill_icon_image = chill_icon_image
+        eternal_soul_icon_image = chill_icon_image
         frost_armor_crystal_image = chill_icon_image
         frozen_small_image = chill_icon_image
         frozen_medium_image = chill_icon_image
@@ -3055,6 +3308,37 @@ def write_maindata_cam(
         )
 
     if (
+        empowered_chill_icon_image
+        and chill_icon_template_tiles
+        and source_chill_icon_tile_indices
+    ):
+        empowered_chill_tile_replacements: dict[int, int] = {}
+        frame_count = len(source_chill_icon_tile_indices)
+        for frame_index, (source_tile_index, template_tile) in enumerate(
+            zip(source_chill_icon_tile_indices, chill_icon_template_tiles)
+        ):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            empowered_chill_tile_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(
+                        f"PHc3EmpChillTile{frame_index}".encode("ascii")
+                    ),
+                    data=generated_chill_snowflake_tile(
+                        template_tile,
+                        palettes,
+                        frame_index,
+                        frame_count,
+                        empowered=True,
+                    ),
+                )
+            )
+        empowered_chill_icon_image = remap_imag_animation_tiles(
+            empowered_chill_icon_image,
+            empowered_chill_tile_replacements,
+        )
+
+    if (
         gravechill_icon_image
         and chill_icon_template_tiles
         and source_chill_icon_tile_indices
@@ -3116,6 +3400,68 @@ def write_maindata_cam(
         gravechill_hit_image = remap_imag_animation_tiles(
             gravechill_hit_image,
             gravechill_hit_replacements,
+        )
+
+    if (
+        eternal_soul_icon_image
+        and chill_icon_template_tiles
+        and source_chill_icon_tile_indices
+        and eternal_soul_flame_source_png
+    ):
+        eternal_soul_icon_replacements: dict[int, int] = {}
+        frame_count = len(source_chill_icon_tile_indices)
+        for frame_index, (source_tile_index, template_tile) in enumerate(
+            zip(source_chill_icon_tile_indices, chill_icon_template_tiles)
+        ):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            eternal_soul_icon_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHe1FlameIcon{frame_index:02d}".encode("ascii")),
+                    data=generated_eternal_soul_icon_tile(
+                        template_tile,
+                        palettes,
+                        eternal_soul_flame_source_png,
+                        frame_index,
+                        frame_count,
+                    ),
+                )
+            )
+        eternal_soul_icon_image = remap_imag_animation_tiles(
+            eternal_soul_icon_image,
+            eternal_soul_icon_replacements,
+        )
+
+    if (
+        eternal_soul_cast_image
+        and eternal_soul_cast_template_tiles
+        and source_ice_tile_indices
+        and eternal_soul_flame_source_png
+    ):
+        eternal_soul_cast_replacements: dict[int, int] = {}
+        frame_count = len(source_ice_tile_indices)
+        for frame_index, source_tile_index in enumerate(source_ice_tile_indices):
+            # Frost Field changes canvas size as its burst expands. Use one
+            # fixed final-frame canvas so the flame itself supplies all growth
+            # and remains locked to the same attachment anchor.
+            template_tile = eternal_soul_cast_template_tiles[-1]
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            eternal_soul_cast_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHe2FlameCast{frame_index:02d}".encode("ascii")),
+                    data=generated_eternal_soul_cast_tile(
+                        template_tile,
+                        palettes,
+                        eternal_soul_flame_source_png,
+                        frame_index,
+                        frame_count,
+                    ),
+                )
+            )
+        eternal_soul_cast_image = remap_imag_animation_tiles(
+            eternal_soul_cast_image,
+            eternal_soul_cast_replacements,
         )
 
     if (
@@ -3287,6 +3633,13 @@ def write_maindata_cam(
         image_entries.append(CamEntry(name=pad_name(PHANTOM_ICE_LANCE_HIT_IMAGE), data=ice_lance_hit_effect))
     if chill_icon_image:
         image_entries.append(CamEntry(name=pad_name(PHANTOM_CHILL_ICON_IMAGE), data=chill_icon_image))
+    if empowered_chill_icon_image:
+        image_entries.append(
+            CamEntry(
+                name=pad_name(PHANTOM_EMPOWERED_CHILL_ICON_IMAGE),
+                data=empowered_chill_icon_image,
+            )
+        )
     if gravechill_icon_image:
         image_entries.append(
             CamEntry(name=pad_name(PHANTOM_GRAVECHILL_ICON_IMAGE), data=gravechill_icon_image)
@@ -3307,6 +3660,20 @@ def write_maindata_cam(
         image_entries.append(CamEntry(name=pad_name(PHANTOM_FROZEN_LARGE_IMAGE), data=frozen_large_image))
     if call_to_grave_image:
         image_entries.append(CamEntry(name=pad_name(PHANTOM_CALL_TO_GRAVE_IMAGE), data=call_to_grave_image))
+    if eternal_soul_icon_image:
+        image_entries.append(
+            CamEntry(
+                name=pad_name(PHANTOM_ETERNAL_SOUL_ICON_IMAGE),
+                data=eternal_soul_icon_image,
+            )
+        )
+    if eternal_soul_cast_image:
+        image_entries.append(
+            CamEntry(
+                name=pad_name(PHANTOM_ETERNAL_SOUL_CAST_IMAGE),
+                data=eternal_soul_cast_image,
+            )
+        )
     write_cam(
         (
             CamSection(
@@ -3391,6 +3758,11 @@ def write_interfacedata_cam(
     for tile_index in CALL_TO_GRAVE_SPELL_ICON_TILES:
         if call_to_grave_spell_icon_rgb:
             replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], call_to_grave_spell_icon_rgb.read_bytes())
+    for tile_index in ETERNAL_SOUL_SPELL_ICON_TILES:
+        replacement_tiles[tile_index] = replacement_tiles.get(
+            FROST_ARMOR_SPELL_ICON_TILES[0],
+            tiles[FROST_ARMOR_SPELL_ICON_TILES[0]].data,
+        )
     for tile_index in LEATHER_ARMOR_ICON_TILES:
         if phantom_cowl_icon_rgb:
             replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], phantom_cowl_icon_rgb.read_bytes())
@@ -5240,8 +5612,9 @@ def generated_chill_snowflake_tile(
     palettes: list[CamEntry],
     frame_index: int,
     frame_count: int,
+    empowered: bool = False,
 ) -> bytes:
-    """Create one bright rotating frame for the floating Chill snowflake."""
+    """Create one rotating frame for normal or empowered Chill."""
     from PIL import Image, ImageDraw
 
     height = struct.unpack_from("<H", template_tile, 2)[0]
@@ -5257,9 +5630,14 @@ def generated_chill_snowflake_tile(
     radius = min(width, height) * scale * 0.34 * pulse
     yaw = math.cos(turn)
     yaw_scale = math.copysign(0.18 + 0.82 * abs(yaw), yaw)
-    dark = (24, 92, 146)
-    cyan = (70, 205, 236)
-    pale = (190, 240, 246)
+    if empowered:
+        dark = (8, 28, 82)
+        cyan = (28, 112, 190)
+        pale = (88, 178, 220)
+    else:
+        dark = (24, 92, 146)
+        cyan = (70, 205, 236)
+        pale = (190, 240, 246)
 
     def project(angle: float, distance: float) -> tuple[float, float]:
         return (
@@ -5330,6 +5708,129 @@ def generated_chill_snowflake_tile(
         ICE_LANCE_PROJECTILE_PALETTE_INDEX,
     )
     return tile_from_rgb(palette_tile, palettes, canvas.tobytes())
+
+
+def generated_eternal_soul_icon_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+) -> bytes:
+    """Render a compact ghost flame that gently pulses above the Phantom."""
+    from PIL import Image, ImageEnhance
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    if bbox is None:
+        return blank_indexed_v3_tile(template_tile)
+    source = source.crop(bbox)
+
+    phase = frame_index / max(1, frame_count)
+    turn = phase * math.tau
+    pulse = 0.90 + 0.12 * (0.5 + 0.5 * math.sin(turn * 2.0))
+    target_height = max(10, round(height * 0.82 * pulse))
+    target_width = max(6, round(source.width * target_height / max(1, source.height)))
+    if target_width > round(width * 0.76):
+        target_width = max(6, round(width * 0.76))
+        target_height = max(10, round(source.height * target_width / max(1, source.width)))
+    source = source.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    source = ImageEnhance.Brightness(source).enhance(
+        0.86 + 0.10 * (0.5 + 0.5 * math.sin(turn * 2.0))
+    )
+
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    left = (width - source.width) // 2
+    top = height - source.height - 1 + round(math.sin(turn) * 0.8)
+    canvas.alpha_composite(source, (left, top))
+    return rgba_to_indexed_tile(
+        canvas,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (
+            3,
+            height,
+            width,
+            struct.unpack_from("<H", template_tile, 6)[0],
+            32,
+            struct.unpack_from("<H", template_tile, 10)[0],
+            struct.unpack_from("<H", template_tile, 12)[0],
+            struct.unpack_from("<H", template_tile, 14)[0],
+        ),
+    )
+
+
+def generated_eternal_soul_cast_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+) -> bytes:
+    """Grow, pulse, and fade the ghost flame as a six-frame self-buff cast."""
+    from PIL import Image, ImageEnhance
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    if bbox is None:
+        return blank_indexed_v3_tile(template_tile)
+    source = source.crop(bbox)
+
+    progress = frame_index / max(1, frame_count - 1)
+    if progress <= 0.60:
+        growth = progress / 0.60
+        smooth_growth = growth * growth * (3.0 - 2.0 * growth)
+        scale = 0.18 + 0.82 * smooth_growth
+        visible_alpha = 0.32 + 0.68 * growth
+    elif progress <= 0.82:
+        pulse = (progress - 0.60) / 0.22
+        scale = 1.0 + 0.08 * math.sin(math.pi * pulse)
+        visible_alpha = 1.0
+    else:
+        fade = (progress - 0.82) / 0.18
+        scale = 1.03 - 0.15 * fade
+        # Leave a dim, partially-eroded final drawing; the one-shot overlay
+        # then removes it, completing the fade instead of snapping from the
+        # brightest pulse directly to nothing.
+        visible_alpha = max(0.22, 1.0 - 0.78 * fade)
+
+    target_height = max(4, round(height * 0.74 * scale))
+    target_width = max(3, round(source.width * target_height / max(1, source.height)))
+    if target_width > round(width * 0.94):
+        target_width = max(3, round(width * 0.94))
+        target_height = max(4, round(source.height * target_width / max(1, source.width)))
+    source = source.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    source = ImageEnhance.Brightness(source).enhance(
+        0.48 + 0.50 * visible_alpha
+    )
+    alpha = source.getchannel("A").point(lambda value: round(value * visible_alpha))
+    source.putalpha(alpha)
+
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    left = (width - source.width) // 2
+    top = height - source.height - 1
+    canvas.alpha_composite(source, (left, top))
+    return rgba_to_indexed_tile(
+        canvas,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (
+            3,
+            height,
+            width,
+            struct.unpack_from("<H", template_tile, 6)[0],
+            32,
+            min(width - 1, struct.unpack_from("<H", template_tile, 10)[0] + 6),
+            min(height - 1, struct.unpack_from("<H", template_tile, 12)[0] + 12),
+            struct.unpack_from("<H", template_tile, 14)[0],
+        ),
+    )
 
 
 def generated_frost_armor_crystal_tile(

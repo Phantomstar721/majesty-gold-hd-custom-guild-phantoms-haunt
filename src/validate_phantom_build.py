@@ -110,6 +110,7 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
             b"WRa5Blizzard",
             b"PHo3Ice Lance Hit",
             b"PHo4chill_icon",
+            b"PHc3emp_chill_icon",
             b"PHg1Gravechill",
             b"PHg2Gravechill Hit",
             b"PHf1Frost Crystal",
@@ -117,6 +118,8 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
             b"PHf3Frozen Medium",
             b"PHf4Frozen Large",
             b"PHc2Call to Grave",
+            b"PHe1Soul Flame Icon",
+            b"PHe2Soul Flame",
         },
         b"TILE": set(),
         b"SPLT": set(),
@@ -152,6 +155,7 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Action", "WRa4"),
         ("Action", "WRa5"),
         ("Action", "WRa6"),
+        ("Action", "WRa7"),
     },
     "phantom_projectiles.xml": {("Unit", "PHp1")},
     "phantom_overlays.xml": {
@@ -159,6 +163,7 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHo2"),
         ("Unit", "PHo3"),
         ("Unit", "PHo4"),
+        ("Unit", "PH11"),
         ("Unit", "PHo6"),
         ("Unit", "PHo7"),
         ("Unit", "PHo8"),
@@ -167,6 +172,8 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHg1"),
         ("Unit", "PHg2"),
         ("Unit", "PHc2"),
+        ("Unit", "PHe1"),
+        ("Unit", "PHe2"),
     },
     "phantom_sounds.xml": {
         ("Sound", "PH01"),
@@ -184,6 +191,7 @@ CUSTOM_TILE_OWNERS = {
     b"PHM1CastGlow": (b"PHM1Phantom", "low16"),
     b"PHo3IceTile": (b"PHo3Ice Lance Hit", "u32"),
     b"PHc1ChillTile": (b"PHo4chill_icon", "u32"),
+    b"PHc3EmpChillTile": (b"PHc3emp_chill_icon", "u32"),
     b"PHg1Skull": (b"PHg1Gravechill", "u32"),
     b"PHg2SkullHit": (b"PHg2Gravechill Hit", "u32"),
     b"PHf1Crystal": (b"PHf1Frost Crystal", "u32"),
@@ -191,6 +199,8 @@ CUSTOM_TILE_OWNERS = {
     b"PHf3Frozen": (b"PHf3Frozen Medium", "u32"),
     b"PHf4Frozen": (b"PHf4Frozen Large", "u32"),
     b"PHc2Portal": (b"PHc2Call to Grave", "u32"),
+    b"PHe1FlameIcon": (b"PHe1Soul Flame Icon", "u32"),
+    b"PHe2FlameCast": (b"PHe2Soul Flame", "u32"),
 }
 
 EXPECTED_CUSTOM_TILE_COUNTS = {
@@ -203,6 +213,7 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHM1CastGlow": 32,
     b"PHo3IceTile": 6,
     b"PHc1ChillTile": 29,
+    b"PHc3EmpChillTile": 29,
     b"PHg1Skull": 29,
     b"PHg2SkullHit": 6,
     b"PHf1Crystal": 29,
@@ -210,6 +221,8 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHf3Frozen": 29,
     b"PHf4Frozen": 29,
     b"PHc2Portal": 22,
+    b"PHe1FlameIcon": 29,
+    b"PHe2FlameCast": 6,
 }
 
 ALIGNED_PHANTOM_DISSOLVE_TILES = {
@@ -1595,6 +1608,8 @@ def validate_ice_lance_contract(output_root: Path) -> None:
     overlay_contract = (
         'ID="PHo4" Name="ice_lance_chill_icon"',
         '<ImageIDBase value="PHo4"/>',
+        'ID="PH11" Name="ice_lance_empowered_chill_icon"',
+        '<ImageIDBase value="PHc3"/>',
     )
     missing_overlay = [value for value in overlay_contract if value not in overlays]
     if missing_overlay:
@@ -1605,11 +1620,22 @@ def validate_ice_lance_contract(output_root: Path) -> None:
             "watcher-owned snowflake must be the only visible Chill effector"
         )
     chill_overlay_start = overlays.index('ID="PHo4" Name="ice_lance_chill_icon"')
-    chill_overlay = overlays[chill_overlay_start:]
+    chill_overlay_end = overlays.index("</Description>", chill_overlay_start)
+    chill_overlay = overlays[chill_overlay_start:chill_overlay_end]
     if "GPLFunction=" in chill_overlay:
         fail(
             f"{overlays_path}: Chill icon must not own modifier cleanup; "
             "the counter watcher owns the full lifecycle"
+        )
+    empowered_overlay_start = overlays.index(
+        'ID="PH11" Name="ice_lance_empowered_chill_icon"'
+    )
+    empowered_overlay_end = overlays.index("</Description>", empowered_overlay_start)
+    empowered_overlay = overlays[empowered_overlay_start:empowered_overlay_end]
+    if "GPLFunction=" in empowered_overlay:
+        fail(
+            f"{overlays_path}: empowered Chill icon must not own modifier "
+            "cleanup; the shared counter watcher owns the lifecycle"
         )
 
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
@@ -1624,27 +1650,40 @@ def validate_ice_lance_contract(output_root: Path) -> None:
     gpl_contract = (
         "$spell_attack(thisagent, target, 8);",
         '$createeffector(target, "ice_lance_hit_effector", 0);',
-        '$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));',
-        "function Phantom_Apply_Chill(agent target, integer duration)",
+        '$Phantom_Apply_Chill(thisagent, target, $GetSpellAttribute("ice_lance", "effector_duration"));',
+        "function Phantom_Apply_Chill(agent source, agent target, integer duration)",
         'If ($HasAttribute("PhantomChillRemaining", target) == False)',
         '$AddAttribute(target, "PhantomChillRemaining", "integer", duration);',
         '$AddAttribute(target, "PhantomChillActive", "boolean", False);',
+        '$AddAttribute(target, "PhantomChillTier", "integer", 0);',
         '$AddAttribute(target, "PhantomChillWatch", "function", $Phantom_Chill_Watch);',
-        'target\'s "PhantomChillRemaining" = duration;',
+        'If ($HasAttribute("PhantomChillIconDelay", target) == False)',
+        '$AddAttribute(target, "PhantomChillIconDelay", "integer", 0);',
         'If (target\'s "PhantomChillActive" == False)',
         "#ATTRIB_MovementRateModifier, 50",
         "#ATTRIB_ActionRateModifier, 500",
+        "#ATTRIB_MovementRateModifier, 100",
+        "#ATTRIB_ActionRateModifier, 1000",
+        '$Phantom_Eternal_Soul_Active(source)',
+        '$Phantom_Chill_Sync_Icon(target);',
+        "function Phantom_Chill_Sync_Icon(agent target)",
+        'target\'s "PhantomChillIconDelay" = 200;',
         'If ($CheckEffector(target, "ice_lance_chill_icon") == False)',
         '$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");',
+        'If ($CheckEffector(target, "ice_lance_empowered_chill_icon") == False)',
+        '$CreateEffector(target, "ice_lance_empowered_chill_icon", 1, "infinite");',
         'If ($IsRunning(target\'s "PhantomChillWatch") == False)',
         '$NewThread(target\'s "PhantomChillWatch", 100, target);',
         "function Phantom_Chill_Watch(agent thisagent)",
+        'thisagent\'s "PhantomChillIconDelay" -= 100;',
+        '$Phantom_Chill_Sync_Icon(thisagent);',
         'thisagent\'s "PhantomChillRemaining" -= 100;',
         '$KillThread(thisagent\'s "PhantomChillWatch");',
         'thisagent\'s "PhantomChillActive" = False;',
-        "#ATTRIB_MovementRateModifier, -50",
-        "#ATTRIB_ActionRateModifier, -500",
+        'thisagent\'s "PhantomChillTier" = 0;',
+        'thisagent\'s "PhantomChillIconDelay" = 0;',
         '$DeleteEffector(thisagent, "ice_lance_chill_icon");',
+        '$DeleteEffector(thisagent, "ice_lance_empowered_chill_icon");',
     )
     missing_gpl = [value for value in gpl_contract if value not in gpl]
     if missing_gpl:
@@ -1653,7 +1692,7 @@ def validate_ice_lance_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: obsolete separate Chill visual callback path remains")
     hit_start = gpl.index("function Ice_Lance_Hit(agent thisagent, agent target)")
     helper_start = gpl.index(
-        "function Phantom_Apply_Chill(agent target, integer duration)",
+        "function Phantom_Apply_Chill(agent source, agent target, integer duration)",
         hit_start,
     )
     helper_end = gpl.index("function Phantom_Chill_Watch(agent thisagent)", helper_start)
@@ -1661,13 +1700,11 @@ def validate_ice_lance_contract(output_root: Path) -> None:
     init_guard = helper_gpl.index(
         'If ($HasAttribute("PhantomChillRemaining", target) == False)'
     )
-    init_end = helper_gpl.index(
-        'target\'s "PhantomChillRemaining" = duration;',
-        init_guard,
-    )
+    init_end = helper_gpl.index("\n\tdesired_tier = 1;", init_guard)
     for init_line in (
         '$AddAttribute(target, "PhantomChillRemaining", "integer", duration);',
         '$AddAttribute(target, "PhantomChillActive", "boolean", False);',
+        '$AddAttribute(target, "PhantomChillTier", "integer", 0);',
         '$AddAttribute(target, "PhantomChillWatch", "function", $Phantom_Chill_Watch);',
     ):
         if not init_guard < helper_gpl.index(init_line) < init_end:
@@ -1686,13 +1723,20 @@ def validate_ice_lance_contract(output_root: Path) -> None:
             f"{gpl_path}: Chill icon creation is not protected by the "
             "authoritative effector-existence guard"
         )
-    if helper_gpl.count(
-        '$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");'
-    ) != 1:
-        fail(f"{gpl_path}: Chill must create exactly one persistent visible icon")
+    for icon_name in (
+        "ice_lance_chill_icon",
+        "ice_lance_empowered_chill_icon",
+    ):
+        if helper_gpl.count(
+            f'$CreateEffector(target, "{icon_name}", 1, "infinite");'
+        ) != 1:
+            fail(
+                f"{gpl_path}: {icon_name} must have exactly one guarded "
+                "persistent creation site"
+            )
     forbidden_refresh = (
-        '$DeleteEffector(target, "ice_lance_chill_icon");',
         '$CreateEffector(target, "ice_lance_chill_icon", duration);',
+        '$CreateEffector(target, "ice_lance_empowered_chill_icon", duration);',
         "function Ice_Lance_Chill_End(agent thisagent)",
     )
     present_forbidden_refresh = [
@@ -1703,6 +1747,35 @@ def validate_ice_lance_contract(output_root: Path) -> None:
             f"{gpl_path}: Chill retains unsafe timed-effector refresh machinery "
             f"{present_forbidden_refresh}"
         )
+    sync_start = helper_gpl.index("function Phantom_Chill_Sync_Icon(agent target)")
+    apply_gpl = helper_gpl[:sync_start]
+    sync_gpl = helper_gpl[sync_start:]
+    if "$CreateEffector" in apply_gpl or "$DeleteEffector" in apply_gpl:
+        fail(
+            f"{gpl_path}: Chill application must delegate icon changes to "
+            "the delayed synchronization helper"
+        )
+    for old_icon, new_icon in (
+        ("ice_lance_chill_icon", "ice_lance_empowered_chill_icon"),
+        ("ice_lance_empowered_chill_icon", "ice_lance_chill_icon"),
+    ):
+        delete_index = sync_gpl.index(
+            f'$DeleteEffector(target, "{old_icon}");'
+        )
+        delay_index = sync_gpl.index(
+            'target\'s "PhantomChillIconDelay" = 200;',
+            delete_index,
+        )
+        return_index = sync_gpl.index("return;", delay_index)
+        create_index = sync_gpl.index(
+            f'$CreateEffector(target, "{new_icon}", 1, "infinite");',
+            return_index,
+        )
+        if not delete_index < delay_index < return_index < create_index:
+            fail(
+                f"{gpl_path}: {old_icon} to {new_icon} handoff does not "
+                "separate deletion and creation across watcher ticks"
+            )
     hit_gpl = gpl[hit_start:helper_start]
     centered_unit_impact = hit_gpl.index(
         '$createeffector(target, "ice_lance_hit_effector", 0);'
@@ -1711,7 +1784,7 @@ def validate_ice_lance_contract(output_root: Path) -> None:
         'If (target\'s "Type" == "Building" || target\'s "Type" == "Lair")'
     )
     chill_application = hit_gpl.index(
-        '$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));'
+        '$Phantom_Apply_Chill(thisagent, target, $GetSpellAttribute("ice_lance", "effector_duration"));'
     )
     if not centered_unit_impact < building_branch < chill_application:
         fail(
@@ -1737,7 +1810,7 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         '<Sound value="Fire_Blast"/>',
         '<SoundPhase begin="Begin"/>',
         'GPLFunction="Icy_Touch_Cast"',
-        '<TimeoutDuration value="4000"/>',
+        '<TimeoutDuration value="5000"/>',
         '<SpellType value="Attack"/>',
         '<CharacterLevel value="4"/>',
         '<SpellRank value="3"/>',
@@ -1885,7 +1958,7 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         "If ($NotValid(target))",
         "If ($IsDead(target))",
         "$spell_attack(thisagent, target, 30);",
-        '$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));',
+        '$Phantom_Apply_Chill(thisagent, target, $GetSpellAttribute("ice_lance", "effector_duration"));',
         '$CreateEffector(target, "gravechill_hit_effector", 0);',
         "$Phantom_Apply_Gravechill(target, 8000);",
         "function Phantom_Apply_Gravechill(agent target, integer duration)",
@@ -2071,6 +2144,16 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     missing_overlay = [value for value in overlay_contract if value not in overlays]
     if missing_overlay:
         fail(f"{overlays_path}: Frost Armor overlays are missing {missing_overlay}")
+    frost_overlay_start = overlays.index(
+        'ID="PHo1" Name="frost_armor_effector"'
+    )
+    frost_overlay_end = overlays.index("</Description>", frost_overlay_start)
+    frost_overlay = overlays[frost_overlay_start:frost_overlay_end]
+    if '<StackPriority value="1"/>' not in frost_overlay:
+        fail(
+            f"{overlays_path}: visible Frost Armor ward must participate in "
+            "the standard status-effect stack"
+        )
 
     building_data_path = output_root / "GPL" / "Phantom_Building_Data.dat"
     building_data = building_data_path.read_text(encoding="utf-8")
@@ -2433,24 +2516,25 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
         ("frost_armor", "#Phantom_Frost_Armor_Confidence"),
         ("icy_touch", "#Phantom_Icy_Touch_Confidence"),
         ("call_to_grave", "#Phantom_Call_To_Grave_Confidence"),
+        ("eternal_soul", "#Phantom_Eternal_Soul_Confidence"),
         ("endless_winter", "#Phantom_Endless_Winter_Confidence"),
     )
     phantom_guard = confidence.index('if (thisagent\'s "Title" == "Phantom")')
     for spell, value in phantom_contract:
         check = f'if ($isspellavailable(thisagent,"{spell}",1))'
+        value_adjustment = f"value += {value};"
+        if confidence.count(check) != 1 or confidence.count(value_adjustment) != 1:
+            fail(
+                f"{gpl_path}: {spell} confidence must have exactly one "
+                "availability check and one value adjustment"
+            )
         check_index = confidence.index(check)
-        value_index = confidence.index(f"value += {value};", check_index)
+        value_index = confidence.index(value_adjustment, check_index)
         if not phantom_guard < check_index < value_index:
             fail(
                 f"{gpl_path}: {spell} confidence is not contained in the "
                 "Phantom-only branch"
             )
-
-    if '$isspellavailable(thisagent,"eternal_soul",1)' in confidence:
-        fail(
-            f"{gpl_path}: Eternal Soul availability is queried before its "
-            "level-6 action exists"
-        )
 
     actions_path = output_root / "Data" / "phantom_actions.xml"
     actions = actions_path.read_text(encoding="utf-8")
@@ -2583,6 +2667,124 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: Call to Grave retains custom home-recall hooks "
             f"{present_forbidden_gpl}"
+        )
+
+
+def validate_eternal_soul_contract(output_root: Path) -> None:
+    actions_path = output_root / "Data" / "phantom_actions.xml"
+    actions = actions_path.read_text(encoding="utf-8")
+    action_start = actions.index(
+        '<Description type="Action" subType="Standard" ID="WRa7" '
+        'Name="eternal_soul"'
+    )
+    action_end = actions.index("</Description>", action_start)
+    action = actions[action_start:action_end]
+    action_contract = (
+        '<ImageSet value="Cast"/>',
+        '<CompletionImageSet value="Stand"/>',
+        'GPLFunction="Eternal_Soul_Begin"',
+        '<EffectorDuration value="25000"/>',
+        '<TimeoutDuration value="30000"/>',
+        '<SpellType value="Attack"/>',
+        '<CharacterLevel value="6"/>',
+        '<SpellRank value="5"/>',
+    )
+    missing_action = [value for value in action_contract if value not in action]
+    if missing_action:
+        fail(f"{actions_path}: Eternal Soul action is missing {missing_action}")
+    if '<CharacterLevel value="1"/>' in action:
+        fail(f"{actions_path}: Eternal Soul retains its temporary test level")
+
+    units_path = output_root / "Data" / "phantom_units.xml"
+    units = units_path.read_text(encoding="utf-8")
+    if '<Spell ID="4" Value="eternal_soul"/>' not in units:
+        fail(f"{units_path}: Eternal Soul is not in the Phantom spell list")
+
+    overlays_path = output_root / "Data" / "phantom_overlays.xml"
+    overlays = overlays_path.read_text(encoding="utf-8")
+    overlay_contract = (
+        'ID="PHe1" Name="eternal_soul_icon"',
+        '<ImageIDBase value="PHe1"/>',
+        'GPLFunction="Eternal_Soul_End"',
+        'ID="PHe2" Name="eternal_soul_effector"',
+        '<ImageIDBase value="PHe2"/>',
+    )
+    missing_overlays = [value for value in overlay_contract if value not in overlays]
+    if missing_overlays:
+        fail(
+            f"{overlays_path}: Eternal Soul overlay contract is missing "
+            f"{missing_overlays}"
+        )
+    eternal_overlay_start = overlays.index(
+        'ID="PHe1" Name="eternal_soul_icon"'
+    )
+    eternal_overlay_end = overlays.index("</Description>", eternal_overlay_start)
+    eternal_cast_start = overlays.index(
+        'ID="PHe2" Name="eternal_soul_effector"'
+    )
+    eternal_cast_end = overlays.index("</Description>", eternal_cast_start)
+    eternal_overlays = (
+        overlays[eternal_overlay_start:eternal_overlay_end]
+        + overlays[eternal_cast_start:eternal_cast_end]
+    )
+    if '<ImageIDBase value="LRa1"/>' in eternal_overlays or (
+        '<ImageIDBase value="LRa2"/>' in eternal_overlays
+    ):
+        fail(f"{overlays_path}: Eternal Soul still borrows stock Shield of Light art")
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    gpl_contract = (
+        "function Phantom_Eternal_Soul_Active(agent thisagent) is boolean",
+        "function Eternal_Soul_Begin(agent thisagent, agent target)",
+        'If ($HasAttribute("PhantomEternalSoulActive", thisagent) == False)',
+        '$AddAttribute(thisagent, "PhantomEternalSoulActive", "boolean", False);',
+        '$AddAttribute(thisagent, "PhantomEternalSoulMaxHPBonus", "integer", 0);',
+        "bonus_max_hp = (base_max_hp * 30) / 100;",
+        '$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 15);',
+        '$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, 15);',
+        '$AdjustAttribute(thisagent, #ATTRIB_MaxHP, bonus_max_hp);',
+        '$SetAttribute(thisagent, #ATTRIB_HP, boosted_hp);',
+        '$CreateEffector(thisagent, "eternal_soul_icon", $GetSpellAttribute("eternal_soul", "effector_duration"));',
+        '$CreateEffector(thisagent, "eternal_soul_effector", 0);',
+        "function Eternal_Soul_End(agent thisagent)",
+        '$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, -15);',
+        '$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, -15);',
+        '$AdjustAttribute(thisagent, #ATTRIB_MaxHP, -bonus_max_hp);',
+        '$SetAttribute(thisagent, #ATTRIB_HP, restored_hp);',
+        "function Phantom_Apply_Chill(agent source, agent target, integer duration)",
+        '$AddAttribute(target, "PhantomChillTier", "integer", 0);',
+        'If ($Phantom_Eternal_Soul_Active(source))',
+        "#ATTRIB_MovementRateModifier, 100",
+        "#ATTRIB_ActionRateModifier, 1000",
+        'If (thisagent\'s "PhantomChillTier" == 2)',
+        'If (target\'s "PhantomChillTier" != 2)',
+        'thisagent\'s "PhantomChillTier" = 0;',
+    )
+    missing_gpl = [value for value in gpl_contract if value not in gpl]
+    if missing_gpl:
+        fail(f"{gpl_path}: Eternal Soul behavior is missing {missing_gpl}")
+
+    begin_start = gpl.index("function Eternal_Soul_Begin(agent thisagent, agent target)")
+    end_start = gpl.index("function Eternal_Soul_End(agent thisagent)", begin_start)
+    chill_start = gpl.index(
+        "function Phantom_Apply_Chill(agent source, agent target, integer duration)",
+        end_start,
+    )
+    begin_gpl = gpl[begin_start:end_start]
+    end_gpl = gpl[end_start:chill_start]
+    if begin_gpl.count("#ATTRIB_Parry, 15") != 1 or begin_gpl.count(
+        "#ATTRIB_MagicResistance, 15"
+    ) != 1:
+        fail(f"{gpl_path}: Eternal Soul defensive bonuses can stack during begin")
+    if end_gpl.count("#ATTRIB_Parry, -15") != 1 or end_gpl.count(
+        "#ATTRIB_MagicResistance, -15"
+    ) != 1:
+        fail(f"{gpl_path}: Eternal Soul does not reverse its bonuses exactly once")
+    if "PhantomChillSource" in gpl:
+        fail(
+            f"{gpl_path}: Chill must not add a runtime agent attribute to stock "
+            "targets; tier precedence is integer-only"
         )
 
 
@@ -3082,6 +3284,7 @@ def validate(output_root: Path) -> None:
     validate_frost_armor_contract(output_root)
     validate_phantom_spell_confidence_contract(output_root)
     validate_call_to_grave_contract(output_root)
+    validate_eternal_soul_contract(output_root)
     validate_phantom_flee_home_contract(output_root)
     validate_phantom_potion_purchase_contract(output_root)
     validate_phantom_equipment_upgrade_contract(output_root)

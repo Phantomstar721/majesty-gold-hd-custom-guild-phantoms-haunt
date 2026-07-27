@@ -47,6 +47,8 @@ This currently builds:
   with `30` spell power, refreshes Chill, and applies Gravechill.
 - A level-5 `Call to Grave` which is mechanically a direct
   Wizard Teleport clone with custom ghostly ice-portal art.
+- A finalized level-6 `Eternal Soul` combat self-buff with custom ghost-flame
+  cast and status art plus empowered Chill.
 - Healers exclude Phantoms from ordinary healing. A Priestess's Drain Life
   secondary heal treats allied Phantoms as undead: Priestess self-healing
   remains first priority, followed by the most-injured Phantom, then controlled
@@ -611,19 +613,23 @@ stock Majesty slow effects closely enough to make action delay observable.
 On a repeated hit, only `PhantomChillRemaining` is reset to three seconds; the
 modifiers, watcher, and icon are not created a second time.
 
-The `PHo4` overlay is the sole visible custom cyan snowflake through the
-packaged `PHo4chill_icon` image. It is created once with infinite duration
-while the separate per-target watcher owns duration and modifier cleanup.
-This removes both the former `PHo5` visual timer and the later timed-PHo4
-delete/recreate path, either of which could overlap visible snowflakes during
-closely spaced hits. The image
-uses the larger stock animated-status canvas and contains 29 distinct frames:
-the snowflake spins around its vertical axis through horizontal perspective
-compression, with a subtle scale pulse and vertical bob. A cyan glint sweeps
-across its face to make the turn readable even though the snowflake itself is
-symmetrical. Its layered dark-blue, bright-cyan, and pale-cyan strokes are
-tuned for the stronger size and vibrancy of Majesty's Wither-style status
-effects.
+Normal Chill uses the `PHo4` overlay and packaged `PHo4chill_icon` image.
+Empowered Chill uses the otherwise identical `PH11` overlay and
+`PHc3emp_chill_icon` image. Both are infinite-duration visuals while the
+separate per-target watcher owns duration and modifier cleanup, but only one
+can exist on a target. A tier upgrade deletes the old icon, waits `200`
+milliseconds through the existing watcher, and only then creates the new tier
+icon. This avoids Majesty briefly rendering both entries while an effector
+deletion is still leaving its overlay list. Ordinary refreshes never delete or
+recreate the active icon.
+
+Both images use the larger stock animated-status canvas and the same 29-frame
+geometry: the snowflake spins around its vertical axis through horizontal
+perspective compression, with a subtle scale pulse and vertical bob. Normal
+Chill retains layered dark-blue, bright-cyan, and pale-cyan strokes. Empowered
+Chill keeps every silhouette, hotspot, and animation frame unchanged while
+shifting the palette to navy, medium blue, and muted blue highlights with no
+white high points.
 
 ### Chill and status-effect implementation notes
 
@@ -650,35 +656,38 @@ The safe refreshable sequence follows the counter/watcher status pattern used
 by Majestic Majesty:
 
 1. Use `HasAttribute` to add per-target `PhantomChillRemaining`,
-   `PhantomChillActive`, and `PhantomChillWatch` attributes exactly once.
-2. Set `PhantomChillRemaining` to the requested duration on every hit.
+   `PhantomChillActive`, `PhantomChillTier`, and `PhantomChillWatch`
+   attributes exactly once.
+2. Set `PhantomChillRemaining` to the requested duration on a same-tier hit.
+   Empowered hits upgrade and refresh normal Chill; normal hits do not replace
+   or extend an active empowered Chill.
 3. Only when `PhantomChillActive` is false, apply the two modifiers. Independently
-   require `CheckEffector` to be false before creating one infinite-duration
-   PHo4 icon, making the engine's attached-effector list the authoritative
-   visual deduplication guard.
+   require `CheckEffector` to be false before creating the tier's one
+   infinite-duration icon, making the engine's attached-effector list the
+   authoritative visual deduplication guard.
 4. Start one 100 ms watcher if it is not already running. The watcher decrements
    the counter, removes the modifiers and icon at zero, and kills itself.
 
-Rehits never recreate PHo4 and never apply another set of modifiers, so
-multiple Phantoms refresh rather than stack. The three-second duration lives
-on the `ice_lance` action as `EffectorDuration`; both Ice Lance and Icy Touch
-pass that value to the shared counter helper through `$GetSpellAttribute`.
+Same-tier rehits never recreate their icon and never apply another set of
+modifiers, so multiple Phantoms refresh rather than stack. A tier-1 to tier-2
+upgrade applies only the modifier delta and swaps the visible icon once. The
+three-second duration lives on the `ice_lance` action as `EffectorDuration`;
+both Ice Lance and Icy Touch pass that value to the shared counter helper
+through `$GetSpellAttribute`.
 
 `Phantom_Apply_Chill` owns that refresh sequence for both Ice Lance and Icy
 Touch, keeping the three-second duration, refresh behavior, and non-stacking
 modifiers identical between the two attacks.
 
 For floating buff/debuff symbols, cloning an existing animated status-image
-layout is more reliable than inventing overlay geometry. Chill clones the
-29-frame `XR25plague_icon` image record, appends custom remapped TILE records,
-and keeps the template's canvas, hotspot, and timing. The visible,
-single visible `PHo4` overlay points directly at the generated
-`PHo4chill_icon` image. The snowflake needs stronger scale, line weight, and
-cyan contrast than an isolated review suggests because in-game terrain and
-sprites reduce legibility. Its approved animation simulates rotation around
-the vertical axis by compressing the horizontal dimension, plus a small bob,
-pulse, and sweeping glint. Rotating the entire snowflake in the image plane
-reads as a wheel and was rejected.
+layout is more reliable than inventing overlay geometry. Both Chill tiers clone
+the 29-frame `XR25plague_icon` image record, append custom remapped TILE
+records, and keep the template's canvas, hotspot, and timing. The snowflake
+needs stronger scale and line weight than an isolated review suggests because
+in-game terrain and sprites reduce legibility. Its approved animation
+simulates rotation around the vertical axis by compressing the horizontal
+dimension, plus a small bob, pulse, and sweeping glint. Rotating the entire
+snowflake in the image plane reads as a wheel and was rejected.
 
 Impact visuals and debuffs should remain separate. Ice Lance creates its native
 hit overlay before the building/lair guard, so every surviving target shows the
@@ -719,7 +728,7 @@ Phantoms learn Icy Touch at level 4 as a melee-gated Attack spell. Its action
 follows the stock scripted-attack-spell presentation used by
 abilities such as Double Attack and Super Strike: the Phantom's directional
 `Attack` animation drives the existing GPL callback. It retains the stock
-`Fire_Blast` sound, rank `3`, and four-second timeout.
+`Fire_Blast` sound, rank `3`, and five-second timeout.
 
 `Icy_Touch_Cast` is now one self-contained monster-style action callback. It
 re-reads the Phantom's current `"Target"` into a local agent instead of relying
@@ -907,6 +916,57 @@ their constants, preserve native animation timing and anchors, and add build
 validation that rejects temporary learning bypasses and obsolete broad
 overrides. This is the default implementation approach for future custom
 spells and hero behaviors.
+
+### Eternal Soul
+
+Eternal Soul follows the stock Shield of Light action and effector lifecycle.
+It is an Attack-type self-buff selected by the ordinary combat spell path,
+lasts `25000` milliseconds, and has a `30000`-millisecond cooldown. It is
+learned at its production level 6 and retains Shield of Light's proven action
+and effector lifecycle,
+but its visuals are custom: a ghostly cyan-blue ice flame grows around the
+Phantom, pulses, and fades in a six-frame one-shot cast effect. A compact
+29-frame version of the same flame gently pulses as the persistent status
+icon. Both are built from
+`assets/source/eternal-soul-icy-flame-source-v1-transparent.png`.
+The cast tiles share one fixed `103x99` canvas and use a translated hotspot
+to center the growing flame over the Phantom instead of inheriting Frost
+Field's southeast-biased target placement.
+
+While active it grants `+15` Parry and `+15` Magic Resistance through
+`MagicalAdjustAttribute`. It also stores and grants 30 percent of the
+Phantom's current Max HP. Current HP is scaled by the same ratio on application
+and removal, so a full `100/100` Phantom becomes `130/130`, while an injured
+Phantom keeps approximately the same health percentage. This avoids turning
+the temporary health ceiling into permanent healing after repeated casts.
+The exact stored Max HP delta is removed on expiry, preserving unrelated level
+or item gains that occur while the buff is active.
+
+Chill remains one shared, non-stacking target state. Each application records
+only an integer tier; it does not attach a dynamic caster-agent reference to
+stock enemy units. An Eternal Soul caster applies tier 2 Chill, doubling the
+fixed movement and action modifiers from `50/500` to `100/1000`. An empowered
+hit upgrades and refreshes a normal Chill in place without creating a second
+icon. A normal hit cannot overwrite or extend an active empowered Chill. Tier
+2 expires through the same three-second watcher as ordinary Chill, after which
+a normal hit can apply tier 1 again. Expiry reverses only the active tier's
+exact modifier values.
+
+All persistent visible status symbols use `StackPriority=1`, including the
+Frost Armor crystal, Eternal Soul, Chill, and Gravechill. This places them in
+Majesty's shared status-effect layout alongside stock buffs and debuffs rather
+than letting the Frost Armor ward occupy the same non-stacking world-effect
+anchor as the first status icon. One-shot cast and impact visuals retain
+`StackPriority=0`.
+
+After a build, decode the actual packaged Eternal Soul frames with:
+
+```powershell
+..\.tools\python.cmd .\scripts\create_eternal_soul_review.py
+```
+
+The review is written to
+`artifacts/reviews/eternal-soul-packaged-review.png`.
 
 ### Frost Armor
 
@@ -1191,9 +1251,9 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   Resistance or targets protected by Magic Mirror. Stock
   `spell_extra_value` retains all eight stock weights and adds Phantom-only
   confidence for learned custom spells: Ice Lance `10`, Frost Armor `10`, Icy
-  Touch `25`, Call to Grave `10`, and Endless Winter `30`. Eternal Soul's
-  future level-6 weight is reserved as `25` but is not queried until its real
-  action exists.
+  Touch `25`, Call to Grave `10`, Eternal Soul `25`, and Endless Winter `30`.
+  Eternal Soul now learns at its finalized level 6; its availability check
+  contributes `25` to recognized spell value only after it is learned.
 - Ice Lance now has final-path generated-source projectile/icon art, 32 packaged
   directions, `8` damage, `180` conceptual base / `190` Icerod-equipped Phantom
   casting range, native impact animation, and a centralized three-second
@@ -1203,7 +1263,7 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   refresh, non-stacking, movement-slow, action-slow, duration, and status-icon
   review. The fixed modifiers deliberately describe a mild Chill rather than
   promising an exact percentage on every unit.
-- Icy Touch is level 4, rank 3, and uses a 4-second cooldown with the
+- Icy Touch is level 4, rank 3, and uses a 5-second cooldown with the
   Phantom's scale-stable directional attack animation and a persistent animated
   cyan Gravechill skull. Its single monster-style action callback re-reads the
   scheduler-selected current target, resolves one complete stock `$make_attack`
@@ -1228,6 +1288,14 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   Its custom portal uses Wizard Teleport's native
   eight-frame open, eight-frame hold, and seven-frame close sets with one fixed
   hotspot; only the name and ghostly ice artwork differ.
+- Eternal Soul is finalized at level 6/rank 5. It follows Shield of Light's
+  stock combat self-buff selection and grants `+15` Parry, `+15` Magic
+  Resistance, and a proportional 30-percent temporary Max HP increase for
+  `25000` ms on a `30000`-ms cooldown. While active, the caster applies the
+  mutually exclusive tier-2 empowered Chill. The spell contributes `25` to
+  `spell_extra_value` once learned. Its custom six-frame ghostly ice flame and
+  29-frame pulsing status icon are approved in game, stack with other status
+  symbols, and use the corrected caster-centered hotspot.
 - Frozen Cowl is a starter item that displays and grants `+2` physical armor.
   Black Icerod retains its in-game-confirmed displayed and mechanical `+8`
   weapon damage and now adds a displayed and mechanical `+5 Parry` through the

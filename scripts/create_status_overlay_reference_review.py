@@ -21,6 +21,7 @@ REFERENCES = (
     ("mx", b"XR25plague_icon"),
     ("mx", b"XR29frost_fld_icon"),
     ("custom", b"PHo4chill_icon"),
+    ("custom", b"PHc3emp_chill_icon"),
 )
 
 
@@ -109,16 +110,26 @@ def main() -> int:
     print(args.out)
 
     _, custom_tiles, custom_palettes = loaded["custom"]
-    chill_prefix = b"PHc1ChillTile"
-    chill_tiles = sorted(
+    animation_specs = (
+        (b"PHc1ChillTile", "chill-snowflake-animation-review.png"),
         (
-            entry
-            for entry in custom_tiles
-            if entry.name.rstrip(b"\x00").startswith(chill_prefix)
+            b"PHc3EmpChillTile",
+            "empowered-chill-snowflake-animation-review.png",
         ),
-        key=lambda entry: int(entry.name.rstrip(b"\x00")[len(chill_prefix) :]),
     )
-    if chill_tiles:
+    for chill_prefix, output_name in animation_specs:
+        chill_tiles = sorted(
+            (
+                entry
+                for entry in custom_tiles
+                if entry.name.rstrip(b"\x00").startswith(chill_prefix)
+            ),
+            key=lambda entry: int(
+                entry.name.rstrip(b"\x00")[len(chill_prefix) :]
+            ),
+        )
+        if not chill_tiles:
+            continue
         frames = [render_tile(entry.data, custom_palettes) for entry in chill_tiles]
         scale = 4
         columns = 8
@@ -146,7 +157,7 @@ def main() -> int:
                 f"frame {frame_index}",
                 fill=(170, 190, 210),
             )
-        animation_out = args.out.with_name("chill-snowflake-animation-review.png")
+        animation_out = args.out.with_name(output_name)
         animation_sheet.save(animation_out)
         print(animation_out)
     return 0
