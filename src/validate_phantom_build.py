@@ -157,7 +157,6 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHo2"),
         ("Unit", "PHo3"),
         ("Unit", "PHo4"),
-        ("Unit", "PHo5"),
         ("Unit", "PHo6"),
         ("Unit", "PHo7"),
         ("Unit", "PHo8"),
@@ -216,7 +215,7 @@ ALIGNED_PHANTOM_DISSOLVE_TILES = {
 CLIP_SAFE_PHANTOM_DEATH_TILES = {
     *{
         f"PHM1PhantomTile{source_tile - 4586}".encode("ascii")
-        for source_tile in range(4723, 4741)
+        for source_tile in range(4722, 4746)
     },
     *ALIGNED_PHANTOM_DISSOLVE_TILES,
     b"PHM1PhantomTile201",
@@ -600,10 +599,6 @@ def validate_tile(path: Path, entry: Entry, tile: bytes, palette_count: int) -> 
             "palette pixels outside shadow indices 247-250"
         )
     shadowless_hero_effect_tiles = {
-        *{
-            f"PHM1PhantomTile{offset}".encode("ascii")
-            for offset in range(4741 - 4586, 4746 - 4586)
-        },
         b"PHM1PhantomTile202",
         b"PHM1PhantomTile203",
         b"PHM1PhantomTile204",
@@ -952,6 +947,65 @@ def validate_custom_tile_references(
             fail(f"{path}: {entry.label} references palette {palette_index}; expected 560")
 
 
+def validate_phantom_primary_direction_topology(
+    path: Path,
+    image: bytes,
+    tiles: list[Entry],
+) -> None:
+    if len(image) < 24:
+        fail(f"{path}: Phantom IMAG is too short for an animation-set table")
+
+    entry_count = u32(image, 20)
+    table_end = 24 + entry_count * 8
+    if entry_count <= 0 or table_end > len(image):
+        fail(f"{path}: Phantom IMAG has an invalid animation-set table")
+
+    set_offsets = {
+        u32(image, 24 + index * 8): u32(image, 24 + index * 8 + 4)
+        for index in range(entry_count)
+    }
+    tile_index_by_name = {entry.name: entry.index for entry in tiles}
+    # Stand and Cast begin with one non-art control frame. The other primary
+    # sets begin directly with their first directional body frame.
+    contracts = {
+        1: (4586, 8, 0x28),   # Walk
+        8: (4650, 1, 0x30),   # Stand
+        64: (4658, 4, 0x28),  # Special
+        16: (4690, 4, 0x28),  # Attack
+        96: (4722, 3, 0x28),  # Die
+        128: (4746, 4, 0x30), # Cast
+    }
+    for set_id, (first_source_tile, stride, first_frame_offset) in contracts.items():
+        set_offset = set_offsets.get(set_id)
+        if set_offset is None or set_offset + 0x60 > len(image):
+            fail(f"{path}: Phantom is missing primary animation set {set_id}")
+        direction_offsets = [
+            struct.unpack_from("<i", image, set_offset + 0x40 + slot * 4)[0]
+            for slot in range(8)
+        ]
+        if any(offset <= 0 for offset in direction_offsets):
+            fail(
+                f"{path}: primary animation set {set_id} does not have eight "
+                "populated direction slots"
+            )
+        for direction, relative_offset in enumerate(direction_offsets):
+            source_tile = first_source_tile + direction * stride
+            name = f"PHM1PhantomTile{source_tile - 4586}".encode("ascii")
+            expected = tile_index_by_name.get(name)
+            if expected is None:
+                fail(
+                    f"{path}: primary animation set {set_id} direction {direction} "
+                    f"is missing custom TILE {name!r}"
+                )
+            frame_offset = set_offset + relative_offset + first_frame_offset
+            actual = u32(image, frame_offset + 4) & 0xFFFF
+            if actual != expected:
+                fail(
+                    f"{path}: primary animation set {set_id} direction {direction} "
+                    f"starts with TILE index {actual}; expected {expected}"
+                )
+
+
 def validate_phantom_die_directional_sequence(
     path: Path,
     image: bytes,
@@ -978,19 +1032,19 @@ def validate_phantom_die_directional_sequence(
 
     tile_index_by_name = {entry.name: entry.index for entry in tiles}
     populated = [
-        struct.unpack_from("<i", image, die_set_offset + 0x38 + slot * 4)[0]
+        struct.unpack_from("<i", image, die_set_offset + 0x40 + slot * 4)[0]
         for slot in range(8)
     ]
     populated = [offset for offset in populated if offset > 0]
-    if len(populated) != 6:
-        fail(f"{path}: Phantom Die set has {len(populated)} directions; expected six")
+    if len(populated) != 8:
+        fail(f"{path}: Phantom Die set has {len(populated)} directions; expected eight")
 
     for direction_index, relative_offset in enumerate(populated):
-        frame_table = die_set_offset + relative_offset + 0x30
+        frame_table = die_set_offset + relative_offset + 0x28
         expected_source_tiles = (
+            4722 + direction_index * 3,
             4723 + direction_index * 3,
             4724 + direction_index * 3,
-            4725 + direction_index * 3,
         )
         expected_indices = []
         for source_tile in expected_source_tiles:
@@ -1386,20 +1440,23 @@ def validate_ice_lance_contract(output_root: Path) -> None:
     overlays = overlays_path.read_text(encoding="utf-8")
     overlay_contract = (
         'ID="PHo4" Name="ice_lance_chill_icon"',
-        '<Info value="NotVisibleInISOView"/>',
-        '<ImageIDBase value="PHo3"/>',
-        'GPLFunction="Ice_Lance_Chill_End"',
+        '<ImageIDBase value="PHo4"/>',
     )
     missing_overlay = [value for value in overlay_contract if value not in overlays]
     if missing_overlay:
         fail(f"{overlays_path}: Ice Lance Chill overlay is missing {missing_overlay}")
-    visual_overlay_contract = (
-        'ID="PHo5" Name="ice_lance_chill_visual"',
-        '<ImageIDBase value="PHo4"/>',
-    )
-    missing_visual_overlay = [value for value in visual_overlay_contract if value not in overlays]
-    if missing_visual_overlay:
-        fail(f"{overlays_path}: Ice Lance Chill visual is missing {missing_visual_overlay}")
+    if 'ID="PHo5"' in overlays or "ice_lance_chill_visual" in overlays:
+        fail(
+            f"{overlays_path}: obsolete separate Chill visual remains; the "
+            "watcher-owned snowflake must be the only visible Chill effector"
+        )
+    chill_overlay_start = overlays.index('ID="PHo4" Name="ice_lance_chill_icon"')
+    chill_overlay = overlays[chill_overlay_start:]
+    if "GPLFunction=" in chill_overlay:
+        fail(
+            f"{overlays_path}: Chill icon must not own modifier cleanup; "
+            "the counter watcher owns the full lifecycle"
+        )
 
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     hero_data = hero_data_path.read_text(encoding="utf-8")
@@ -1415,26 +1472,83 @@ def validate_ice_lance_contract(output_root: Path) -> None:
         '$createeffector(target, "ice_lance_hit_effector", 0);',
         '$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));',
         "function Phantom_Apply_Chill(agent target, integer duration)",
-        'If ($CheckEffector(target, "ice_lance_chill_icon"))',
-        '$DeleteEffector(target, "ice_lance_chill_icon");',
+        'If ($HasAttribute("PhantomChillRemaining", target) == False)',
+        '$AddAttribute(target, "PhantomChillRemaining", "integer", duration);',
+        '$AddAttribute(target, "PhantomChillActive", "boolean", False);',
+        '$AddAttribute(target, "PhantomChillWatch", "function", $Phantom_Chill_Watch);',
+        'target\'s "PhantomChillRemaining" = duration;',
+        'If (target\'s "PhantomChillActive" == False)',
         "#ATTRIB_MovementRateModifier, 50",
         "#ATTRIB_ActionRateModifier, 500",
-        '$CreateEffector(target, "ice_lance_chill_icon", duration);',
-        'If ($CheckEffector(target, "ice_lance_chill_visual"))',
-        '$DeleteEffector(target, "ice_lance_chill_visual");',
-        '$CreateEffector(target, "ice_lance_chill_visual", duration);',
-        "function Ice_Lance_Chill_End(agent thisagent)",
+        'If ($CheckEffector(target, "ice_lance_chill_icon") == False)',
+        '$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");',
+        'If ($IsRunning(target\'s "PhantomChillWatch") == False)',
+        '$NewThread(target\'s "PhantomChillWatch", 100, target);',
+        "function Phantom_Chill_Watch(agent thisagent)",
+        'thisagent\'s "PhantomChillRemaining" -= 100;',
+        '$KillThread(thisagent\'s "PhantomChillWatch");',
+        'thisagent\'s "PhantomChillActive" = False;',
         "#ATTRIB_MovementRateModifier, -50",
         "#ATTRIB_ActionRateModifier, -500",
+        '$DeleteEffector(thisagent, "ice_lance_chill_icon");',
     )
     missing_gpl = [value for value in gpl_contract if value not in gpl]
     if missing_gpl:
         fail(f"{gpl_path}: Ice Lance behavior contract is missing {missing_gpl}")
+    if "ice_lance_chill_visual" in gpl:
+        fail(f"{gpl_path}: obsolete separate Chill visual callback path remains")
     hit_start = gpl.index("function Ice_Lance_Hit(agent thisagent, agent target)")
     helper_start = gpl.index(
         "function Phantom_Apply_Chill(agent target, integer duration)",
         hit_start,
     )
+    helper_end = gpl.index("function Phantom_Chill_Watch(agent thisagent)", helper_start)
+    helper_gpl = gpl[helper_start:helper_end]
+    init_guard = helper_gpl.index(
+        'If ($HasAttribute("PhantomChillRemaining", target) == False)'
+    )
+    init_end = helper_gpl.index(
+        'target\'s "PhantomChillRemaining" = duration;',
+        init_guard,
+    )
+    for init_line in (
+        '$AddAttribute(target, "PhantomChillRemaining", "integer", duration);',
+        '$AddAttribute(target, "PhantomChillActive", "boolean", False);',
+        '$AddAttribute(target, "PhantomChillWatch", "function", $Phantom_Chill_Watch);',
+    ):
+        if not init_guard < helper_gpl.index(init_line) < init_end:
+            fail(
+                f"{gpl_path}: Chill dynamic attribute {init_line!r} is not "
+                "inside its one-time initialization guard"
+            )
+    icon_guard = helper_gpl.index(
+        'If ($CheckEffector(target, "ice_lance_chill_icon") == False)'
+    )
+    icon_create = helper_gpl.index(
+        '$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");'
+    )
+    if not icon_guard < icon_create:
+        fail(
+            f"{gpl_path}: Chill icon creation is not protected by the "
+            "authoritative effector-existence guard"
+        )
+    if helper_gpl.count(
+        '$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");'
+    ) != 1:
+        fail(f"{gpl_path}: Chill must create exactly one persistent visible icon")
+    forbidden_refresh = (
+        '$DeleteEffector(target, "ice_lance_chill_icon");',
+        '$CreateEffector(target, "ice_lance_chill_icon", duration);',
+        "function Ice_Lance_Chill_End(agent thisagent)",
+    )
+    present_forbidden_refresh = [
+        value for value in forbidden_refresh if value in gpl
+    ]
+    if present_forbidden_refresh:
+        fail(
+            f"{gpl_path}: Chill retains unsafe timed-effector refresh machinery "
+            f"{present_forbidden_refresh}"
+        )
     hit_gpl = gpl[hit_start:helper_start]
     centered_unit_impact = hit_gpl.index(
         '$createeffector(target, "ice_lance_hit_effector", 0);'
@@ -1518,7 +1632,6 @@ def validate_icy_touch_contract(output_root: Path) -> None:
     overlay_contract = (
         'ID="PHg1" Name="gravechill_icon"',
         '<ImageIDBase value="PHg1"/>',
-        'GPLFunction="Gravechill_End"',
         '<StackPriority value="1"/>',
     )
     missing_overlay = [value for value in overlay_contract if value not in overlays]
@@ -1526,6 +1639,21 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         fail(
             f"{overlays_path}: Gravechill status overlay is missing "
             f"{missing_overlay}"
+        )
+    gravechill_overlay_start = overlays.index(
+        'ID="PHg1" Name="gravechill_icon"'
+    )
+    gravechill_overlay_end = overlays.index(
+        "</Description>",
+        gravechill_overlay_start,
+    )
+    gravechill_overlay = overlays[
+        gravechill_overlay_start:gravechill_overlay_end
+    ]
+    if "GPLFunction=" in gravechill_overlay:
+        fail(
+            f"{overlays_path}: Gravechill icon must not own modifier cleanup; "
+            "the counter watcher owns the full lifecycle"
         )
     hit_overlay_contract = (
         'ID="PHg2" Name="gravechill_hit_effector"',
@@ -1605,16 +1733,29 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         "$spell_attack(thisagent, target, 30);",
         '$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));',
         '$CreateEffector(target, "gravechill_hit_effector", 0);',
-        'If ($CheckEffector(target, "gravechill_icon"))',
-        '$DeleteEffector(target, "gravechill_icon");',
-        '$CreateEffector(target, "gravechill_icon", 8000);',
+        "$Phantom_Apply_Gravechill(target, 8000);",
+        "function Phantom_Apply_Gravechill(agent target, integer duration)",
+        'If ($HasAttribute("PhantomGravechillRemaining", target) == False)',
+        '$AddAttribute(target, "PhantomGravechillRemaining", "integer", duration);',
+        '$AddAttribute(target, "PhantomGravechillActive", "boolean", False);',
+        '$AddAttribute(target, "PhantomGravechillWatch", "function", $Phantom_Gravechill_Watch);',
+        'target\'s "PhantomGravechillRemaining" = duration;',
+        'If (target\'s "PhantomGravechillActive" == False)',
         "$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);",
         "$MagicalAdjustAttribute(target, #ATTRIB_Parry, -2);",
         "$MagicalAdjustAttribute(target, #ATTRIB_MagicResistance, -2);",
-        "function Gravechill_End(agent thisagent)",
+        'If ($CheckEffector(target, "gravechill_icon") == False)',
+        '$CreateEffector(target, "gravechill_icon", 1, "infinite");',
+        'If ($IsRunning(target\'s "PhantomGravechillWatch") == False)',
+        '$NewThread(target\'s "PhantomGravechillWatch", 100, target);',
+        "function Phantom_Gravechill_Watch(agent thisagent)",
+        'thisagent\'s "PhantomGravechillRemaining" -= 100;',
+        '$KillThread(thisagent\'s "PhantomGravechillWatch");',
+        'thisagent\'s "PhantomGravechillActive" = False;',
         "$MagicalAdjustAttribute(thisagent, #ATTRIB_Strength, 5);",
         "$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 2);",
         "$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, 2);",
+        '$DeleteEffector(thisagent, "gravechill_icon");',
     )
     missing_baseline = [value for value in baseline_contract if value not in icy_gpl]
     if missing_baseline:
@@ -1630,13 +1771,13 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: Icy Touch must resolve exactly one inline magic attack")
     if icy_gpl.count('$CreateEffector(target, "gravechill_hit_effector", 0);') != 1:
         fail(f"{gpl_path}: Icy Touch must create exactly one skull hit animation")
-    if icy_gpl.count('$CreateEffector(target, "gravechill_icon", 8000);') != 1:
-        fail(f"{gpl_path}: Gravechill must have exactly one duration-owning icon")
+    if icy_gpl.count(
+        '$CreateEffector(target, "gravechill_icon", 1, "infinite");'
+    ) != 1:
+        fail(f"{gpl_path}: Gravechill must create exactly one persistent icon")
     forbidden_helpers = (
         "function Icy_Touch_Hit",
         "$Icy_Touch_Hit",
-        "function Phantom_Apply_Gravechill",
-        "$Phantom_Apply_Gravechill",
         "$Does_Resist_Fire",
         "wither_effector",
         "$AdjustAttribute(target, #ATTRIB_Armor_Basic_Damage, -2);",
@@ -1650,15 +1791,67 @@ def validate_icy_touch_contract(output_root: Path) -> None:
             f"{gpl_path}: Icy Touch still contains intermediary or "
             f"player-spell machinery {present_helpers}"
         )
-    delete_icon = icy_gpl.index('$DeleteEffector(target, "gravechill_icon");')
-    create_icon = icy_gpl.index('$CreateEffector(target, "gravechill_icon", 8000);')
-    apply_strength = icy_gpl.index(
-        "$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);"
+    gravechill_helper_start = icy_gpl.index(
+        "function Phantom_Apply_Gravechill(agent target, integer duration)"
     )
-    if not delete_icon < create_icon < apply_strength:
+    gravechill_watcher_start = icy_gpl.index(
+        "function Phantom_Gravechill_Watch(agent thisagent)",
+        gravechill_helper_start,
+    )
+    gravechill_helper = icy_gpl[
+        gravechill_helper_start:gravechill_watcher_start
+    ]
+    gravechill_init_guard = gravechill_helper.index(
+        'If ($HasAttribute("PhantomGravechillRemaining", target) == False)'
+    )
+    gravechill_init_end = gravechill_helper.index(
+        'target\'s "PhantomGravechillRemaining" = duration;',
+        gravechill_init_guard,
+    )
+    for init_line in (
+        '$AddAttribute(target, "PhantomGravechillRemaining", "integer", duration);',
+        '$AddAttribute(target, "PhantomGravechillActive", "boolean", False);',
+        '$AddAttribute(target, "PhantomGravechillWatch", "function", $Phantom_Gravechill_Watch);',
+    ):
+        if not (
+            gravechill_init_guard
+            < gravechill_helper.index(init_line)
+            < gravechill_init_end
+        ):
+            fail(
+                f"{gpl_path}: Gravechill dynamic attribute {init_line!r} is "
+                "not inside its one-time initialization guard"
+            )
+    gravechill_icon_guard = gravechill_helper.index(
+        'If ($CheckEffector(target, "gravechill_icon") == False)'
+    )
+    gravechill_icon_create = gravechill_helper.index(
+        '$CreateEffector(target, "gravechill_icon", 1, "infinite");'
+    )
+    if not gravechill_icon_guard < gravechill_icon_create:
         fail(
-            f"{gpl_path}: Gravechill must refresh and apply in stock monster "
-            "debuff order"
+            f"{gpl_path}: Gravechill icon creation is not protected by the "
+            "authoritative effector-existence guard"
+        )
+    if gravechill_helper.count(
+        "$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);"
+    ) != 1:
+        fail(
+            f"{gpl_path}: Gravechill must apply its modifiers exactly once "
+            "inside the inactive guard"
+        )
+    forbidden_gravechill_refresh = (
+        '$DeleteEffector(target, "gravechill_icon");',
+        '$CreateEffector(target, "gravechill_icon", 8000);',
+        "function Gravechill_End(agent thisagent)",
+    )
+    present_forbidden_refresh = [
+        value for value in forbidden_gravechill_refresh if value in icy_gpl
+    ]
+    if present_forbidden_refresh:
+        fail(
+            f"{gpl_path}: Gravechill retains unsafe timed-effector refresh "
+            f"machinery {present_forbidden_refresh}"
         )
     if "expression #Phantom_Icy_Touch_Range 24" not in gpl:
         fail(f"{gpl_path}: Icy Touch melee range must be the stock-style 24 units")
@@ -2520,6 +2713,11 @@ def validate(output_root: Path) -> None:
     phantom_image = captured.get((b"IMAG", b"PHM1Phantom"))
     if phantom_image is None:
         fail(f"{maindata_path}: IMAG/PHM1Phantom was not found")
+    validate_phantom_primary_direction_topology(
+        maindata_path,
+        phantom_image,
+        sections.get(b"TILE", []),
+    )
     validate_phantom_die_directional_sequence(
         maindata_path,
         phantom_image,

@@ -69,9 +69,9 @@ def main() -> int:
     scale = 4
     cell_width = 300
     cell_height = 390
-    card = Image.new("RGB", (cell_width * len(FRAME_LABELS), cell_height * 6), (18, 22, 28))
+    card = Image.new("RGB", (cell_width * len(FRAME_LABELS), cell_height * 8), (18, 22, 28))
     draw = ImageDraw.Draw(card)
-    for direction in range(6):
+    for direction in range(8):
         source_tiles = (
             4650 + direction,
             4590 + direction * 8,
@@ -90,7 +90,7 @@ def main() -> int:
             card.paste(frame, (x, y), frame)
             draw.text(
                 (column * cell_width + 16, direction * cell_height + 350),
-                f"D{direction + 2} {label}",
+                f"D{direction} {label}",
                 font=font(20),
                 fill=(220, 230, 240),
             )

@@ -12,16 +12,16 @@ LABEL_BY_TILE: dict[int, str] = {}
 for tile_index in range(4586, 4650):
     LABEL_BY_TILE[tile_index] = "hover"
 
-for tile_index in range(4650, 4659):
+for tile_index in range(4650, 4658):
     LABEL_BY_TILE[tile_index] = "stand"
 
-for tile_index in range(4659, 4690):
+for tile_index in range(4658, 4690):
     LABEL_BY_TILE[tile_index] = "special"
 
-for tile_index in range(4690, 4723):
+for tile_index in range(4690, 4722):
     LABEL_BY_TILE[tile_index] = "attack"
 
-for tile_index in range(4723, 4741):
+for tile_index in range(4722, 4746):
     LABEL_BY_TILE[tile_index] = "death_directional"
 
 for tile_index in range(4746, 4778):
@@ -63,21 +63,21 @@ def main() -> int:
             }
         )
 
-    # The last two Majesty view slots are the exact opposite-side counterparts
-    # of the generated front-adjacent and rear-three-quarter views.
+    # Construct the two opposite-side art views before mapping the six authored
+    # views onto Majesty's eight engine direction slots.
     frames_by_direction.append(mirror_direction(frames_by_direction[2]))
     frames_by_direction.append(mirror_direction(frames_by_direction[1]))
 
-    # Majesty's populated unit slots are not stored front-to-back. Stock
-    # Peasant/Warrior frames establish the compass turn as:
-    #   slot 2 back/north, 3 rear-side, 4 front-side, 5 front/south,
-    #   6 opposite front-side, 7 opposite rear-side.
-    # Generated sheets are held in the opposite, art-production order:
-    #   front, front-side, rear-side, back, mirrored rear-side,
-    #   mirrored front-side.
+    # The Priestess scaffold has eight populated directions in every primary
+    # animation set. Generated art is held as:
+    #   front, front-right, rear-right, back, rear-left, front-left.
+    # We do not have exact side-on paintings, so the nearest three-quarter view
+    # is intentionally shared by the two adjacent side slots. Crucially, this
+    # same mapping is used for Stand, Walk, Attack, Cast, Special, and Die so
+    # an action can never complete through a differently facing view.
     frames_by_direction = [
         frames_by_direction[index]
-        for index in (3, 2, 1, 0, 5, 4)
+        for index in (3, 2, 2, 1, 0, 5, 4, 4)
     ]
 
     directional_death_grid = extract_grid_frames(
@@ -100,7 +100,7 @@ def main() -> int:
     )
     death_frames_by_direction = [
         death_frames_by_direction[index]
-        for index in (3, 2, 1, 0, 5, 4)
+        for index in (3, 2, 2, 1, 0, 5, 4, 4)
     ]
 
     shared_death_frames = extract_grid_frames(
@@ -118,8 +118,8 @@ def main() -> int:
 
     for tile_index, label in sorted(LABEL_BY_TILE.items()):
         if label == "death_directional":
-            direction = (tile_index - 4723) // 3
-            stage = (tile_index - 4723) % 3
+            direction = (tile_index - 4722) // 3
+            stage = (tile_index - 4722) % 3
             image = prepare_frame(death_frames_by_direction[direction][stage], label)
         elif label == "death_shared":
             # Once the directional body has shattered, use only the approved
@@ -157,7 +157,7 @@ def mirror_direction(frames: dict[str, Image.Image]) -> dict[str, Image.Image]:
 
 def animation_position(tile_index: int, label: str) -> tuple[int, int, int]:
     if label == "hover":
-        direction = min(5, max(0, (tile_index - 4586) // 8))
+        direction = min(7, max(0, (tile_index - 4586) // 8))
         position = (tile_index - 4586) % 8
         # Each direction block begins with a header/base pose, followed by
         # seven ordinary Walk frames. The engine periodically displays that
@@ -165,18 +165,18 @@ def animation_position(tile_index: int, label: str) -> tuple[int, int, int]:
         stage = 3 if position == 0 else position - 1
         return direction, stage, 7
     if label == "stand":
-        return min(5, max(0, tile_index - 4650)), 0, 1
+        return min(7, max(0, tile_index - 4650)), 0, 1
     if label == "special":
-        direction = min(5, max(0, (tile_index - 4659) // 4))
-        return direction, min(2, (tile_index - 4659) % 4), 3
+        direction = min(7, max(0, (tile_index - 4658) // 4))
+        return direction, min(2, (tile_index - 4658) % 4), 3
     if label == "attack":
-        direction = min(5, max(0, (tile_index - 4690) // 4))
+        direction = min(7, max(0, (tile_index - 4690) // 4))
         return direction, min(3, (tile_index - 4690) % 4), 4
     if label == "dissolve" and tile_index < 4778:
-        direction = min(5, max(0, (tile_index - 4723) // 3))
-        return direction, min(1, (tile_index - 4723) % 3), 2
+        direction = min(7, max(0, (tile_index - 4722) // 3))
+        return direction, min(1, (tile_index - 4722) % 3), 2
     if label == "cast":
-        direction = min(5, max(0, (tile_index - 4746) // 4))
+        direction = min(7, max(0, (tile_index - 4746) // 4))
         return direction, min(3, (tile_index - 4746) % 4), 4
     if label == "dissolve":
         return 0, min(7, max(0, tile_index - 4778)), 8

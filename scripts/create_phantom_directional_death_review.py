@@ -23,12 +23,12 @@ def main() -> int:
     scale = 3
     cell_width = 330
     cell_height = 290
-    card = Image.new("RGB", (cell_width * 3, cell_height * 6), (18, 22, 28))
+    card = Image.new("RGB", (cell_width * 3, cell_height * 8), (18, 22, 28))
     draw = ImageDraw.Draw(card)
 
-    for direction in range(6):
+    for direction in range(8):
         for stage in range(3):
-            source_tile = 4723 + direction * 3 + stage
+            source_tile = 4722 + direction * 3 + stage
             name = f"PHM1PhantomTile{source_tile - 4586}".encode("ascii")
             tile = by_name[name].data
             frame = render_tile(tile, palettes)
@@ -57,7 +57,7 @@ def main() -> int:
             )
             draw.text(
                 (cell_left + 12, cell_top + 245),
-                f"D{direction + 2}  PHASE {stage + 1}  TILE {source_tile}",
+                f"D{direction}  PHASE {stage + 1}  TILE {source_tile}",
                 font=font(16),
                 fill=(220, 230, 240),
             )

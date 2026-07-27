@@ -524,7 +524,6 @@ def phantom_overlays_xml() -> str:
 \t\t\t<Info value="DontBlock"/>
 \t\t\t<Menu value="11"/>
 \t\t\t<ImageIDBase value="PHg1"/>
-\t\t\t<Script type="0" cProc="0" GPLFunction="Gravechill_End"/>
 \t\t\t<DefaultSound value="0"/>
 \t\t</Engine>
 \t\t<Game version="1">
@@ -650,21 +649,6 @@ def phantom_overlays_xml() -> str:
 \t\t</Game>
 \t</Description>
 \t<Description type="Unit" subType="Overlay" ID="PHo4" Name="ice_lance_chill_icon" Description="Chilled">
-\t\t<Engine version="1">
-\t\t\t<Info value="Directionless"/>
-\t\t\t<Info value="DontBlock"/>
-\t\t\t<Info value="NotVisibleInISOView"/>
-\t\t\t<Menu value="11"/>
-\t\t\t<ImageIDBase value="PHo3"/>
-\t\t\t<Script type="0" cProc="0" GPLFunction="Ice_Lance_Chill_End"/>
-\t\t\t<DefaultSound value="0"/>
-\t\t</Engine>
-\t\t<Game version="1">
-\t\t\t<DialogID value="0"/>
-\t\t\t<StackPriority value="1"/>
-\t\t</Game>
-\t</Description>
-\t<Description type="Unit" subType="Overlay" ID="PHo5" Name="ice_lance_chill_visual" Description="Chilled">
 \t\t<Engine version="1">
 \t\t\t<Info value="Directionless"/>
 \t\t\t<Info value="DontBlock"/>
@@ -1751,28 +1735,52 @@ begin
 \tIf (target's "Type" == "Building" || target's "Type" == "Lair")
 \t\treturn;
 
-\tIf ($CheckEffector(target, "ice_lance_chill_icon"))
-\t\t$DeleteEffector(target, "ice_lance_chill_icon");
+\tIf ($HasAttribute("PhantomChillRemaining", target) == False)
+\t\tbegin
+\t\t\t$AddAttribute(target, "PhantomChillRemaining", "integer", duration);
+\t\t\t$AddAttribute(target, "PhantomChillActive", "boolean", False);
+\t\t\t$AddAttribute(target, "PhantomChillWatch", "function", $Phantom_Chill_Watch);
+\t\tend
+\ttarget's "PhantomChillRemaining" = duration;
 
-\t$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
-\t$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
-\t$CreateEffector(target, "ice_lance_chill_icon", duration);
+\tIf (target's "PhantomChillActive" == False)
+\t\tbegin
+\t\t\ttarget's "PhantomChillActive" = True;
+\t\t\t$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
+\t\t\t$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
+\t\tend
 
-\tIf ($CheckEffector(target, "ice_lance_chill_visual"))
-\t\t$DeleteEffector(target, "ice_lance_chill_visual");
-\t$CreateEffector(target, "ice_lance_chill_visual", duration);
+\tIf ($CheckEffector(target, "ice_lance_chill_icon") == False)
+\t\t$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");
+
+\tIf ($IsRunning(target's "PhantomChillWatch") == False)
+\t\t$NewThread(target's "PhantomChillWatch", 100, target);
 end
 
-function Ice_Lance_Chill_End(agent thisagent)
+function Phantom_Chill_Watch(agent thisagent)
 
 declare
 
 begin
-\tIf ($isdead(thisagent))
+\tIf ($IsValidGamePiece(thisagent) == False)
 \t\treturn;
 
+\tIf (thisagent's "PhantomChillActive" == False)
+\t\tbegin
+\t\t\t$KillThread(thisagent's "PhantomChillWatch");
+\t\t\treturn;
+\t\tend
+
+\tthisagent's "PhantomChillRemaining" -= 100;
+\tIf (thisagent's "PhantomChillRemaining" > 0)
+\t\treturn;
+
+\t$KillThread(thisagent's "PhantomChillWatch");
+\tthisagent's "PhantomChillActive" = False;
 \t$AdjustAttribute(thisagent, #ATTRIB_MovementRateModifier, -50);
 \t$AdjustAttribute(thisagent, #ATTRIB_ActionRateModifier, -500);
+\tIf ($CheckEffector(thisagent, "ice_lance_chill_icon"))
+\t\t$DeleteEffector(thisagent, "ice_lance_chill_icon");
 end
 
 function Phantom_death(agent thisagent)
@@ -2129,24 +2137,68 @@ begin
 
 \t$Phantom_Apply_Chill(target, $GetSpellAttribute("ice_lance", "effector_duration"));
 \t$CreateEffector(target, "gravechill_hit_effector", 0);
-
-\tIf ($CheckEffector(target, "gravechill_icon"))
-\t\t$DeleteEffector(target, "gravechill_icon");
-
-\t$CreateEffector(target, "gravechill_icon", 8000);
-\t$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);
-\t$MagicalAdjustAttribute(target, #ATTRIB_Parry, -2);
-\t$MagicalAdjustAttribute(target, #ATTRIB_MagicResistance, -2);
+\t$Phantom_Apply_Gravechill(target, 8000);
 end
 
-function Gravechill_End(agent thisagent)
+function Phantom_Apply_Gravechill(agent target, integer duration)
 
 declare
 
 begin
+\tIf ($isdead(target))
+\t\treturn;
+
+\tIf (target's "Type" == "Building" || target's "Type" == "Lair")
+\t\treturn;
+
+\tIf ($HasAttribute("PhantomGravechillRemaining", target) == False)
+\t\tbegin
+\t\t\t$AddAttribute(target, "PhantomGravechillRemaining", "integer", duration);
+\t\t\t$AddAttribute(target, "PhantomGravechillActive", "boolean", False);
+\t\t\t$AddAttribute(target, "PhantomGravechillWatch", "function", $Phantom_Gravechill_Watch);
+\t\tend
+\ttarget's "PhantomGravechillRemaining" = duration;
+
+\tIf (target's "PhantomGravechillActive" == False)
+\t\tbegin
+\t\t\ttarget's "PhantomGravechillActive" = True;
+\t\t\t$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);
+\t\t\t$MagicalAdjustAttribute(target, #ATTRIB_Parry, -2);
+\t\t\t$MagicalAdjustAttribute(target, #ATTRIB_MagicResistance, -2);
+\t\tend
+
+\tIf ($CheckEffector(target, "gravechill_icon") == False)
+\t\t$CreateEffector(target, "gravechill_icon", 1, "infinite");
+
+\tIf ($IsRunning(target's "PhantomGravechillWatch") == False)
+\t\t$NewThread(target's "PhantomGravechillWatch", 100, target);
+end
+
+function Phantom_Gravechill_Watch(agent thisagent)
+
+declare
+
+begin
+\tIf ($IsValidGamePiece(thisagent) == False)
+\t\treturn;
+
+\tIf (thisagent's "PhantomGravechillActive" == False)
+\t\tbegin
+\t\t\t$KillThread(thisagent's "PhantomGravechillWatch");
+\t\t\treturn;
+\t\tend
+
+\tthisagent's "PhantomGravechillRemaining" -= 100;
+\tIf (thisagent's "PhantomGravechillRemaining" > 0)
+\t\treturn;
+
+\t$KillThread(thisagent's "PhantomGravechillWatch");
+\tthisagent's "PhantomGravechillActive" = False;
 \t$MagicalAdjustAttribute(thisagent, #ATTRIB_Strength, 5);
 \t$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 2);
 \t$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, 2);
+\tIf ($CheckEffector(thisagent, "gravechill_icon"))
+\t\t$DeleteEffector(thisagent, "gravechill_icon");
 end
 
 function Blizzard_Check(agent thisagent) is integer
@@ -3409,7 +3461,7 @@ def is_building_dialog_key_index(index: int, colors: list[tuple[int, int, int]])
 
 
 def hero_sprite_scale_multiplier(source_tile_index: int) -> float:
-    if 4723 <= source_tile_index <= 4740 or 4779 <= source_tile_index <= 4787:
+    if 4722 <= source_tile_index <= 4745 or 4779 <= source_tile_index <= 4787:
         return 1.0
     if 4746 <= source_tile_index <= 4777:
         # Cast bodies previously bypassed the 1.12 multiplier used by Stand,
@@ -3439,7 +3491,7 @@ def hero_sprite_body_base_offset(source_tile_index: int) -> int | None:
     if 4746 <= source_tile_index <= 4777:
         direction = (source_tile_index - 4746) // 4
         return (13, 14, 17, 12, 8, 8, 8, 8)[direction]
-    if 4723 <= source_tile_index <= 4740:
+    if 4722 <= source_tile_index <= 4745:
         return 12
     if 4779 <= source_tile_index <= 4785:
         return 8
@@ -3461,23 +3513,23 @@ def hero_sprite_horizontal_alignment(source_tile_index: int) -> str:
 def hero_sprite_direction_index(source_tile_index: int) -> int:
     direction = 0
     if 4586 <= source_tile_index <= 4649:
-        direction = min(5, (source_tile_index - 4586) // 8)
-    elif 4650 <= source_tile_index <= 4658:
-        direction = min(5, source_tile_index - 4650)
-    elif 4659 <= source_tile_index <= 4689:
-        direction = min(5, (source_tile_index - 4659) // 4)
-    elif 4690 <= source_tile_index <= 4722:
-        direction = min(5, (source_tile_index - 4690) // 4)
-    elif 4723 <= source_tile_index <= 4745:
-        direction = min(5, (source_tile_index - 4723) // 3)
+        direction = min(7, (source_tile_index - 4586) // 8)
+    elif 4650 <= source_tile_index <= 4657:
+        direction = min(7, source_tile_index - 4650)
+    elif 4658 <= source_tile_index <= 4689:
+        direction = min(7, (source_tile_index - 4658) // 4)
+    elif 4690 <= source_tile_index <= 4721:
+        direction = min(7, (source_tile_index - 4690) // 4)
+    elif 4722 <= source_tile_index <= 4745:
+        direction = min(7, (source_tile_index - 4722) // 3)
     elif 4746 <= source_tile_index <= 4777:
-        direction = min(5, (source_tile_index - 4746) // 4)
+        direction = min(7, (source_tile_index - 4746) // 4)
     return direction
 
 
 def is_phantom_death_art_tile(source_tile_index: int) -> bool:
     return (
-        4723 <= source_tile_index <= 4740
+        4722 <= source_tile_index <= 4745
         or 4779 <= source_tile_index <= 4785
         or source_tile_index == 4787
     )
@@ -4169,22 +4221,22 @@ def replace_priestess_die_holds_with_directional_third_frames(imag: bytes) -> by
         raise ValueError("Hero IMAG has no readable Die animation set")
 
     direction_offsets = [
-        struct.unpack_from("<i", imag, die_set_offset + 0x38 + slot * 4)[0]
+        struct.unpack_from("<i", imag, die_set_offset + 0x40 + slot * 4)[0]
         for slot in range(8)
     ]
     populated = [offset for offset in direction_offsets if offset > 0]
-    if len(populated) != 6:
-        raise ValueError(f"Expected six populated Die directions, found {len(populated)}")
+    if len(populated) != 8:
+        raise ValueError(f"Expected eight populated Die directions, found {len(populated)}")
 
     patched = bytearray(imag)
     for direction_index, relative_offset in enumerate(populated):
         direction_offset = die_set_offset + relative_offset
-        frame_table = direction_offset + 0x30
+        frame_table = direction_offset + 0x28
         if frame_table + 13 * 8 > len(imag):
             raise ValueError(f"Die direction {direction_index} has a truncated frame table")
 
         first_tile = u32(imag, frame_table + 4) & 0xFFFF
-        expected_first = 4723 + direction_index * 3
+        expected_first = 4722 + direction_index * 3
         if first_tile != expected_first:
             raise ValueError(
                 f"Die direction {direction_index} begins with TILE {first_tile}; "

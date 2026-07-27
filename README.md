@@ -599,31 +599,29 @@ Both mutations occur inside the same inventory-item absence guard, so neither
 can stack during the birth path. Package validation requires both bonuses and
 rejects an ordinary `AdjustAttribute(Parry)` substitution.
 
-On a non-building target, `Ice_Lance_Hit` creates the original invisible
-`ice_lance_chill_icon` timer for three seconds and adds `50` to
+On a non-building target, `Ice_Lance_Hit` starts or refreshes a three-second
+per-target Chill counter and adds `50` to
 `ATTRIB_MovementRateModifier` and `500` to `ATTRIB_ActionRateModifier`.
 These engine modifiers use different scales rather than percentages: the
 movement value provides a gentler slow, while the larger action value follows
 stock Majesty slow effects closely enough to make action delay observable.
-`Ice_Lance_Chill_End` reverses both values.
-On a repeated hit, the existing effector is deleted so its callback first
-reverses the old modifiers, then Chill is reapplied with a fresh three-second
-timer. This refreshes the duration without stacking the penalty. The mechanic
-otherwise retains the first working Chill implementation recovered from the
-original Codex session transcript.
+`Phantom_Chill_Watch` reverses both values when the counter reaches zero.
+On a repeated hit, only `PhantomChillRemaining` is reset to three seconds; the
+modifiers, watcher, and icon are not created a second time.
 
-The mechanical timer remains an invisible `PHo4` overlay and is the sole owner
-of the cleanup callback. A separate visual-only `PHo5` overlay displays the
-custom cyan snowflake through the packaged `PHo4chill_icon` image. The image
+The `PHo4` overlay is the sole visible custom cyan snowflake through the
+packaged `PHo4chill_icon` image. It is created once with infinite duration
+while the separate per-target watcher owns duration and modifier cleanup.
+This removes both the former `PHo5` visual timer and the later timed-PHo4
+delete/recreate path, either of which could overlap visible snowflakes during
+closely spaced hits. The image
 uses the larger stock animated-status canvas and contains 29 distinct frames:
 the snowflake spins around its vertical axis through horizontal perspective
 compression, with a subtle scale pulse and vertical bob. A cyan glint sweeps
 across its face to make the turn readable even though the snowflake itself is
 symmetrical. Its layered dark-blue, bright-cyan, and pale-cyan strokes are
 tuned for the stronger size and vibrancy of Majesty's Wither-style status
-effects. Every hit refreshes both overlays independently, so the symbol tracks
-the three-second Chill duration without participating in modifier application
-or cleanup.
+effects.
 
 ### Chill and status-effect implementation notes
 
@@ -632,28 +630,37 @@ Majesty's rate modifiers are fixed engine offsets, not percentage inputs.
 numeric scales; assigning the same number to both does not produce the same
 slow and can make it appear that both modifiers affected movement. The working
 Ice Lance values are therefore intentionally different (`+50` movement and
-`+500` action). Positive values slow the corresponding rate, and the cleanup
-callback applies the exact negatives. Because units have different base
+`+500` action). Positive values slow the corresponding rate, and the watcher
+cleanup applies the exact negatives. Because units have different base
 movement classes and action timings, one fixed modifier can produce different
 effective percentage changes between units. No dependable GPL path was found
 for converting the live speed/action class into an exact percentage reduction,
 and stock effects such as Medusa-style slows likewise use fixed modifiers.
 Treat this as a mild Chill, not a guaranteed numeric-percent debuff.
 
-The safe non-stacking refresh sequence is:
+Stock Medusa Slow uses a `HasEffect` attribute to reject repeat applications;
+it does not refresh. Deleting and immediately recreating a timed effector is
+not a stock refresh mechanism: deletion invokes cleanup while a same-named
+replacement may already be entering the overlay list. Closely spaced hits can
+therefore overlap icons or cross modifier cleanup.
 
-1. If the mechanical timer effector exists, delete it. Deletion runs its end
-   callback and reverses the previous modifiers.
-2. Apply the movement and action modifiers once.
-3. Recreate the mechanical effector for the full duration.
-4. Independently delete and recreate the visual effector for the same duration.
+The safe refreshable sequence follows the counter/watcher status pattern used
+by Majestic Majesty:
 
-Do not apply another set of modifiers before deleting the old mechanical
-effector. Do not give the visual overlay a cleanup callback: modifier ownership
-must stay centralized in one timer so multiple Phantoms refresh rather than
-stack. The three-second duration lives on the `ice_lance` action as
-`EffectorDuration`; both effectors read it through `$GetSpellAttribute`, so the
-timer and icon cannot silently drift apart.
+1. Use `HasAttribute` to add per-target `PhantomChillRemaining`,
+   `PhantomChillActive`, and `PhantomChillWatch` attributes exactly once.
+2. Set `PhantomChillRemaining` to the requested duration on every hit.
+3. Only when `PhantomChillActive` is false, apply the two modifiers. Independently
+   require `CheckEffector` to be false before creating one infinite-duration
+   PHo4 icon, making the engine's attached-effector list the authoritative
+   visual deduplication guard.
+4. Start one 100 ms watcher if it is not already running. The watcher decrements
+   the counter, removes the modifiers and icon at zero, and kills itself.
+
+Rehits never recreate PHo4 and never apply another set of modifiers, so
+multiple Phantoms refresh rather than stack. The three-second duration lives
+on the `ice_lance` action as `EffectorDuration`; both Ice Lance and Icy Touch
+pass that value to the shared counter helper through `$GetSpellAttribute`.
 
 `Phantom_Apply_Chill` owns that refresh sequence for both Ice Lance and Icy
 Touch, keeping the three-second duration, refresh behavior, and non-stacking
@@ -662,8 +669,8 @@ modifiers identical between the two attacks.
 For floating buff/debuff symbols, cloning an existing animated status-image
 layout is more reliable than inventing overlay geometry. Chill clones the
 29-frame `XR25plague_icon` image record, appends custom remapped TILE records,
-and keeps the template's canvas, hotspot, and timing. The mechanical `PHo4`
-overlay uses `NotVisibleInISOView`; visible `PHo5` points at the generated
+and keeps the template's canvas, hotspot, and timing. The visible,
+single visible `PHo4` overlay points directly at the generated
 `PHo4chill_icon` image. The snowflake needs stronger scale, line weight, and
 cyan contrast than an isolated review suggests because in-game terrain and
 sprites reduce legibility. Its approved animation simulates rotation around
@@ -743,22 +750,21 @@ helper used by Ice Lance with Ice Lance's three-second duration. The inherited
 Fire Blast `Does_Resist_Fire` gate and player-cast Wither impact have been
 removed: neither belongs in a frost attack, and both obscured whether the
 monster action callback itself was applying the effect. The Chill helper
-removes and recreates the existing Chill effectors before applying their
-modifiers, so subsequent hits refresh Chill without stacking.
+resets its per-target counter, so subsequent hits refresh Chill without
+recreating its icon or stacking its modifiers.
 
 The hit also applies the custom `Gravechill` debuff for eight seconds.
-Gravechill now reproduces the monster-side Medusa Slow structure within that
-same executing callback: it directly creates the timed visible icon and then
-adjusts the target's attributes, without a player spell or secondary callback
-between them. The `gravechill_icon` owns the duration and calls
-`Gravechill_End` when it expires or is deleted. Application reduces Strength
-by `5` through `MagicalAdjustAttribute`, Defence by `2` through
-`ATTRIB_Parry`, and Resistance by `2` through `ATTRIB_MagicResistance`. The end
-callback restores those exact values.
-Reapplication first deletes the existing icon, allowing its end callback to
-restore the old modifiers, and then creates the fresh icon before applying the
-fresh modifiers, matching stock monster debuff ordering. The result refreshes
-duration across any number of Phantoms without stacking.
+`Phantom_Apply_Gravechill` uses the same single-instance counter/watcher
+lifecycle as Chill. Its first application reduces Strength by `5` through
+`MagicalAdjustAttribute`, Defence by `2` through `ATTRIB_Parry`, and Resistance
+by `2` through `ATTRIB_MagicResistance`, then creates one infinite-duration
+`gravechill_icon`. Reapplication only resets
+`PhantomGravechillRemaining` to eight seconds. It does not recreate the icon or
+apply another set of modifiers. The sole 100 ms watcher restores the exact
+attribute values and removes the icon when the counter reaches zero, so hits
+from multiple Phantoms refresh one shared debuff rather than stacking it.
+As with Chill, dynamic state is initialized only behind `HasAttribute`, and
+`CheckEffector` must report no existing skull before icon creation.
 
 The weapon half may miss, be dodged, or be parried while the directly invoked
 magic half still resolves through `$spell_attack`; the magic/debuff half is
@@ -767,8 +773,8 @@ creates a separate zero-duration `gravechill_hit_effector` using PHg2, a
 six-frame one-shot animation which runs through every source stage from the
 ghostly skull forming to the completed crystal skull cracking into flying
 shards. It has no end callback and owns no modifiers. The animated PHg1 status
-symbol remains the persistent cyan crystalline skull and sole owner of the
-eight-second cleanup timer. Both use:
+symbol remains the persistent cyan crystalline skull, while the per-target
+watcher owns its eight-second duration and cleanup. Both use:
 
 ```text
 assets\source\icy-touch-impact-skull-source-v1-transparent.png
@@ -979,25 +985,32 @@ After body clearance, keep only the largest connected shadow-control component.
 Projection quantization can otherwise strand the hood/head as a small
 upper-left island that the engine renders as an implausible detached shadow.
 
-The production hero source now uses six direction slots. Directions 2-5 have
-dedicated approved/generated 3x2 major-action sheets; directions 6-7 are exact
-opposite-side mirrors of directions 4-3 for costume consistency. The generator
-maps them into the real Priestess animation topology: seven floating movement
-frames, four-stage attacks, four-stage casts, three-stage specials,
-direction-specific death starts, and the shared eight-frame dissolve.
+The Priestess scaffold has eight populated direction records in every primary
+animation set, not six. The production art supplies four approved/generated
+3x2 major-action sheets—front, front-right, rear-right, and back—plus mirrored
+front-left and rear-left views. Exact side-on paintings do not yet exist, so
+the nearest three-quarter view is deliberately shared by each adjacent side
+slot. The eight engine slots therefore use:
 
-Majesty's populated unit slots rotate from back/north to front/south rather
-than following art-generation order: slot 2 is back/north, 3 rear-side,
-4 front-side, 5 front/south, 6 opposite front-side, and 7 opposite rear-side.
-The generator therefore applies the explicit source permutation
-`back, rear-side, front-side, front, mirrored front-side, mirrored rear-side`.
+`back, rear-right, rear-right, front-right, front, front-left, rear-left, rear-left`.
+
+That identical mapping is applied independently to Stand, Walk, Attack, Cast,
+Special, and Die. No action borrows another direction's pose, so its recovery
+and completion cannot flip to a differently facing art view.
+
+The stock source TILE ranges are exact and must not drift by one:
+Walk `4586-4649`, Stand `4650-4657`, Special `4658-4689`, Attack
+`4690-4721`, directional Die `4722-4745`, Cast `4746-4777`, and shared
+dissolve `4778-4785`. The earlier six-direction implementation misclassified
+the first Special and Die tiles as the preceding set and left the last two
+engine directions clamped to one art view.
 
 Walk directions occupy eight-TILE blocks beginning at tile 4586. The first
 TILE in each block is a header/base pose that the engine periodically displays;
 the following seven are the normal Walk sequence. Direction assignment must
-therefore use `(tile - 4586) // 8`, including base tiles 4586, 4594, 4602,
-4610, 4618, and 4626. Starting at 4587 assigns every later base pose to the
-previous direction and causes a recurring one-frame facing flip in-game.
+therefore use `(tile - 4586) // 8`, including all eight base tiles from 4586
+through 4642 in steps of eight. Starting at 4587 assigns every later base pose
+to the previous direction and causes a recurring one-frame facing flip in-game.
 
 Shared dissolve TILEs `4778-4785` use increasingly large stock effect canvases.
 Replacement art must cap their character anchor height instead of fitting each

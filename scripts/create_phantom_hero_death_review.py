@@ -75,7 +75,7 @@ def main() -> int:
     palettes = builder.read_cam_entries(args.cam, b"SPLT")
     by_name = {entry.name.rstrip(b"\x00"): entry for entry in tiles}
 
-    source_tiles = (4723, 4724, 4725, 4779, 4780, 4781, 4782, 4783, 4784, 4785, 4787)
+    source_tiles = (4722, 4723, 4724, 4779, 4780, 4781, 4782, 4783, 4784, 4785, 4787)
     scale = 3
     cell_width = 500
     cell_height = 480
