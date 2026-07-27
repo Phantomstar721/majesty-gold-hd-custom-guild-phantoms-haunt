@@ -45,6 +45,8 @@ This currently builds:
   Freeze, and rest-to-recharge behavior.
 - A level-4, melee-gated `Icy Touch` which combines one normal weapon attack
   with `30` spell power, refreshes Chill, and applies Gravechill.
+- A level-5 `Call to Grave` which is mechanically a direct
+  Wizard Teleport clone with custom ghostly ice-portal art.
 - Healers exclude Phantoms from ordinary healing. A Priestess's Drain Life
   secondary heal treats allied Phantoms as undead: Priestess self-healing
   remains first priority, followed by the most-injured Phantom, then controlled
@@ -795,6 +797,117 @@ After a build, decode the actual packaged palette art with:
 This writes
 `artifacts\reviews\gravechill-icon-packaged-review.png`.
 
+### Call to Grave
+
+Phantoms automatically learn Call to Grave at level 5 through the stock
+`AllowedSpells` and action `CharacterLevel` path. Its action retains the stock
+Wizard Teleport travel path: spell type `4`, rank `4`, a `1200` ms effect, and
+a `5000` ms cooldown. It is selected through Majesty's normal travel-spell
+logic, with custom validation limiting it to home-bound travel.
+
+`Call_To_Grave_Check` preserves the stock target-or-destination validation
+shape, but first requires the stock home-bound task state:
+`TaskName == "go_home"` and `Target == Home`. The ordinary `go_home` decision
+sets both fields before entering `use_building -> travel_to -> TryTravelSpell`.
+Terror-fleeing sets the same task only when the selected refuge is the hero's
+actual home; fleeing to an inn or another shelter remains a `"visiting"` task
+and cannot select Call to Grave. The task name persists throughout travel and
+is cleared by stock `use_building` only after the hero enters home.
+
+After that home-only gate, the checker compares the resulting trip distance
+directly against `#Phantom_Call_To_Grave_Min_Distance`, currently `500`. Stock
+`main_teleport_check` divides its supplied range by five, producing only a
+`100`-unit cutoff for Teleport Short and a `280`-unit cutoff for Wizard
+Teleport. A direct `500`-unit cutoff matches the full travel range of a
+Marketplace teleportation amulet: Phantoms walk when an amulet could have
+covered the trip and cast Call to Grave only for longer travel.
+
+Phantom terror fleeing is redirected at the stock refuge-selection boundary.
+The mod overrides `flee_part_II` with its stock body plus one title-specific
+choice: when the fleeing agent is a Phantom and its home is valid, `go_here`
+is always the Phantom's home. All non-Phantoms—and Phantoms whose home has
+been destroyed—retain stock closest-refuge selection and the stock berserk
+fallback. The remainder of the routine is unchanged: home selection sets
+`TaskName = "go_home"`, preserves the original fleeing intent and danger
+effect, and enters `use_building_safe`, where the ordinary travel-spell path
+can select Call to Grave. Normal `flee`, `flee_absolute`, evaluation,
+`use_building_safe`, and travel functions are not overridden.
+
+Stock normal fleeing has an earlier safety case when home is within `125`
+units of nearby enemies; it may choose berserk before reaching refuge
+selection. This is already inside Call to Grave's `500`-unit no-cast radius.
+
+The effect creates one attached effector for the full action duration, waits
+until the midpoint, then uses the stock point-target or unit-target teleport
+path with the Phantom's current destination, target, and casting range. The
+movement call receives the custom range `50000`, which is effectively
+map-spanning while remaining within values already used safely by stock game
+scripts. Because the effect remains attached to the caster, the same portal
+animation begins at departure and finishes at the arrival point.
+
+The portal now preserves Wizard Teleport's native three-set overlay structure
+instead of mapping a six-frame Frost Field hit loop over the full effect
+duration. Eight frames open the rift, eight identical full-width frames hold it
+open without rotation or cycling, and seven frames close it. The shared fully
+open transition leaves `22` unique custom TILEs. Every phase uses the same
+`84x116` canvas and `(42,31)` hotspot, preventing the inherited Frost Field
+anchors from moving the portal left and right between frames. The generated
+art sources are:
+
+```text
+assets\source\call-to-grave-portal-source-v1-chroma.png
+assets\source\call-to-grave-portal-source-v1-transparent.png
+```
+
+Decode the actual packaged palette animation with:
+
+```powershell
+.\scripts\create_call_to_grave_review.py
+```
+
+This writes:
+
+```text
+artifacts\reviews\call-to-grave-portal-packaged-review.png
+```
+
+#### Call to Grave implementation postmortem
+
+The first implementation tried to build a separate recall system around the
+desired outcome. It introduced custom return-home detection and movement
+helpers, intercepted `use_building` / `use_building_safe`, and attempted to
+teleport directly to home from custom callbacks. That design did not produce a
+working spell because it bypassed the stock travel action's selection,
+validation, target state, animation timing, and midpoint movement lifecycle.
+Its range behavior was also inferred from constant names before tracing
+`main_teleport_check`, which silently divides its supplied value by five.
+
+The completed implementation started again from the closest proven stock
+feature: Wizard Teleport. It preserved the native action type, spell rank,
+effector duration, midpoint movement thread, point/unit target handling, and
+ordinary `TryTravelSpell` selection. Changes were then made one dimension at a
+time:
+
+1. Replace only the portal art while retaining the three native animation
+   phases and fixed hotspot.
+2. Give the movement thread a map-spanning range.
+3. Add a direct, explicitly understood minimum-distance check.
+4. Gate spell validation on the canonical stock home state,
+   `TaskName == "go_home"` and `Target == Home`.
+5. Change only the Phantom's refuge choice at the narrow stock
+   `flee_part_II` boundary, preserving the complete stock fallback for every
+   other hero and for a Phantom without a valid home.
+
+The reusable rule is to trace a comparable stock behavior from decision
+through action completion before inventing hooks. Begin with that action
+unchanged, prove it works, and alter one contract at a time. Prefer a
+validation callback for eligibility and the narrowest existing decision
+boundary for class-specific behavior. Read helper bodies before interpreting
+their constants, preserve native animation timing and anchors, and add build
+validation that rejects temporary learning bypasses and obsolete broad
+overrides. This is the default implementation approach for future custom
+spells and hero behaviors.
+
 ### Frost Armor
 
 Phantoms automatically learn Frost Armor at level 3. `Phantom_tree` checks for
@@ -1012,6 +1125,16 @@ therefore use `(tile - 4586) // 8`, including all eight base tiles from 4586
 through 4642 in steps of eight. Starting at 4587 assigns every later base pose
 to the previous direction and causes a recurring one-frame facing flip in-game.
 
+The stock Priestess Walk and Cast canvases vary substantially by direction;
+several side and rear-side records are shorter than the approved Phantom Stand
+art and clip an attempted scale increase. Generated Walk and Cast bodies are
+therefore normalized to the packaged Stand height for their own direction:
+`61, 55, 52, 50, 50, 56, 60, 61` pixels. When a native action canvas is too
+small, the builder expands it upward and translates the hotspot by the same
+amount, preserving world position and robe baseline. Validators allow at most
+one pixel of palette-rounding drift and reject action art touching the expanded
+canvas boundary.
+
 Shared dissolve TILEs `4778-4785` use increasingly large stock effect canvases.
 Replacement art must cap their character anchor height instead of fitting each
 frame independently, or the dying Phantom grows to several times normal size
@@ -1057,7 +1180,10 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   are approved for the spell pass.
 - Cast body geometry and recovery poses are locked directionally across all
   eight Cast records; validators reject the old Priestess swirl, mismatched
-  recovery direction, clipping, and frame-size drift.
+  recovery direction, clipping, and frame-size drift. Walk and Cast now also
+  match each direction's approved Stand height within one pixel, using
+  hotspot-preserving upward canvas expansion where stock Priestess action
+  records were too short.
 - Phantom retreat and combat estimates are temporarily set to a fearless
   testing profile so spell behavior can be exercised without frequent retreat.
 - Ice Lance now has final-path generated-source projectile/icon art, 32 packaged
@@ -1083,6 +1209,17 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   it available only when that specific unit target is within the fixed
   24-unit melee radius, allowing Ice Lance to remain selected at range without
   making the Phantom move closer for Icy Touch.
+- Call to Grave is a level-5 spell using stock Wizard Teleport travel
+  behavior: rank 4, an effectively map-wide
+  `50000` movement range, `5000` ms cooldown, an explicit `500`-unit
+  minimum-use threshold matching a teleportation amulet's full range, a
+  validation gate requiring stock `TaskName == "go_home"` and `Target == Home`,
+  and stock midpoint point/unit movement. A Phantom-only branch in the
+  stock-compatible `flee_part_II` refuge selector makes terror fleeing choose
+  home; all non-Phantom refuge selection remains stock.
+  Its custom portal uses Wizard Teleport's native
+  eight-frame open, eight-frame hold, and seven-frame close sets with one fixed
+  hotspot; only the name and ghostly ice artwork differ.
 - Frozen Cowl is a starter item that displays and grants `+2` physical armor.
   Black Icerod retains its in-game-confirmed displayed and mechanical `+8`
   weapon damage and now adds a displayed and mechanical `+5 Parry` through the

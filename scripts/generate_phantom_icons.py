@@ -29,6 +29,15 @@ def main() -> int:
     )
     write_icon(args.out_dir / "frost_armor_spell_icon_24", (24, 24), draw_frost_armor)
     write_icon(args.out_dir / "blizzard_spell_icon_24", (24, 24), draw_blizzard)
+    write_image_icon(
+        args.out_dir / "call_to_grave_spell_icon_24",
+        render_call_to_grave_icon(
+            repo_root
+            / "assets"
+            / "source"
+            / "call-to-grave-portal-source-v1-transparent.png"
+        ),
+    )
     write_icon(args.out_dir / "phantom_cowl_icon_23", (23, 23), draw_cowl)
     write_icon(args.out_dir / "dark_staff_icon_16", (16, 16), draw_dark_staff)
     write_icon(args.out_dir / "dark_staff_icon_23", (23, 23), draw_dark_staff)
@@ -134,6 +143,25 @@ def render_ice_lance_icon(source_path: Path, size: tuple[int, int]) -> Image.Ima
     )
     draw_border(ImageDraw.Draw(canvas), size)
     return posterize_to_majesty_icon(canvas.convert("RGB"), levels=44)
+
+
+def render_call_to_grave_icon(source_path: Path) -> Image.Image:
+    size = (24, 24)
+    canvas = Image.new("RGBA", size, (3, 4, 8, 255))
+    source = Image.open(source_path).convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    if bbox is None:
+        raise ValueError(f"Call to Grave source has no visible pixels: {source_path}")
+    source = source.crop(bbox)
+    source.thumbnail((15, 20), Image.Resampling.LANCZOS)
+    source = ImageEnhance.Brightness(source).enhance(0.82)
+    source = ImageEnhance.Contrast(source).enhance(1.08)
+    canvas.alpha_composite(
+        source,
+        ((size[0] - source.width) // 2, (size[1] - source.height) // 2),
+    )
+    draw_border(ImageDraw.Draw(canvas), size)
+    return posterize_to_majesty_icon(canvas.convert("RGB"), levels=40)
 
 
 def posterize_to_majesty_icon(image: Image.Image, levels: int) -> Image.Image:

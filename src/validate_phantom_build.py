@@ -116,6 +116,7 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
             b"PHf2Frozen Small",
             b"PHf3Frozen Medium",
             b"PHf4Frozen Large",
+            b"PHc2Call to Grave",
         },
         b"TILE": set(),
         b"SPLT": set(),
@@ -150,6 +151,7 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Action", "WRa3"),
         ("Action", "WRa4"),
         ("Action", "WRa5"),
+        ("Action", "WRa6"),
     },
     "phantom_projectiles.xml": {("Unit", "PHp1")},
     "phantom_overlays.xml": {
@@ -164,6 +166,7 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PH10"),
         ("Unit", "PHg1"),
         ("Unit", "PHg2"),
+        ("Unit", "PHc2"),
     },
     "phantom_sounds.xml": {
         ("Sound", "PH01"),
@@ -187,6 +190,7 @@ CUSTOM_TILE_OWNERS = {
     b"PHf2Frozen": (b"PHf2Frozen Small", "u32"),
     b"PHf3Frozen": (b"PHf3Frozen Medium", "u32"),
     b"PHf4Frozen": (b"PHf4Frozen Large", "u32"),
+    b"PHc2Portal": (b"PHc2Call to Grave", "u32"),
 }
 
 EXPECTED_CUSTOM_TILE_COUNTS = {
@@ -205,6 +209,7 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHf2Frozen": 29,
     b"PHf3Frozen": 29,
     b"PHf4Frozen": 29,
+    b"PHc2Portal": 22,
 }
 
 ALIGNED_PHANTOM_DISSOLVE_TILES = {
@@ -1233,6 +1238,152 @@ def validate_phantom_cast_tile_geometry(
             )
 
 
+def validate_phantom_action_size_against_stand(
+    path: Path,
+    captured: dict[tuple[bytes, bytes], bytes],
+) -> None:
+    expected_stand_heights = (61, 55, 52, 50, 50, 56, 60, 61)
+
+    def body_geometry(source_tile: int) -> tuple[int, int, int, int, int, int]:
+        name = f"PHM1PhantomTile{source_tile - 4586}".encode("ascii")
+        tile = captured.get((b"TILE", name))
+        if tile is None:
+            fail(f"{path}: missing normalized Phantom action TILE {name!r}")
+        bounds = indexed_v3_body_bounds(tile)
+        if bounds is None:
+            fail(f"{path}: normalized Phantom action TILE {name!r} has no body")
+        left, top, right, bottom = bounds
+        _version, canvas_height, canvas_width = struct.unpack_from("<HHH", tile, 0)
+        hotspot_y = struct.unpack_from("<H", tile, 12)[0]
+        return (
+            right - left + 1,
+            bottom - top + 1,
+            bottom + 1 - hotspot_y,
+            left,
+            top,
+            min(canvas_width - 1 - right, canvas_height - 1 - bottom),
+        )
+
+    for direction, expected_height in enumerate(expected_stand_heights):
+        stand = body_geometry(4650 + direction)
+        if stand[1] != expected_height:
+            fail(
+                f"{path}: approved Stand direction {direction} is {stand[1]} px high; "
+                f"expected {expected_height}"
+            )
+        for label, source_tiles in (
+            (
+                "Walk",
+                [4586 + direction * 8 + frame for frame in range(8)],
+            ),
+            (
+                "Cast",
+                [4746 + direction * 4 + frame for frame in range(4)],
+            ),
+        ):
+            geometries = [body_geometry(source_tile) for source_tile in source_tiles]
+            bad_heights = [
+                geometry[1]
+                for geometry in geometries
+                if abs(geometry[1] - expected_height) > 1
+            ]
+            if bad_heights:
+                fail(
+                    f"{path}: Phantom {label} direction {direction} heights "
+                    f"{[geometry[1] for geometry in geometries]} drift from "
+                    f"Stand height {expected_height}"
+                )
+            if any(
+                geometry[3] < 1 or geometry[4] < 1 or geometry[5] < 1
+                for geometry in geometries
+            ):
+                fail(
+                    f"{path}: Phantom {label} direction {direction} touches an "
+                    "expanded TILE boundary"
+                )
+            if label == "Cast":
+                bad_bases = [
+                    geometry[2]
+                    for geometry in geometries
+                    if abs(geometry[2] - stand[2]) > 1
+                ]
+                if bad_bases:
+                    fail(
+                        f"{path}: Phantom Cast direction {direction} body bases "
+                        f"{[geometry[2] for geometry in geometries]} drift from "
+                        f"Stand base {stand[2]}"
+                    )
+
+
+def validate_call_to_grave_portal_animation(
+    path: Path,
+    image: bytes,
+    tiles: list[Entry],
+    captured: dict[tuple[bytes, bytes], bytes],
+) -> None:
+    if len(image) < 24:
+        fail(f"{path}: Call to Grave IMAG is too short")
+    entry_count = u32(image, 20)
+    sets: dict[int, list[int]] = {}
+    for index in range(entry_count):
+        set_id = u32(image, 24 + index * 8)
+        set_offset = u32(image, 28 + index * 8)
+        if set_offset + 68 > len(image):
+            fail(f"{path}: Call to Grave set {set_id} is truncated")
+        direction_offset = set_offset + u32(image, set_offset + 64)
+        frame_count = u32(image, direction_offset + 4) >> 16
+        frame_start = direction_offset + 20
+        last_tile_end = frame_start + (frame_count - 1) * 8 + 4
+        if frame_count <= 0 or last_tile_end > len(image):
+            fail(f"{path}: Call to Grave set {set_id} has an invalid frame table")
+        sets[set_id] = [
+            u32(image, frame_start + frame * 8)
+            for frame in range(frame_count)
+        ]
+
+    expected_counts = {80: 8, 64: 8, 96: 7}
+    actual_counts = {set_id: len(frames) for set_id, frames in sets.items()}
+    if actual_counts != expected_counts:
+        fail(
+            f"{path}: Call to Grave open/hold/close counts are {actual_counts}; "
+            f"expected {expected_counts}"
+        )
+
+    tile_by_index = {entry.index: entry for entry in tiles}
+    phase_widths: dict[int, list[int]] = {}
+    for set_id, frame_indices in sets.items():
+        phase_widths[set_id] = []
+        for tile_index in frame_indices:
+            entry = tile_by_index.get(tile_index)
+            if entry is None or not entry.name.startswith(b"PHc2Portal"):
+                fail(
+                    f"{path}: Call to Grave set {set_id} references non-portal "
+                    f"TILE index {tile_index}"
+                )
+            tile = captured.get((b"TILE", entry.name))
+            if tile is None:
+                fail(f"{path}: Call to Grave TILE {entry.name!r} was not captured")
+            _version, height, width = struct.unpack_from("<HHH", tile, 0)
+            hotspot = struct.unpack_from("<HH", tile, 10)
+            if (width, height, hotspot) != (84, 116, (42, 31)):
+                fail(
+                    f"{path}: Call to Grave TILE {entry.name!r} has "
+                    f"{width}x{height} hotspot {hotspot}; expected "
+                    "84x116 hotspot (42, 31)"
+                )
+            bounds = indexed_v3_body_bounds(tile)
+            if bounds is None:
+                fail(f"{path}: Call to Grave TILE {entry.name!r} is invisible")
+            phase_widths[set_id].append(bounds[2] - bounds[0] + 1)
+
+    if phase_widths[80] != sorted(phase_widths[80]):
+        fail(f"{path}: Call to Grave opening widths are not monotonic")
+    if len(set(phase_widths[64])) != 1:
+        fail(f"{path}: Call to Grave hold frames do not remain fully open")
+    if phase_widths[96] != sorted(phase_widths[96], reverse=True):
+        fail(f"{path}: Call to Grave closing widths are not monotonic")
+
+
 def validate_building_destruction_attachments(path: Path, image: bytes) -> None:
     if len(image) < 24:
         fail(f"{path}: Phantoms Haunt IMAG is too short for an animation-set table")
@@ -2225,6 +2376,165 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: experimental passive-armor item state is still present")
 
 
+def validate_call_to_grave_contract(output_root: Path) -> None:
+    actions_path = output_root / "Data" / "phantom_actions.xml"
+    actions = actions_path.read_text(encoding="utf-8")
+    action_start = actions.index(
+        '<Description type="Action" subType="Standard" ID="WRa6" '
+        'Name="call_to_grave"'
+    )
+    action_end = actions.index("</Description>", action_start)
+    action = actions[action_start:action_end]
+    action_contract = (
+        '<ImageSet value="Cast"/>',
+        '<CompletionImageSet value="Stand"/>',
+        'GPLFunction="Call_To_Grave_Effect"',
+        '<EffectorDuration value="1200"/>',
+        '<TimeoutDuration value="5000"/>',
+        '<SpellType value="4"/>',
+        '<CharacterLevel value="5"/>',
+        '<SpellRank value="4"/>',
+        '<ValidationScript value="Call_To_Grave_Check"/>',
+    )
+    missing_action = [value for value in action_contract if value not in action]
+    if missing_action:
+        fail(f"{actions_path}: Call to Grave action is missing {missing_action}")
+    forbidden_action = (
+        "<Sound ",
+        "<SoundPhase ",
+        'GPLFunction="Call_To_Grave_Begin"',
+        '<TimeoutDuration value="1000"/>',
+        '<TimeoutDuration value="36500"/>',
+        '<SpellType value="Travel"/>',
+        '<CharacterLevel value="1"/>',
+        '<SpellRank value="5"/>',
+    )
+    present_forbidden_action = [value for value in forbidden_action if value in action]
+    if present_forbidden_action:
+        fail(
+            f"{actions_path}: Call to Grave retains obsolete "
+            f"action fields {present_forbidden_action}"
+        )
+
+    units_path = output_root / "Data" / "phantom_units.xml"
+    units = units_path.read_text(encoding="utf-8")
+    if '<Spell ID="3" Value="call_to_grave"/>' not in units:
+        fail(f"{units_path}: Phantom does not list Call to Grave as an allowed spell")
+
+    overlays_path = output_root / "Data" / "phantom_overlays.xml"
+    overlays = overlays_path.read_text(encoding="utf-8")
+    overlay_contract = (
+        'ID="PHc2" Name="call_to_grave_effector"',
+        '<ImageIDBase value="PHc2"/>',
+        '<AttachmentPointID value="3"/>',
+        '<DefaultSound value="Teleport"/>',
+    )
+    missing_overlay = [value for value in overlay_contract if value not in overlays]
+    if missing_overlay:
+        fail(f"{overlays_path}: Call to Grave overlay is missing {missing_overlay}")
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    gpl_contract = (
+        "expression #Phantom_Call_To_Grave_Range 50000",
+        "expression #Phantom_Call_To_Grave_Min_Distance 500",
+        "function Call_To_Grave_Check(agent thisagent) is integer",
+        'if (thisagent\'s "taskname" != "go_home")',
+        'if (thisagent\'s "target" != thisagent\'s "home")',
+        'if (thisagent\'s "Target" == thisagent)',
+        'destination = thisagent\'s "destination";',
+        'if ($isvalidgamepiece(thisagent\'s "target"))',
+        'destination = $locationof(thisagent\'s "target");',
+        "else\n\t\t\treturn 0;",
+        "if ($distancebetweencoords(destination,$locationof(thisagent)) > #Phantom_Call_To_Grave_Min_Distance)",
+        "function Call_To_Grave_Effect(agent thisagent, agent target)",
+        'theTimePeriod = $GetSpellAttribute("call_to_grave","effector_duration");',
+        '$createeffector(thisagent,"call_to_grave_effector",theTimePeriod);',
+        'thisagent\'s "teleportScript" = $Call_To_Grave_DoMove;',
+        '$RunThread(thisagent\'s "teleportScript",theTimePeriod/2,thisagent,#Phantom_Call_To_Grave_Range);',
+        "function Call_To_Grave_DoMove(agent thisagent, integer theRange)",
+        "If ($IsDead(ThisAgent))",
+        'if (thisagent\'s "Target" == thisagent)',
+        '$TeleportToPoint(thisagent,theRange,thisagent\'s "destination");',
+        'if ($isvalidgamepiece(thisagent\'s "target"))',
+        '$TeleportToUnit(thisagent,theRange,thisagent\'s "Target",thisagent\'s "castingrange");',
+    )
+    missing_gpl = [value for value in gpl_contract if value not in gpl]
+    if missing_gpl:
+        fail(f"{gpl_path}: Call to Grave GPL is missing {missing_gpl}")
+    check_start = gpl.index("function Call_To_Grave_Check(agent thisagent) is integer")
+    check_end = gpl.index("\nfunction Call_To_Grave_Effect", check_start)
+    check_function = gpl[check_start:check_end]
+    if 'thisagent\'s "taskname" = "go_home";' in check_function:
+        fail(f"{gpl_path}: Call to Grave validation mutates the stock home task")
+    forbidden_gpl = (
+        "expression #Phantom_Call_To_Grave_Walk_Range",
+        "function Phantom_Is_Returning_Home(",
+        "function Phantom_Return_Home(",
+        "function Phantom_Return_Home_Safe(",
+        "function Phantom_Try_Call_To_Grave(",
+        "function Call_To_Grave_Begin(",
+        "function Call_To_Grave_Move(",
+        "function use_building(",
+        "function use_building_safe(",
+        "$TeleportToUnit(thisagent, 50000, home, 0);",
+        "return $main_teleport_check(thisagent,#Teleport_Range);",
+        "return $main_teleport_check(thisagent,#Teleport_Short_Range);",
+        '$RunThread(thisagent\'s "teleportScript",theTimePeriod/2,thisagent,#Teleport_Range);',
+        '$LearnSpell(thisagent, "call_to_grave");',
+    )
+    present_forbidden_gpl = [value for value in forbidden_gpl if value in gpl]
+    if present_forbidden_gpl:
+        fail(
+            f"{gpl_path}: Call to Grave retains custom home-recall hooks "
+            f"{present_forbidden_gpl}"
+        )
+
+
+def validate_phantom_flee_home_contract(output_root: Path) -> None:
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    flee_start = gpl.index(
+        "function flee_part_II(agent thisagent, list places, integer intent)"
+    )
+    flee_end = gpl.index("\nfunction Phantom_tree", flee_start)
+    flee_function = gpl[flee_start:flee_end]
+    contract = (
+        'if (thisagent\'s "Title" == "Phantom" && '
+        '$isvalidgamepiece(thisagent\'s "home"))',
+        'go_here = thisagent\'s "home";',
+        "else if ($listsize(places) > 0)",
+        "go_here = $pick_closest(thisagent,places);",
+        "$go_berserk(thisagent);",
+        'if (go_here == thisagent\'s "home")',
+        'thisagent\'s "taskname" = "go_home";',
+        'thisagent\'s "taskname" = "visiting";',
+        "$SpecifyIntent(ThisAgent,intent);",
+        'thisagent\'s "Activescript" = $use_building_safe;',
+        'thisagent\'s "backscript" = $use_building_safe;',
+        'thisagent\'s "target" = go_here;',
+        'thisagent\'s "destination" = $locationof(thisagent\'s "target");',
+        '$createeffector(thisagent,"thought_bubble_danger",#danger_bubble_time);',
+        '$say(thisagent,"VFX_FLEE_COMBAT");',
+    )
+    missing = [value for value in contract if value not in flee_function]
+    if missing:
+        fail(f"{gpl_path}: Phantom flee-home override is missing {missing}")
+    forbidden = (
+        "function flee(agent thisagent",
+        "function flee_absolute(agent thisagent",
+        "function wizard_eval_nearby(agent thisagent",
+        "function use_building_safe(agent thisagent",
+        "function travel_to_safe(agent thisagent",
+    )
+    present_forbidden = [value for value in forbidden if value in gpl]
+    if present_forbidden:
+        fail(
+            f"{gpl_path}: Phantom flee-home behavior overrides broader stock "
+            f"functions {present_forbidden}"
+        )
+
+
 def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
@@ -2675,6 +2985,8 @@ def validate(output_root: Path) -> None:
     validate_ice_lance_contract(output_root)
     validate_icy_touch_contract(output_root)
     validate_frost_armor_contract(output_root)
+    validate_call_to_grave_contract(output_root)
+    validate_phantom_flee_home_contract(output_root)
     validate_phantom_potion_purchase_contract(output_root)
     validate_phantom_equipment_upgrade_contract(output_root)
     validate_phantom_healing_contract(output_root)
@@ -2729,6 +3041,16 @@ def validate(output_root: Path) -> None:
         sections.get(b"TILE", []),
     )
     validate_phantom_cast_tile_geometry(maindata_path, captured)
+    validate_phantom_action_size_against_stand(maindata_path, captured)
+    call_to_grave_image = captured.get((b"IMAG", b"PHc2Call to Grave"))
+    if call_to_grave_image is None:
+        fail(f"{maindata_path}: IMAG/PHc2Call to Grave was not found")
+    validate_call_to_grave_portal_animation(
+        maindata_path,
+        call_to_grave_image,
+        sections.get(b"TILE", []),
+        captured,
+    )
     building_image = captured.get((b"IMAG", b"PHG1Phantom Guild"))
     if building_image is None:
         fail(f"{maindata_path}: IMAG/PHG1Phantom Guild was not found")

@@ -18,6 +18,7 @@ param(
     [string]$IcyTouchImpactSource = ".\assets\source\icy-touch-impact-skull-source-v1-transparent.png",
     [string]$FrostArmorCrystalSource = ".\assets\source\frost-armor-crystal-source-v1.png",
     [string]$FrostArmorFrozenCasingSource = ".\assets\source\frost-armor-frozen-casing-source-v3.png",
+    [string]$CallToGravePortalSource = ".\assets\source\call-to-grave-portal-source-v1-transparent.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
     [string]$GplCompiler = ""
 )
@@ -139,6 +140,7 @@ $iceLanceIconRgb = Join-Path $tempDir "ice_lance_icon_29.rgb"
 $iceLanceSpellIconRgb = Join-Path $tempDir "ice_lance_spell_icon_24.rgb"
 $frostArmorSpellIconRgb = Join-Path $tempDir "frost_armor_spell_icon_24.rgb"
 $blizzardSpellIconRgb = Join-Path $tempDir "blizzard_spell_icon_24.rgb"
+$callToGraveSpellIconRgb = Join-Path $tempDir "call_to_grave_spell_icon_24.rgb"
 $phantomCowlIconRgb = Join-Path $tempDir "phantom_cowl_icon_23.rgb"
 $darkStaffSmallIconRgb = Join-Path $tempDir "dark_staff_icon_16.rgb"
 $darkStaffMxIconRgb = Join-Path $tempDir "dark_staff_icon_23.rgb"
@@ -195,9 +197,11 @@ if ($LASTEXITCODE -ne 0) {
     --icy-touch-impact-source-png (Resolve-RepoPath $IcyTouchImpactSource) `
     --frost-armor-crystal-source-png (Resolve-RepoPath $FrostArmorCrystalSource) `
     --frost-armor-frozen-casing-source-png (Resolve-RepoPath $FrostArmorFrozenCasingSource) `
+    --call-to-grave-portal-source-png (Resolve-RepoPath $CallToGravePortalSource) `
     --ice-lance-spell-icon-rgb $iceLanceSpellIconRgb `
     --frost-armor-spell-icon-rgb $frostArmorSpellIconRgb `
     --blizzard-spell-icon-rgb $blizzardSpellIconRgb `
+    --call-to-grave-spell-icon-rgb $callToGraveSpellIconRgb `
     --phantom-cowl-icon-rgb $phantomCowlIconRgb `
     --dark-staff-small-icon-rgb $darkStaffSmallIconRgb `
     --dark-staff-mx-icon-rgb $darkStaffMxIconRgb `

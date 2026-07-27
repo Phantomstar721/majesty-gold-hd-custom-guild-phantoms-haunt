@@ -27,6 +27,7 @@ SOURCE_RECRUIT_GUILD_DIALOG_ID = PHANTOM_GUILD_DIALOG_ID
 SOURCE_HERO_IMAGE = b"AVN1Wizard"
 SOURCE_PHANTOM_SPRITE_IMAGE = b"AVG1Priestess"
 SOURCE_BUILDING_IMAGE = b"ABQ1Temple, Fervus1"
+SOURCE_TELEPORT_EFFECT_IMAGE = b"WRd1teleport_e"
 SOURCE_ICE_LANCE_ICON = b"XL15PowerShock"
 SOURCE_ICE_LANCE_PROJECTILE = b"WPc2fire_blast_M"
 SOURCE_FROST_ARMOR_ICON = b"WRb2fireshield_IC"
@@ -51,6 +52,8 @@ PHANTOM_FROST_ARMOR_CRYSTAL_IMAGE = b"PHf1Frost Crystal"
 PHANTOM_FROZEN_SMALL_IMAGE = b"PHf2Frozen Small"
 PHANTOM_FROZEN_MEDIUM_IMAGE = b"PHf3Frozen Medium"
 PHANTOM_FROZEN_LARGE_IMAGE = b"PHf4Frozen Large"
+PHANTOM_CALL_TO_GRAVE_IMAGE = b"PHc2Call to Grave"
+PHANTOM_APPROVED_STAND_BODY_HEIGHTS = (61, 55, 52, 50, 50, 56, 60, 61)
 HERO_PORTRAIT_TILE = 6293
 HERO_ICON_TILE = 6299
 BUILDING_PROFILE_TILE = 1509
@@ -86,6 +89,7 @@ FROST_ARMOR_SPELL_ICON_TILES = (345,)
 ICY_TOUCH_SPELL_ICON_TILES = (346,)
 FIRE_BLAST_SPELL_ICON_TILE = 357
 BLIZZARD_SPELL_ICON_TILES = (347,)
+CALL_TO_GRAVE_SPELL_ICON_TILES = (348,)
 STAFF_ICON_TILES: tuple[int, ...] = ()
 STAFF_SMALL_ICON_TILES: tuple[int, ...] = ()
 MX_STAFF_ICON_TILES: tuple[int, ...] = ()
@@ -143,9 +147,11 @@ def main() -> int:
     parser.add_argument("--icy-touch-impact-source-png", type=Path)
     parser.add_argument("--frost-armor-crystal-source-png", type=Path)
     parser.add_argument("--frost-armor-frozen-casing-source-png", type=Path)
+    parser.add_argument("--call-to-grave-portal-source-png", type=Path)
     parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
     parser.add_argument("--frost-armor-spell-icon-rgb", type=Path)
     parser.add_argument("--blizzard-spell-icon-rgb", type=Path)
+    parser.add_argument("--call-to-grave-spell-icon-rgb", type=Path)
     parser.add_argument("--phantom-cowl-icon-rgb", type=Path)
     parser.add_argument("--dark-staff-small-icon-rgb", type=Path)
     parser.add_argument("--dark-staff-mx-icon-rgb", type=Path)
@@ -193,6 +199,7 @@ def main() -> int:
         args.icy_touch_impact_source_png,
         args.frost_armor_crystal_source_png,
         args.frost_armor_frozen_casing_source_png,
+        args.call_to_grave_portal_source_png,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
     )
     write_interfacedata_cam(
@@ -201,6 +208,7 @@ def main() -> int:
         args.ice_lance_spell_icon_rgb,
         args.frost_armor_spell_icon_rgb,
         args.blizzard_spell_icon_rgb,
+        args.call_to_grave_spell_icon_rgb,
         args.phantom_cowl_icon_rgb,
         args.dark_staff_small_icon_rgb,
         args.dark_staff_icon_rgb,
@@ -349,6 +357,7 @@ def phantom_units_xml() -> str:
 \t\t\t\t<Spell ID="0" Value="ice_lance"/>
 \t\t\t\t<Spell ID="1" Value="frost_armor"/>
 \t\t\t\t<Spell ID="2" Value="icy_touch"/>
+\t\t\t\t<Spell ID="3" Value="call_to_grave"/>
 \t\t\t</AllowedSpells>
 \t\t</Game>
 \t</Description>
@@ -479,6 +488,22 @@ def phantom_actions_xml() -> str:
 \t\t\t<CharacterLevel value="7"/>
 \t\t\t<SpellRank value="7"/>
 \t\t\t<ValidationScript value="Blizzard_Check"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Action" subType="Standard" ID="WRa6" Name="call_to_grave" Description="Call to Grave">
+\t\t<Engine version="1">
+\t\t\t<ImageSet value="Cast"/>
+\t\t\t<CompletionImageSet value="Stand"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Call_To_Grave_Effect"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<Flags value="IsSpell"/>
+\t\t\t<EffectorDuration value="1200"/>
+\t\t\t<TimeoutDuration value="5000"/>
+\t\t\t<SpellType value="4"/>
+\t\t\t<CharacterLevel value="5"/>
+\t\t\t<SpellRank value="4"/>
+\t\t\t<ValidationScript value="Call_To_Grave_Check"/>
 \t\t</Game>
 \t</Description>
 </Majesty>
@@ -661,6 +686,21 @@ def phantom_overlays_xml() -> str:
 \t\t\t<StackPriority value="1"/>
 \t\t</Game>
 \t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHc2" Name="call_to_grave_effector" Description="Call to Grave">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHc2"/>
+\t\t\t<AttachmentPointID value="3"/>
+\t\t\t<DefaultSound value="Teleport"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="0"/>
+\t\t\t<Flags value="TransparentToMouse"/>
+\t\t</Game>
+\t</Description>
 </Majesty>
 """
 
@@ -805,6 +845,8 @@ def phantom_gpl() -> str:
         f"\nexpression #Phantom_Item_FrostArmorBonus {PHANTOM_FROST_ARMOR_ITEM_ID}\n"
     )
     item_expressions += "\nexpression #Phantom_Icy_Touch_Range 24\n"
+    item_expressions += "\nexpression #Phantom_Call_To_Grave_Range 50000\n"
+    item_expressions += "\nexpression #Phantom_Call_To_Grave_Min_Distance 500\n"
     return item_expressions + """
 
 function DEAL_DEMON()
@@ -1474,6 +1516,90 @@ begin
 \t\tarrivedist = thisagent's "castingrange";
 
 \treturn arrivedist;
+end
+
+function Call_To_Grave_Check(agent thisagent) is integer
+
+declare
+\tcoordinate destination;
+
+begin
+\tif (thisagent's "taskname" != "go_home")
+\t\treturn 0;
+
+\tif (thisagent's "target" != thisagent's "home")
+\t\treturn 0;
+
+\tif (thisagent's "Target" == thisagent)
+\t\tdestination = thisagent's "destination";
+\telse
+\t\tif ($isvalidgamepiece(thisagent's "target"))
+\t\t\tdestination = $locationof(thisagent's "target");
+\t\telse
+\t\t\treturn 0;
+
+\tif ($distancebetweencoords(destination,$locationof(thisagent)) > #Phantom_Call_To_Grave_Min_Distance)
+\t\treturn 1;
+
+\treturn 0;
+end
+
+function Call_To_Grave_Effect(agent thisagent, agent target)
+
+declare
+\tinteger theTimePeriod;
+
+begin
+\ttheTimePeriod = $GetSpellAttribute("call_to_grave","effector_duration");
+\t$createeffector(thisagent,"call_to_grave_effector",theTimePeriod);
+\tthisagent's "teleportScript" = $Call_To_Grave_DoMove;
+\t$RunThread(thisagent's "teleportScript",theTimePeriod/2,thisagent,#Phantom_Call_To_Grave_Range);
+end
+
+function Call_To_Grave_DoMove(agent thisagent, integer theRange)
+
+declare
+
+begin
+\tIf ($IsDead(ThisAgent))
+\t\treturn;
+
+\tif (thisagent's "Target" == thisagent)
+\t\t$TeleportToPoint(thisagent,theRange,thisagent's "destination");
+\telse
+\t\tif ($isvalidgamepiece(thisagent's "target"))
+\t\t\t$TeleportToUnit(thisagent,theRange,thisagent's "Target",thisagent's "castingrange");
+end
+
+function flee_part_II(agent thisagent, list places, integer intent)
+
+declare
+\tagent go_here;
+
+begin
+\tif (thisagent's "Title" == "Phantom" && $isvalidgamepiece(thisagent's "home"))
+\t\tgo_here = thisagent's "home";
+\telse if ($listsize(places) > 0)
+\t\tgo_here = $pick_closest(thisagent,places);
+\telse
+\t\tbegin
+\t\t\t$go_berserk(thisagent);
+\t\t\treturn;
+\t\tend
+
+\tif (go_here == thisagent's "home")
+\t\tthisagent's "taskname" = "go_home";
+\telse
+\t\tthisagent's "taskname" = "visiting";
+
+\t$SpecifyIntent(ThisAgent,intent);
+\tthisagent's "Activescript" = $use_building_safe;
+\tthisagent's "backscript" = $use_building_safe;
+\tthisagent's "target" = go_here;
+\tthisagent's "destination" = $locationof(thisagent's "target");
+
+\t$createeffector(thisagent,"thought_bubble_danger",#danger_bubble_time);
+\t$say(thisagent,"VFX_FLEE_COMBAT");
 end
 
 function Phantom_tree (agent thisagent)
@@ -2306,6 +2432,7 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
             fourcc_id("WRa3"): "Frost Armor",
             fourcc_id("WRa4"): "Icy Touch",
             fourcc_id("WRa5"): "Blizzard",
+            fourcc_id("WRa6"): "Call to Grave",
         },
     )
     cloned_guild_menu = (
@@ -2466,11 +2593,17 @@ def write_maindata_cam(
     icy_touch_impact_source_png: Path | None,
     frost_armor_crystal_source_png: Path | None,
     frost_armor_frozen_casing_source_png: Path | None,
+    call_to_grave_portal_source_png: Path | None,
     ice_effect_maindata: Path | None,
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
     hero_imag = replace_priestess_die_holds_with_directional_third_frames(hero_imag)
     building_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_BUILDING_IMAGE).data
+    teleport_effect_imag = read_cam_entry(
+        source_maindata,
+        b"IMAG",
+        SOURCE_TELEPORT_EFFECT_IMAGE,
+    ).data
     ice_lance_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICE_LANCE_ICON).data
     ice_lance_projectile = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICE_LANCE_PROJECTILE).data
     frost_armor_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_FROST_ARMOR_ICON).data
@@ -2491,6 +2624,7 @@ def write_maindata_cam(
     frozen_small_image: bytes | None = None
     frozen_medium_image: bytes | None = None
     frozen_large_image: bytes | None = None
+    call_to_grave_image: bytes | None = None
     if ice_effect_maindata:
         source_ice_lance_hit_effect = read_cam_entry(
             ice_effect_maindata,
@@ -2536,6 +2670,7 @@ def write_maindata_cam(
         frozen_small_image = chill_icon_image
         frozen_medium_image = chill_icon_image
         frozen_large_image = chill_icon_image
+        call_to_grave_image = teleport_effect_imag
 
     phantom_sprite_tile_indices = sorted(
         index
@@ -2751,11 +2886,16 @@ def write_maindata_cam(
                     hero_sprite_png_paths[source_tile_index],
                     scale_multiplier=hero_sprite_scale_multiplier(source_tile_index),
                     max_anchor_height=hero_sprite_max_anchor_height(source_tile_index),
+                    target_art_height=hero_sprite_target_art_height(source_tile_index),
                     vertical_offset=hero_sprite_vertical_offset(source_tile_index),
                     shadow_strength=hero_sprite_shadow_strength(source_tile_index),
                     horizontal_alignment=hero_sprite_horizontal_alignment(source_tile_index),
                     shadow_png_path=shadow_source_path,
-                    edge_margin=2 if death_art or cast_body else 0,
+                    edge_margin=(
+                        2
+                        if death_art or cast_body or 4586 <= source_tile_index <= 4649
+                        else 0
+                    ),
                     body_base_offset=hero_sprite_body_base_offset(source_tile_index),
                 )
             else:
@@ -2990,6 +3130,56 @@ def write_maindata_cam(
         remapped_frozen_images.append(frozen_image)
     frozen_small_image, frozen_medium_image, frozen_large_image = remapped_frozen_images
 
+    if (
+        call_to_grave_image
+        and call_to_grave_portal_source_png
+    ):
+        portal_sets = single_direction_imag_animation_sets(call_to_grave_image)
+        portal_phase_by_set = {80: "open", 64: "hold", 96: "close"}
+        if {set_id for set_id, _frames in portal_sets} != set(portal_phase_by_set):
+            raise ValueError(
+                "Wizard Teleport IMAG no longer has the expected "
+                "open/hold/close animation sets"
+            )
+        call_to_grave_replacements: dict[int, int] = {}
+        portal_tile_number = 0
+        for set_id, frames in portal_sets:
+            phase = portal_phase_by_set[set_id]
+            for frame_index, (_record_offset, source_tile_index) in enumerate(frames):
+                if source_tile_index in call_to_grave_replacements:
+                    continue
+                progress = frame_index / max(1, len(frames) - 1)
+                if phase == "open":
+                    openness = 0.10 + 0.90 * progress
+                    visible_alpha = 0.24 + 0.76 * progress
+                elif phase == "close":
+                    openness = 1.0 - 0.90 * progress
+                    visible_alpha = 1.0 - 0.76 * progress
+                else:
+                    openness = 1.0
+                    visible_alpha = 1.0
+                custom_tile_index = max_tile_index + len(extra_tiles) + 1
+                call_to_grave_replacements[source_tile_index] = custom_tile_index
+                extra_tiles.append(
+                    CamEntry(
+                        name=pad_name(
+                            f"PHc2Portal{portal_tile_number:02d}".encode("ascii")
+                        ),
+                        data=generated_call_to_grave_portal_tile(
+                            tiles[source_tile_index].data,
+                            palettes,
+                            call_to_grave_portal_source_png,
+                            openness,
+                            visible_alpha,
+                        ),
+                    )
+                )
+                portal_tile_number += 1
+        call_to_grave_image = remap_imag_tile_indices(
+            call_to_grave_image,
+            call_to_grave_replacements,
+        )
+
     palette_indices: set[int] = set()
     tile_entries: list[CamEntry] = []
     for tile_index in range(max_tile_index + 1):
@@ -3057,6 +3247,8 @@ def write_maindata_cam(
         image_entries.append(CamEntry(name=pad_name(PHANTOM_FROZEN_MEDIUM_IMAGE), data=frozen_medium_image))
     if frozen_large_image:
         image_entries.append(CamEntry(name=pad_name(PHANTOM_FROZEN_LARGE_IMAGE), data=frozen_large_image))
+    if call_to_grave_image:
+        image_entries.append(CamEntry(name=pad_name(PHANTOM_CALL_TO_GRAVE_IMAGE), data=call_to_grave_image))
     write_cam(
         (
             CamSection(
@@ -3111,6 +3303,7 @@ def write_interfacedata_cam(
     ice_lance_spell_icon_rgb: Path | None,
     frost_armor_spell_icon_rgb: Path | None,
     blizzard_spell_icon_rgb: Path | None,
+    call_to_grave_spell_icon_rgb: Path | None,
     phantom_cowl_icon_rgb: Path | None,
     dark_staff_small_icon_rgb: Path | None,
     dark_staff_icon_rgb: Path | None,
@@ -3137,6 +3330,9 @@ def write_interfacedata_cam(
     for tile_index in BLIZZARD_SPELL_ICON_TILES:
         if blizzard_spell_icon_rgb:
             replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], blizzard_spell_icon_rgb.read_bytes())
+    for tile_index in CALL_TO_GRAVE_SPELL_ICON_TILES:
+        if call_to_grave_spell_icon_rgb:
+            replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], call_to_grave_spell_icon_rgb.read_bytes())
     for tile_index in LEATHER_ARMOR_ICON_TILES:
         if phantom_cowl_icon_rgb:
             replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], phantom_cowl_icon_rgb.read_bytes())
@@ -3472,14 +3668,19 @@ def hero_sprite_scale_multiplier(source_tile_index: int) -> float:
 
 
 def hero_sprite_max_anchor_height(source_tile_index: int) -> int | None:
-    if 4746 <= source_tile_index <= 4777:
-        direction = (source_tile_index - 4746) // 4
-        return (71, 65, 58, 52, 48, 48, 48, 48)[direction]
     # The stock shared dissolve records use progressively enormous canvases for
     # effects. Scaling replacement character art to those per-frame bounds
     # makes the Phantom balloon several times before becoming a gravestone.
     if 4778 <= source_tile_index <= 4785:
         return 45
+    return None
+
+
+def hero_sprite_target_art_height(source_tile_index: int) -> int | None:
+    """Normalize motion and casting to the approved Stand size by direction."""
+    if 4586 <= source_tile_index <= 4649 or 4746 <= source_tile_index <= 4777:
+        direction = hero_sprite_direction_index(source_tile_index)
+        return PHANTOM_APPROVED_STAND_BODY_HEIGHTS[direction]
     return None
 
 
@@ -3490,7 +3691,9 @@ def hero_sprite_vertical_offset(source_tile_index: int) -> int:
 def hero_sprite_body_base_offset(source_tile_index: int) -> int | None:
     if 4746 <= source_tile_index <= 4777:
         direction = (source_tile_index - 4746) // 4
-        return (13, 14, 17, 12, 8, 8, 8, 8)[direction]
+        # Match each direction's approved Stand robe base. The extra source
+        # canvas space is added above the hotspot, never below the feet.
+        return (10, 9, 10, 10, 9, 10, 10, 9)[direction]
     if 4722 <= source_tile_index <= 4745:
         return 12
     if 4779 <= source_tile_index <= 4785:
@@ -3546,6 +3749,7 @@ def tile_from_png_source(
     *,
     scale_multiplier: float = 1.0,
     max_anchor_height: int | None = None,
+    target_art_height: int | None = None,
     vertical_offset: int = 0,
     shadow_strength: float = 1.0,
     horizontal_alignment: str = "left",
@@ -3564,7 +3768,11 @@ def tile_from_png_source(
 
     source = Image.open(png_path).convert("RGBA")
     source = remove_small_detached_alpha_components(source)
-    bbox = source.getbbox()
+    bbox = (
+        source.getchannel("A").getbbox()
+        if target_art_height is not None
+        else source.getbbox()
+    )
     if bbox is None:
         return original_tile
 
@@ -3590,13 +3798,54 @@ def tile_from_png_source(
     # action effects to use the rest of the native TILE canvas. Constraining
     # the whole attack/cast image to the narrow Priestess body bbox would make
     # the character tiny merely because an ice lance or vortex extends aside.
-    available_width = max(1, width - edge_margin * 2)
-    available_height = max(1, height - edge_margin * 2)
-    scale = min(
-        available_width / source.width,
-        available_height / source.height,
-        anchor_height / source.height,
-    ) * scale_multiplier
+    if target_art_height is not None:
+        # Walk and Cast inherit several Priestess TILE canvases which are much
+        # shorter than the approved Phantom Stand art in the same direction.
+        # Scaling inside those native bounds only clips the enlarged sprite.
+        # Give the art an explicit visible height, grow the canvas upward, and
+        # translate the hotspot with the added pixels so its world position and
+        # robe base remain unchanged.
+        scale = target_art_height / source.height
+        required_width = math.ceil(source.width * scale) + edge_margin * 2
+        required_height = math.ceil(source.height * scale) + edge_margin * 2
+        expanded_width = max(width, required_width)
+        base_expanded_height = max(height, required_height)
+        if body_base_offset is not None:
+            # Cast placement needs genuine room above and below the native
+            # canvas. Shift the hotspot only for the upper addition so world
+            # position is preserved while neither edge can clamp the robe.
+            top_padding = base_expanded_height - height + 4
+            expanded_height = base_expanded_height + 8
+        else:
+            top_padding = base_expanded_height - height
+            expanded_height = base_expanded_height
+        left_padding = (expanded_width - width) // 2
+        if left_padding or top_padding or expanded_width != width:
+            anchor_left += left_padding
+            anchor_right += left_padding
+            anchor_top += top_padding
+            anchor_bottom += top_padding
+            hotspot_x, hotspot_y = struct.unpack_from("<HH", original_tile, 10)
+            patched_template = bytearray(original_tile)
+            struct.pack_into(
+                "<HH",
+                patched_template,
+                10,
+                hotspot_x + left_padding,
+                hotspot_y + top_padding,
+            )
+            original_tile = bytes(patched_template)
+            width = expanded_width
+            height = expanded_height
+        anchor_height = target_art_height
+    else:
+        available_width = max(1, width - edge_margin * 2)
+        available_height = max(1, height - edge_margin * 2)
+        scale = min(
+            available_width / source.width,
+            available_height / source.height,
+            anchor_height / source.height,
+        ) * scale_multiplier
     scaled_size = (
         max(1, int(source.width * scale)),
         max(1, int(source.height * scale)),
@@ -4198,6 +4447,48 @@ def remap_imag_low16_tile_indices(imag: bytes, replacements: dict[int, int]) -> 
                 (value & 0xFFFF0000) | replacements[low_tile_index],
             )
     return bytes(patched)
+
+
+def single_direction_imag_animation_sets(
+    imag: bytes,
+) -> list[tuple[int, list[tuple[int, int]]]]:
+    """Read the one-direction animation sets used by stock overlay IMAGs."""
+    if len(imag) < 24:
+        raise ValueError("Overlay IMAG is too short for an animation-set table")
+
+    entry_count = u32(imag, 20)
+    table_end = 24 + entry_count * 8
+    if entry_count <= 0 or table_end > len(imag):
+        raise ValueError("Overlay IMAG has an invalid animation-set table")
+
+    result: list[tuple[int, list[tuple[int, int]]]] = []
+    for index in range(entry_count):
+        entry_offset = 24 + index * 8
+        set_id = u32(imag, entry_offset)
+        set_offset = u32(imag, entry_offset + 4)
+        if set_offset + 68 > len(imag):
+            raise ValueError(f"Overlay IMAG set {set_id} is truncated")
+        direction_offset = set_offset + u32(imag, set_offset + 64)
+        if direction_offset + 20 > len(imag):
+            raise ValueError(f"Overlay IMAG set {set_id} has an invalid direction")
+        frame_count = u32(imag, direction_offset + 4) >> 16
+        frame_start = direction_offset + 20
+        last_tile_end = frame_start + (frame_count - 1) * 8 + 4
+        if frame_count <= 0 or last_tile_end > len(imag):
+            raise ValueError(f"Overlay IMAG set {set_id} has an invalid frame table")
+        result.append(
+            (
+                set_id,
+                [
+                    (
+                        frame_start + frame_index * 8,
+                        u32(imag, frame_start + frame_index * 8),
+                    )
+                    for frame_index in range(frame_count)
+                ],
+            )
+        )
+    return result
 
 
 def replace_priestess_die_holds_with_directional_third_frames(imag: bytes) -> bytes:
@@ -5030,6 +5321,62 @@ def generated_frost_armor_crystal_tile(
             32,
             struct.unpack_from("<H", template_tile, 10)[0],
             struct.unpack_from("<H", template_tile, 12)[0],
+            struct.unpack_from("<H", template_tile, 14)[0],
+        ),
+    )
+
+
+def generated_call_to_grave_portal_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    openness: float,
+    visible_alpha: float,
+) -> bytes:
+    """Render one fixed-anchor phase of the spectral ice portal."""
+    from PIL import Image, ImageEnhance
+
+    width = 84
+    height = 116
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    if bbox is None:
+        return blank_indexed_v3_tile(template_tile)
+    source = source.crop(bbox)
+
+    openness = max(0.10, min(1.0, openness))
+    visible_alpha = max(0.24, min(1.0, visible_alpha))
+    target_height = round(height * (0.78 + 0.18 * openness))
+    full_width = round(source.width * target_height / max(1, source.height))
+    target_width = max(5, round(full_width * (0.16 + 0.84 * openness)))
+    source = source.resize(
+        (target_width, target_height),
+        Image.Resampling.LANCZOS,
+    )
+    source = ImageEnhance.Brightness(source).enhance(0.76 + 0.16 * openness)
+
+    alpha = source.getchannel("A").point(
+        lambda value: round(value * visible_alpha)
+    )
+    source.putalpha(alpha)
+
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    left = (width - source.width) // 2
+    top = height - source.height - 2
+    canvas.alpha_composite(source, (left, top))
+    return rgba_to_indexed_tile(
+        canvas,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (
+            3,
+            height,
+            width,
+            struct.unpack_from("<H", template_tile, 6)[0],
+            32,
+            width // 2,
+            31,
             struct.unpack_from("<H", template_tile, 14)[0],
         ),
     )
