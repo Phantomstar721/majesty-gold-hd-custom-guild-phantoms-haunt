@@ -34,7 +34,8 @@ This currently builds:
   Majesty uses it for equipment-shopping choices, stealing checks, and
   Gambling Hall fallback rolls, not spell damage, casting speed, range, or
   cooldown.
-- Generated placeholder voice/soundbite WAVs.
+- Generated placeholder voice/soundbite WAVs. A dedicated Phantom spell-audio
+  pass is intentionally deferred until the rest of the content is complete.
 - Wizard-style hero stats and Wizard decision-tree behavior through
   `Phantom_tree`.
 - A Phantom-only `Ice Lance` spell entry, generated-source directional
@@ -49,6 +50,78 @@ This currently builds:
   Wizard Teleport clone with custom ghostly ice-portal art.
 - A finalized level-6 `Eternal Soul` combat self-buff with custom ghost-flame
   cast and status art plus empowered Chill.
+- A finalized level-7 `Endless Winter` action built from the stock Wizard Meteor
+  Storm behavior with Phantom-only visual units. At cast time it uses the
+  stock `compile_enemies` helper, which returns enemy monsters and heroes but
+  not buildings, then stock `Pick_Closest` to select the nearest eligible unit
+  within the Phantom's current Icerod-aware casting range. After that stock
+  selection, an eligible live current combat target wins only when its stock
+  `DistanceBetweenAgents` value exactly ties the selected closest distance;
+  otherwise the closest result is unchanged. The custom-art storm
+  unit is created at that unit through the stock `CreateSpellUnit` target path;
+  validation prevents a building-only encounter from consuming the cooldown.
+  `CreateSpellUnit` passes that original unit into the stock-style unit-created
+  callback. The callback records it through Majesty's engine-managed
+  parent/child relationship, so the repeating thread does not retain a raw
+  target argument after that unit dies. Stock `TeleportToUnit` relocates an
+  invisible spell anchor exactly onto the still-live original target before
+  each pulse scan; if that target is gone, the anchor remains at its last valid
+  center. An exact world-coordinate comparison skips relocation only when the
+  anchor and target occupy the same X/Y coordinates. `DistanceBetweenAgents`
+  cannot guard this path because it measures edge/range separation and can
+  report zero for nearby agents whose centers are still different, suppressing
+  tracking. The coordinate guard is required because Majesty's stock movement
+  routine divides by the requested travel distance and crashes on an exact
+  zero-distance move. The visible vortex is a single long-lived overlay
+  attached to that anchor, preventing each teleport from resetting its
+  rotation animation. Because the parented moving anchor does not reliably
+  inherit stock Meteor Storm's timeout/thread teardown, a one-shot cleanup
+  callback runs 100 ms after the overlay ends. It kills that anchor's periodic
+  damage and tracking threads and deletes the invisible host; the engine
+  spell-unit timeout remains 500 ms later as a safety net. This prevents
+  invisible tornado pulses after the vortex art expires without truncating the
+  last pulse at 20.8 seconds. Visual tracking runs independently every 25 ms,
+  while damage retains the stock 1600 ms pulse cadence. The blank anchor can
+  therefore request up to 40 attached-vortex position updates per second
+  without multiplying damage or resetting the overlay's rotation. This keeps
+  the follow motion visually smooth without the unnecessary script overhead of
+  the discarded 10 ms stress-test value. No retargeting or travel leash is
+  applied; the storm follows its original living target and remains at that
+  target's last position after death. Its explicit spell-data entry runs the
+  active loop.
+  A Phantom-only unit-created callback performs the
+  immediate first pulse through the same custom path as every later pulse,
+  preventing the stock Wizard missile and impact from leaking into frame one.
+  The loop uses a stock-speed four-phase snowflake-flick missile and a custom
+  tornado impact. The vortex uses 15 phases which advance its internal
+  ice-flow arms in the fixed elliptical ground plane while preserving the
+  outer rim, footprint, and center; each impact grows and roils through 8
+  bottom-anchored phases on fixed canvases to avoid sprite bounce.
+  Phantom-only `PHW4` and `PHW5` particle systems replace the stock `XL20`
+  storm and `XL21` missile attachments embedded in the cloned IMAG records.
+  Their 13-frame and 7-frame cyan snowflakes preserve the stock emitter
+  motion without leaking the separate orange meteor orb or smoke-ring art.
+  It retains the stock 175-unit pulse scan, 21-second duration, and 55-second
+  cooldown. Damage restores the original staged Endless Winter design instead
+  of Meteor Storm's `5`-to-`25` random roll: targets within the fixed
+  `24`-unit Icy Touch/melee range take `8`, targets through `80` take `6`, and
+  all remaining targets in the `175`-unit scan take `4` per pulse. The storm
+  anchor measures center-to-center world distance before launch using stock
+  `DistanceBetweenCoords(LocationOf(anchor), LocationOf(target))`, then encodes
+  the selected tier through one of three visually identical Phantom
+  projectiles. `DistanceBetweenAgents` is deliberately not used here because
+  it measures edge/range separation; the large storm-anchor footprint can make
+  a visibly distant target report zero distance. Tiering also cannot be
+  deferred to impact because a projectile callback runs after that projectile
+  has reached the victim, where its measured distance is effectively zero.
+  Every surviving impact uses the shared non-stacking
+  three-second Chill state: the `0-24` inner tier requests empowered tier-2
+  Chill, while both collateral tiers request standard tier-1 Chill. Repeated
+  impacts refresh the applicable tier through the same watcher used by Ice
+  Lance and Icy Touch; a standard hit cannot weaken or extend an already-active
+  empowered Chill. Custom IDs and CAM entries are used throughout, so the
+  Wizard's stock action, units, missiles, impacts, and artwork are not
+  overridden.
 - Healers exclude Phantoms from ordinary healing. A Priestess's Drain Life
   secondary heal treats allied Phantoms as undead: Priestess self-healing
   remains first priority, followed by the most-injured Phantom, then controlled
@@ -71,6 +144,9 @@ Confirmed working in-game:
 - `Ice Lance` is a Phantom-only custom spell with its own directional
   projectile art and Frost Field hit overlay, without modifying stock Wizard
   spell visuals.
+- The complete six-spell Phantom progression is implemented and verified:
+  Ice Lance at level 1, Frost Armor at level 3, Icy Touch at level 4, Call to
+  Grave at level 5, Eternal Soul at level 6, and Endless Winter at level 7.
 - `Phantoms Haunt` now has a generated Phantom-only building sprite set wired
   through appended tile records, without modifying the stock Wizard Guild art.
 - Occupied Haunts use an eight-frame full-building active animation so
@@ -83,9 +159,10 @@ Confirmed working in-game:
 
 Next planned work:
 
+- Give the completed spell suite its dedicated custom audio pass.
 - Restore or reattach proper Phantom hero sprite shadows.
-- Continue tuning Phantom balance, spell progression, and any additional
-  Phantom-only items or spells.
+- Revisit the Phantom death dissolve and gravestone art.
+- Continue balance testing without changing the now-stable spell plumbing.
 
 ## Custom Special Items
 
@@ -308,9 +385,9 @@ Armor marker from being recreated between cleanup and deletion. The remainder
 of the function preserves Majesty's stock loop exactly: all other inventory
 items are deleted, exempt Marketplace items stay non-droppable, and legitimate
 droppable quest items are spawned normally. Other hero classes enter the
-unchanged stock portion immediately. This realm-exit candidate still needs
-in-game verification. Keep the explicit `Phantom_death` cleanup, which is a
-separate working requirement.
+unchanged stock portion immediately. This realm-exit path is verified and
+needs no special downstream handling. Keep the explicit `Phantom_death`
+cleanup, which is a separate verified requirement.
 
 ## Implementation Notes
 
@@ -576,7 +653,7 @@ aligned.
 
 Casting range belongs to the hero rather than the individual spell, so the
 Icerod technically affects the Phantom's complete spell kit; Frost Armor is
-self-targeted and Endless Winter is caster-centered. Icy Touch deliberately uses its
+self-targeted. Icy Touch deliberately uses its
 fixed `24`-unit melee gate, so the Icerod's casting-range bonus affects Ice
 Lance but does not extend Icy Touch. Custom special items are stored as
 inventory IDs and do not automatically transfer XML attributes to their owner.
@@ -1214,20 +1291,17 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
   changing more offsets.
 - The current Phantom gravestone is a temporary first pass and is next in line
   for a complete visual redesign.
-- `Frost Armor` still needs its remaining balance and placement pass. Earlier
-  crashes overlapped an Icerod version that removed its stable weapon damage;
-  the current Icerod keeps that damage while adding Parry through the stock
-  Ring of Protection mutation. `Endless Winter` still needs its dedicated
-  implementation pass.
+- Spell mechanics and visual effects are complete, but spell audio still uses
+  stock or placeholder sounds pending the final dedicated audio pass.
 - The Phantoms Haunt borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
   while the mod is active.
 - The Phantoms Haunt is still a proof of concept rather than a balanced finished
   content mod.
 
-## Next Session
+## Spell Completion Checkpoint
 
-Checkpoint recorded July 25 and verified through July 26, 2026:
+Final spell checkpoint recorded July 27, 2026:
 
 - The building, construction progression, destruction progression, cast
   shadows, shadow seams, and construction pit cleanup are working in game.
@@ -1237,7 +1311,7 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
 - The directional Phantom hero, floating movement, action frames, corrected
   direction mapping, projected detached shadows, movement speed, death and
   dark-ice gravestone sequence, and staff-centered cyan snowflake cast effect
-  are approved for the spell pass.
+  are approved for the current build.
 - Cast body geometry and recovery poses are locked directionally across all
   eight Cast records; validators reject the old Priestess swirl, mismatched
   recovery direction, clipping, and frame-size drift. Walk and Cast now also
@@ -1296,47 +1370,37 @@ Checkpoint recorded July 25 and verified through July 26, 2026:
   `spell_extra_value` once learned. Its custom six-frame ghostly ice flame and
   29-frame pulsing status icon are approved in game, stack with other status
   symbols, and use the corrected caster-centered hotspot.
-- Frozen Cowl is a starter item that displays and grants `+2` physical armor.
-  Black Icerod retains its in-game-confirmed displayed and mechanical `+8`
-  weapon damage and now adds a displayed and mechanical `+5 Parry` through the
-  stock Ring path; the combined version is verified in game. The current build
-  candidate also displays `+10 cast range` and safely represents it with the
-  guaranteed Icerod-equipped prototype value `190`. Both starter items are
-  currently marked non-droppable, and death cleanup works. The current build
-  candidate also explicitly removes all three Phantom class items before the
-  stock realm-exit drop loop; the range and departure paths still need in-game
-  verification.
-- Phantom base weapon damage is intentionally `0`. Strength is `8`, producing
-  the minimum safe stock `hero_damage` value of `1` through integer `8 / 8`.
-  This prevents `target_eval` division by zero even before the Icerod adds its
-  retained `+8` weapon damage. Ice Lance remains fixed at `8` spell damage.
-- Frost Armor learns at level 3, persists until the first qualified attack
-  attempt, negates ordinary weapon and spell damage, consumes against units and
-  buildings, Freezes unit attackers for three seconds, and recharges after a
-  completed full-health rest at the Phantoms Haunt, an Inn, or a Gazebo. Its
-  temporary basic and magical armor adjustments are removed together on
-  consumption or death. Its animated octahedral ward and three size-aware
-  frozen casings are packaged from generated source art. Its auto-cast
-  currently checks a fixed `240` radius. The current build candidate also
-  grants a visible level-3 `Frost Armor (+10 armor)` special item so the
-  permanent physical-armor component is attributable in the hero panel; this
-  new item path still needs in-game verification.
-- The Phantom-only stock `Potion_Check` replacement is verified in game:
-  Phantoms remain active, do not get stuck thinking, and skip healing-potion
-  purchases while retaining other shop decisions.
-- Next: retest Frost Armor attack detection, building consumption, ranged
-  retaliation, rest recharge, and effect placement with the stable Icerod
-  build before continuing to Endless Winter.
-- Tomorrow's desired gameplay/mechanics checklist:
-  - Verify Frozen Cowl, Black Icerod, and the Frost Armor marker are destroyed
-    rather than dropped when a Phantom leaves through the palace.
-  - Healing-potion purchasing at Marketplaces and Trading Posts is blocked by
-    the class guard in the stock `Potion_Check` replacement. Next make ordinary
-    healing and any externally granted healing potions ineffective on
-    Phantoms.
-  - Allow Priestess healing casts to heal Phantoms as the intended exception.
-  - Prevent Phantoms and Paladins from existing in the same realm.
-  - Design and implement `Endless Winter`.
+- Endless Winter is finalized at level 7/rank 7 with a 55-second cooldown and
+  21-second lifetime. It casts on the closest eligible enemy unit, preserves
+  the Phantom's current combat target as the winner of an exact closest-distance
+  tie, and tracks the original target at 25-ms visual cadence while pulsing
+  damage every 1600 ms. The storm uses a 175-unit radius with center-distance
+  tiers of `8` damage plus empowered Chill through 24 units, `6` plus normal
+  Chill through 80, and `4` plus normal Chill through 175. Three visually
+  identical projectile definitions carry those fixed tiers safely into their
+  impact callbacks. Explicit cleanup terminates both threads and deletes the
+  invisible anchor after the visible storm expires.
+- Frozen Cowl displays and grants `+2` physical armor. Black Icerod displays
+  and grants `+8` weapon damage, `+5` Parry, and `+10` casting range. Their
+  Blacksmith/Wizard Guild upgrade variants, stat mutations, names, tooltips,
+  death cleanup, and realm-exit cleanup use the verified stock-compatible
+  paths.
+- Phantom base weapon damage remains `0`, while Strength `8` keeps stock
+  `hero_damage` above zero before the Icerod's `+8` weapon damage is applied.
+  This avoids the target-evaluation divide-by-zero crash.
+- Frost Armor is finalized at level 3 with persistent `+10` physical armor,
+  a visible class-effect item, a one-hit physical/magical ward, three-second
+  retaliatory Freeze against unit attackers, and full-rest recharge at a
+  Phantoms Haunt, Inn, or Gazebo.
+- Ordinary Healers, healing potions, and player healing spells do not heal
+  Phantoms. Priestess undead healing is the intentional exception and
+  prioritizes the Priestess, then injured Phantoms, then other undead minions.
+- The Phantom-only stock `Potion_Check` replacement prevents healing-potion
+  purchases without trapping the hero's shopping decision or blocking other
+  items.
+- The remaining spell-suite task is audio only; mechanics, progression,
+  targeting, debuffs, custom status art, cast/impact art, and package
+  validation are complete.
 
 ## Build
 

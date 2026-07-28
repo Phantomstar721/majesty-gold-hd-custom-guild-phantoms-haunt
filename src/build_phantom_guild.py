@@ -33,6 +33,11 @@ SOURCE_ICE_LANCE_PROJECTILE = b"WPc2fire_blast_M"
 SOURCE_FROST_ARMOR_ICON = b"WRb2fireshield_IC"
 SOURCE_ICY_TOUCH_ICON = b"WRc1fire_blast_e"
 SOURCE_BLIZZARD_ICON = b"WRg2meteor_blast"
+SOURCE_METEOR_STORM_IMAGE = b"WRg1meteor_swarm_E1"
+SOURCE_METEOR_HIT_IMAGE = b"WRg2meteor_blast"
+SOURCE_METEOR_MISSILE_IMAGE = b"WPg3meteor_missile"
+SOURCE_METEOR_STORM_PARTICLE_IMAGE = b"XL20MeteorStrmEffct"
+SOURCE_METEOR_MISSILE_PARTICLE_IMAGE = b"XL21MeteorStrmMiss"
 PHANTOM_HERO_IMAGE = b"PHM1Phantom"
 PHANTOM_BUILDING_IMAGE = b"PHG1Phantom Guild"
 RAW_TEXTURES_IMAGE = b"INTIraw textures"
@@ -56,6 +61,12 @@ PHANTOM_FROZEN_LARGE_IMAGE = b"PHf4Frozen Large"
 PHANTOM_CALL_TO_GRAVE_IMAGE = b"PHc2Call to Grave"
 PHANTOM_ETERNAL_SOUL_ICON_IMAGE = b"PHe1Soul Flame Icon"
 PHANTOM_ETERNAL_SOUL_CAST_IMAGE = b"PHe2Soul Flame"
+PHANTOM_ENDLESS_WINTER_IMAGE = b"PHw1Winter Storm"
+PHANTOM_ENDLESS_WINTER_HIT_IMAGE = b"PHw2Winter Hit"
+PHANTOM_ENDLESS_WINTER_MISSILE_IMAGE = b"PHw3Winter Missile"
+PHANTOM_ENDLESS_WINTER_STORM_PARTICLE_IMAGE = b"PHw4Winter Flakes"
+PHANTOM_ENDLESS_WINTER_MISSILE_PARTICLE_IMAGE = b"PHw5Missile Flakes"
+PHANTOM_ENDLESS_WINTER_ANCHOR_IMAGE = b"PHw6Winter Anchor"
 PHANTOM_APPROVED_STAND_BODY_HEIGHTS = (61, 55, 52, 50, 50, 56, 60, 61)
 HERO_PORTRAIT_TILE = 6293
 HERO_ICON_TILE = 6299
@@ -153,6 +164,9 @@ def main() -> int:
     parser.add_argument("--frost-armor-frozen-casing-source-png", type=Path)
     parser.add_argument("--call-to-grave-portal-source-png", type=Path)
     parser.add_argument("--eternal-soul-flame-source-png", type=Path)
+    parser.add_argument("--endless-winter-vortex-source-png", type=Path)
+    parser.add_argument("--endless-winter-hit-source-png", type=Path)
+    parser.add_argument("--endless-winter-missile-source-png", type=Path)
     parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
     parser.add_argument("--frost-armor-spell-icon-rgb", type=Path)
     parser.add_argument("--blizzard-spell-icon-rgb", type=Path)
@@ -206,6 +220,9 @@ def main() -> int:
         args.frost_armor_frozen_casing_source_png,
         args.call_to_grave_portal_source_png,
         args.eternal_soul_flame_source_png,
+        args.endless_winter_vortex_source_png,
+        args.endless_winter_hit_source_png,
+        args.endless_winter_missile_source_png,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
     )
     write_interfacedata_cam(
@@ -232,6 +249,7 @@ def main() -> int:
     (data_dir / "phantom_actions.xml").write_text(phantom_actions_xml(), encoding="utf-8")
     (data_dir / "phantom_projectiles.xml").write_text(phantom_projectiles_xml(), encoding="utf-8")
     (data_dir / "phantom_overlays.xml").write_text(phantom_overlays_xml(), encoding="utf-8")
+    (data_dir / "phantom_particles.xml").write_text(phantom_particles_xml(), encoding="utf-8")
     (data_dir / "phantom_sounds.xml").write_text(phantom_sounds_xml(), encoding="utf-8")
     (gpl_dir / "Phantom_Building_Data.dat").write_text(phantom_building_data(), encoding="utf-8")
     (gpl_dir / "Phantom_Hero_Data.dat").write_text(phantom_hero_data(), encoding="utf-8")
@@ -365,6 +383,7 @@ def phantom_units_xml() -> str:
 \t\t\t\t<Spell ID="2" Value="icy_touch"/>
 \t\t\t\t<Spell ID="3" Value="call_to_grave"/>
 \t\t\t\t<Spell ID="4" Value="eternal_soul"/>
+\t\t\t\t<Spell ID="5" Value="endless_winter"/>
 \t\t\t</AllowedSpells>
 \t\t</Game>
 \t</Description>
@@ -391,6 +410,21 @@ def phantom_units_xml() -> str:
 \t\t\t\t<Attribute ID="CanDropItem" Value="0"/>
 \t\t\t\t<Attribute ID="Phantom_Item_FrostArmorBonus" Value="0"/>
 \t\t\t</Attributes>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Character" ID="PHW1" Name="endless_winter_storm" Description="Endless Winter">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="12"/>
+\t\t\t<ImageIDBase value="PHw6"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Endless_Winter_Unit_Created"/>
+\t\t\t<Attachment kind="Movement" type="Walk" ID="Class 1"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<RecruitDelay value="10000"/>
+\t\t\t<Flags value="NotInMiniMap"/>
 \t\t</Game>
 \t</Description>
 \t<Description type="Unit" subType="Building" ID="MBPhantomGuild" Name="Phantoms_Haunt" Description="Phantoms Haunt">
@@ -483,9 +517,7 @@ def phantom_actions_xml() -> str:
 \t\t<Engine version="1">
 \t\t\t<ImageSet value="Cast"/>
 \t\t\t<CompletionImageSet value="Stand"/>
-\t\t\t<Sound value="Meteor_Storm"/>
-\t\t\t<SoundPhase begin="Begin"/>
-\t\t\t<Script type="0" cProc="0" GPLFunction="Blizzard_Hit"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Endless_Winter_Hit"/>
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<Flags value="IsSpell"/>
@@ -494,7 +526,7 @@ def phantom_actions_xml() -> str:
 \t\t\t<SpellType value="Attack"/>
 \t\t\t<CharacterLevel value="7"/>
 \t\t\t<SpellRank value="7"/>
-\t\t\t<ValidationScript value="Blizzard_Check"/>
+\t\t\t<ValidationScript value="Endless_Winter_Check"/>
 \t\t</Game>
 \t</Description>
 \t<Description type="Action" subType="Standard" ID="WRa6" Name="call_to_grave" Description="Call to Grave">
@@ -543,6 +575,36 @@ def phantom_projectiles_xml() -> str:
 \t\t\t<ImageIDBase value="PHp1"/>
 \t\t\t<Script type="0" cProc="0" GPLFunction="Ice_Lance_Hit"/>
 \t\t\t<Attachment kind="Movement" type="Walk" ID="dragon_missile"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t</Description>
+\t<Description type="Unit" subType="Projectile" ID="PHW2" Name="endless_winter_missile" Description="Endless Winter">
+\t\t<Engine version="1">
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHw3"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Endless_Winter_Inner_Missile_Hit"/>
+\t\t\t<Attachment kind="Movement" type="Walk" ID="fast missile"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t</Description>
+\t<Description type="Unit" subType="Projectile" ID="PHW7" Name="endless_winter_missile_middle" Description="Endless Winter">
+\t\t<Engine version="1">
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHw3"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Endless_Winter_Middle_Missile_Hit"/>
+\t\t\t<Attachment kind="Movement" type="Walk" ID="fast missile"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t</Description>
+\t<Description type="Unit" subType="Projectile" ID="PHW8" Name="endless_winter_missile_outer" Description="Endless Winter">
+\t\t<Engine version="1">
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHw3"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="Endless_Winter_Outer_Missile_Hit"/>
+\t\t\t<Attachment kind="Movement" type="Walk" ID="fast missile"/>
 \t\t\t<DefaultSound value="0"/>
 \t\t</Engine>
 \t</Description>
@@ -767,6 +829,141 @@ def phantom_overlays_xml() -> str:
 \t\t\t<Flags value="TransparentToMouse"/>
 \t\t</Game>
 \t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHW3" Name="endless_winter_hit_effector" Description="Endless Winter Hit">
+\t\t<Engine version="1">
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHw2"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="0"/>
+\t\t\t<Flags value="TransparentToMouse"/>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Overlay" ID="PHW6" Name="endless_winter_vortex_effector" Description="Endless Winter Vortex">
+\t\t<Engine version="1">
+\t\t\t<Info value="Static"/>
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Menu value="11"/>
+\t\t\t<ImageIDBase value="PHw1"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="0"/>
+\t\t\t<StackPriority value="0"/>
+\t\t\t<Flags value="TransparentToMouse"/>
+\t\t</Game>
+\t</Description>
+</Majesty>
+"""
+
+
+def phantom_particles_xml() -> str:
+    return """<Majesty>
+\t<Description type="Unit" subType="ParticleSystem" ID="PHW4" Name="endless_winter_storm_attachment" Description="Endless Winter">
+\t\t<Engine version="1">
+\t\t\t<Info value="Static"/>
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Info value="NoGPLAgent"/>
+\t\t\t<Menu value="13"/>
+\t\t\t<ImageIDBase value="PHw4"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t\t<InitialParticles value="1"/>
+\t\t\t<MaxParticles value="10"/>
+\t\t\t<Bounds min="-1000.0, -1000.0, -1000.0" max="1000.0, 1000.0, 1000.0"/>
+\t\t\t<Emitter>
+\t\t\t\t<Type value="Area"/>
+\t\t\t\t<Type value="Column"/>
+\t\t\t\t<Velocity value="0.0, 0.0, 0.0"/>
+\t\t\t\t<Acceleration value="0.0, 0.0, 0.0"/>
+\t\t\t\t<Offset value="0.0, 0.0, 0.0"/>
+\t\t\t\t<SurfaceNormal value="0.0, 0.0, 1.0"/>
+\t\t\t\t<Radius value="0.05"/>
+\t\t\t\t<RadiusVariance value="0.5"/>
+\t\t\t\t<DirectionVariance value="90.0"/>
+\t\t\t\t<Rate value="8.0"/>
+\t\t\t\t<Lifespan value="4294967295"/>
+\t\t\t\t<Recycle value="0"/>
+\t\t\t</Emitter>
+\t\t\t<Particle>
+\t\t\t\t<Lifespan value="1000"/>
+\t\t\t\t<LifespanVariance value="0.4"/>
+\t\t\t\t<InitialSpeed value="3.0"/>
+\t\t\t\t<InitialSpeedVariance value="0.4"/>
+\t\t\t\t<Gravity value="0.0, 0.0, 0.0"/>
+\t\t\t\t<BirthColor value="0.0, 0.0, 0.0, 0.0"/>
+\t\t\t\t<MidlifeColor value="0.0, 0.0, 0.0, 1.0"/>
+\t\t\t\t<DeathColor value="0.0, 0.0, 0.0, 0.0"/>
+\t\t\t\t<BirthSize value="0.1"/>
+\t\t\t\t<MaxSize value="7.0"/>
+\t\t\t\t<DeathSize value="0.2"/>
+\t\t\t\t<SizeTime in="0.5" out="0.3"/>
+\t\t\t\t<FadeTime in="0.1" out="0.5"/>
+\t\t\t\t<JitterOrientation value="0.0, 0.0, 0.0"/>
+\t\t\t\t<JitterDisplacement value="0.0, 0.0, 0.0"/>
+\t\t\t\t<BirthSpinRate value="0.0"/>
+\t\t\t\t<MidlifeSpinRate value="0.0"/>
+\t\t\t\t<DeathSpinRate value="0.0"/>
+\t\t\t</Particle>
+\t\t</Engine>
+\t</Description>
+\t<Description type="Unit" subType="ParticleSystem" ID="PHW5" Name="endless_winter_missile_attachment" Description="Endless Winter">
+\t\t<Engine version="1">
+\t\t\t<Info value="Static"/>
+\t\t\t<Info value="Directionless"/>
+\t\t\t<Info value="DontBlock"/>
+\t\t\t<Info value="NoGPLAgent"/>
+\t\t\t<Menu value="13"/>
+\t\t\t<ImageIDBase value="PHw5"/>
+\t\t\t<AttachmentPointID value="2"/>
+\t\t\t<DefaultSound value="0"/>
+\t\t\t<InitialParticles value="2"/>
+\t\t\t<MaxParticles value="8"/>
+\t\t\t<Bounds min="-1000.0, -1000.0, -1000.0" max="1000.0, 1000.0, 1000.0"/>
+\t\t\t<Emitter>
+\t\t\t\t<Type value="Area"/>
+\t\t\t\t<Type value="Column"/>
+\t\t\t\t<Velocity value="0.0, 0.0, 0.0"/>
+\t\t\t\t<Acceleration value="0.0, 0.0, 0.0"/>
+\t\t\t\t<Offset value="0.0, 0.0, 0.0"/>
+\t\t\t\t<SurfaceNormal value="0.0, 0.0, 1.0"/>
+\t\t\t\t<Radius value="0.04"/>
+\t\t\t\t<RadiusVariance value="0.0"/>
+\t\t\t\t<DirectionVariance value="360.0"/>
+\t\t\t\t<Rate value="18.0"/>
+\t\t\t\t<Lifespan value="4294967295"/>
+\t\t\t\t<Recycle value="0"/>
+\t\t\t</Emitter>
+\t\t\t<Particle>
+\t\t\t\t<Lifespan value="300"/>
+\t\t\t\t<LifespanVariance value="0.5"/>
+\t\t\t\t<InitialSpeed value="4.0"/>
+\t\t\t\t<InitialSpeedVariance value="0.4"/>
+\t\t\t\t<Gravity value="0.0, 0.0, 0.0"/>
+\t\t\t\t<BirthColor value="0.0, 0.0, 0.0, 0.0"/>
+\t\t\t\t<MidlifeColor value="0.0, 0.0, 0.0, 1.0"/>
+\t\t\t\t<DeathColor value="0.0, 0.0, 0.0, 0.0"/>
+\t\t\t\t<BirthSize value="0.1"/>
+\t\t\t\t<MaxSize value="7.0"/>
+\t\t\t\t<DeathSize value="0.2"/>
+\t\t\t\t<SizeTime in="0.5" out="0.3"/>
+\t\t\t\t<FadeTime in="0.1" out="0.2"/>
+\t\t\t\t<JitterOrientation value="0.0, 0.0, 0.0"/>
+\t\t\t\t<JitterDisplacement value="0.0, 0.0, 0.0"/>
+\t\t\t\t<BirthSpinRate value="0.0"/>
+\t\t\t\t<MidlifeSpinRate value="0.0"/>
+\t\t\t\t<DeathSpinRate value="0.0"/>
+\t\t\t</Particle>
+\t\t</Engine>
+\t</Description>
 </Majesty>
 """
 
@@ -847,6 +1044,15 @@ def phantom_hero_data() -> str:
 \t\t(StartingScript\tPhantom_tree)
 \t\t(birthScript\tPhantom_birth)
 \t\t(IGdeathscript\tPhantom_death)
+\t}
+[end]
+
+[endless_winter_storm]
+\t{Spell
+\t\t(type\t\tspell)
+\t\t(subtype\tspell)
+\t\t(title\t\tendless_winter_storm)
+\t\t(activeScript\tEndless_Winter_Active)
 \t}
 [end]
 """
@@ -2075,6 +2281,18 @@ declare
 \tinteger desired_tier;
 
 begin
+\tdesired_tier = 1;
+\tIf ($Phantom_Eternal_Soul_Active(source))
+\t\tdesired_tier = 2;
+
+\t$Phantom_Apply_Chill_Tier(target, duration, desired_tier);
+end
+
+function Phantom_Apply_Chill_Tier(agent target, integer duration, integer desired_tier)
+
+declare
+
+begin
 \tIf ($isdead(target))
 \t\treturn;
 
@@ -2090,10 +2308,6 @@ begin
 \t\tend
 \tIf ($HasAttribute("PhantomChillIconDelay", target) == False)
 \t\t$AddAttribute(target, "PhantomChillIconDelay", "integer", 0);
-
-\tdesired_tier = 1;
-\tIf ($Phantom_Eternal_Soul_Active(source))
-\t\tdesired_tier = 2;
 
 \tIf (target's "PhantomChillActive" == False)
 \t\tbegin
@@ -2628,6 +2842,197 @@ begin
 \t\t$DeleteEffector(thisagent, "gravechill_icon");
 end
 
+function Endless_Winter_Hit(agent thisagent, agent target)
+
+declare
+\tinteger cast_range;
+\tlist targets;
+\tagent closest_enemy;
+\tinteger closest_distance;
+\tinteger target_distance;
+
+begin
+\tcast_range = $Phantom_effective_casting_range(thisagent);
+\ttargets = $compile_enemies(thisagent, cast_range);
+\tIf ($ListSize(targets) == 0)
+\t\treturn;
+
+\tclosest_enemy = $Pick_Closest(thisagent, targets);
+\tIf ($notvalid(closest_enemy))
+\t\treturn;
+
+\tIf ($isvalidgamepiece(target))
+\t\tIf ($IsDead(target) == False)
+\t\t\tIf ($AgentInList(target, targets))
+\t\t\t\tbegin
+\t\t\t\t\tclosest_distance = $DistanceBetweenAgents(thisagent, closest_enemy);
+\t\t\t\t\ttarget_distance = $DistanceBetweenAgents(thisagent, target);
+\t\t\t\t\tIf (target_distance == closest_distance)
+\t\t\t\t\t\tclosest_enemy = target;
+\t\t\t\tend
+
+\t$CreateSpellUnit(thisagent, "endless_winter_storm", closest_enemy);
+end
+
+function Endless_Winter_Check(agent thisagent) is integer
+
+declare
+\tinteger cast_range;
+\tlist targets;
+
+begin
+\tIf ($isdead(thisagent))
+\t\treturn 0;
+
+\tcast_range = $Phantom_effective_casting_range(thisagent);
+\ttargets = $compile_enemies(thisagent, cast_range);
+\tIf ($ListSize(targets) > 0)
+\t\treturn 1;
+
+\treturn 0;
+end
+
+function Endless_Winter_Unit_Created(agent thisagent, agent target)
+
+declare
+\tinteger duration;
+
+begin
+\tduration = $GetSpellAttribute("endless_winter", "effector_duration");
+\t$SetParent(thisagent, target);
+\t$SetSpellUnitTimeout(
+\t\tthisagent,
+\t\tduration + 500
+\t);
+\t$CreateEffector(
+\t\tthisagent,
+\t\t"endless_winter_vortex_effector",
+\t\tduration
+\t);
+\t$AddAttribute(
+\t\tthisagent,
+\t\t"EndlessWinterTracking",
+\t\t"function",
+\t\t$Endless_Winter_Track
+\t);
+\t$AddAttribute(
+\t\tthisagent,
+\t\t"EndlessWinterCleanup",
+\t\t"function",
+\t\t$Endless_Winter_Cleanup
+\t);
+\t$RunThread(
+\t\tthisagent's "EndlessWinterCleanup",
+\t\tduration + 100,
+\t\tthisagent
+\t);
+\t$NewThread(thisagent's "EndlessWinterTracking", 25, thisagent);
+\t$NewThread(thisagent's "activeScript", 1600, thisagent);
+\t$Endless_Winter_Track(thisagent);
+\t$Endless_Winter_Active(thisagent);
+end
+
+function Endless_Winter_Cleanup(agent thisagent)
+
+declare
+
+begin
+\tIf ($isvalidgamepiece(thisagent) == False)
+\t\treturn;
+
+\t$KillThread(thisagent's "EndlessWinterTracking");
+\t$KillThread(thisagent's "activeScript");
+\t$DeleteGamePiece(thisagent);
+end
+
+function Endless_Winter_Track(agent thisagent)
+
+declare
+\tagent tracked_target;
+\tcoordinate anchor_location;
+\tcoordinate target_location;
+
+begin
+\tIf ($isvalidgamepiece(thisagent) == False)
+\t\treturn;
+
+\ttracked_target = $Parent(thisagent);
+\tIf ($isvalidgamepiece(tracked_target))
+\t\tIf ($IsDead(tracked_target) == False)
+\t\t\tbegin
+\t\t\t\tanchor_location = $LocationOf(thisagent);
+\t\t\t\ttarget_location = $LocationOf(tracked_target);
+\t\t\t\tIf (($GetX(anchor_location) != $GetX(target_location)) || ($GetY(anchor_location) != $GetY(target_location)))
+\t\t\t\t\t$TeleportToUnit(thisagent, 50000, tracked_target, 0);
+\t\t\tend
+end
+
+function Endless_Winter_Active(agent thisagent)
+
+declare
+\tlist targets;
+\tagent target;
+\tinteger distance;
+
+begin
+\tIf ($isvalidgamepiece(thisagent) == False)
+\t\treturn;
+
+\ttargets = $compile_enemies(thisagent, 175);
+
+\tforeach target in targets do
+\t\tbegin
+\t\t\tdistance = $DistanceBetweenCoords(
+\t\t\t\t$LocationOf(thisagent),
+\t\t\t\t$LocationOf(target)
+\t\t\t);
+\t\t\tIf (distance <= #Phantom_Icy_Touch_Range)
+\t\t\t\t$CreateMissile("endless_winter_missile", thisagent, target);
+\t\t\tElse If (distance <= 80)
+\t\t\t\t$CreateMissile("endless_winter_missile_middle", thisagent, target);
+\t\t\tElse
+\t\t\t\t$CreateMissile("endless_winter_missile_outer", thisagent, target);
+\t\tend
+end
+
+function Endless_Winter_Inner_Missile_Hit(agent thisagent, agent target)
+
+declare
+
+begin
+\t$Endless_Winter_Missile_Hit(target, 8, 2);
+end
+
+function Endless_Winter_Middle_Missile_Hit(agent thisagent, agent target)
+
+declare
+
+begin
+\t$Endless_Winter_Missile_Hit(target, 6, 1);
+end
+
+function Endless_Winter_Outer_Missile_Hit(agent thisagent, agent target)
+
+declare
+
+begin
+\t$Endless_Winter_Missile_Hit(target, 4, 1);
+end
+
+function Endless_Winter_Missile_Hit(agent target, integer damage, integer chill_tier)
+
+declare
+
+begin
+\t$CreateEffector(target, "endless_winter_hit_effector", 0);
+\t$player_spell_attack(target, damage, damage);
+\t$Phantom_Apply_Chill_Tier(
+\t\ttarget,
+\t\t$GetSpellAttribute("ice_lance", "effector_duration"),
+\t\tchill_tier
+\t);
+end
+
 function Blizzard_Check(agent thisagent) is integer
 
 declare
@@ -2682,6 +3087,7 @@ def mod_xml() -> str:
 \t\t\t\t\t<Descriptions>Data\\phantom_actions.xml</Descriptions>
 \t\t\t\t\t<Descriptions>Data\\phantom_projectiles.xml</Descriptions>
 \t\t\t\t\t<Descriptions>Data\\phantom_overlays.xml</Descriptions>
+\t\t\t\t\t<Descriptions>Data\\phantom_particles.xml</Descriptions>
 \t\t\t\t\t<Descriptions>Data\\phantom_sounds.xml</Descriptions>
 \t\t\t\t\t<GPL>
 \t\t\t\t\t\t<Target>Data\\Phantom.bcd</Target>
@@ -2897,6 +3303,9 @@ def write_maindata_cam(
     frost_armor_frozen_casing_source_png: Path | None,
     call_to_grave_portal_source_png: Path | None,
     eternal_soul_flame_source_png: Path | None,
+    endless_winter_vortex_source_png: Path | None,
+    endless_winter_hit_source_png: Path | None,
+    endless_winter_missile_source_png: Path | None,
     ice_effect_maindata: Path | None,
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
@@ -2912,8 +3321,74 @@ def write_maindata_cam(
     frost_armor_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_FROST_ARMOR_ICON).data
     icy_touch_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_ICY_TOUCH_ICON).data
     blizzard_icon = read_cam_entry(source_maindata, b"IMAG", SOURCE_BLIZZARD_ICON).data
+    endless_winter_image = read_cam_entry(
+        source_maindata,
+        b"IMAG",
+        SOURCE_METEOR_STORM_IMAGE,
+    ).data
+    endless_winter_hit_image = read_cam_entry(
+        source_maindata,
+        b"IMAG",
+        SOURCE_METEOR_HIT_IMAGE,
+    ).data
+    endless_winter_missile_image = read_cam_entry(
+        source_maindata,
+        b"IMAG",
+        SOURCE_METEOR_MISSILE_IMAGE,
+    ).data
+    endless_winter_storm_particle_image = read_cam_entry(
+        source_maindata,
+        b"IMAG",
+        SOURCE_METEOR_STORM_PARTICLE_IMAGE,
+    ).data
+    endless_winter_missile_particle_image = read_cam_entry(
+        source_maindata,
+        b"IMAG",
+        SOURCE_METEOR_MISSILE_PARTICLE_IMAGE,
+    ).data
+    endless_winter_image = replace_embedded_attachment_id(
+        endless_winter_image,
+        b"XL20",
+        b"PHW4",
+    )
+    endless_winter_missile_image = replace_embedded_attachment_id(
+        endless_winter_missile_image,
+        b"XL21",
+        b"PHW5",
+    )
     tiles = read_cam_entries(source_maindata, b"TILE")
     palettes = read_cam_entries(source_maindata, b"SPLT")
+    endless_winter_tile_indices = sorted(
+        index
+        for index in referenced_tile_indices(endless_winter_image, len(tiles))
+        if index >= 8000
+    )
+    endless_winter_hit_tile_indices = sorted(
+        index
+        for index in referenced_tile_indices(endless_winter_hit_image, len(tiles))
+        if index >= 8000
+    )
+    endless_winter_missile_tile_indices = sorted(
+        index
+        for index in referenced_tile_indices(endless_winter_missile_image, len(tiles))
+        if index >= 8000
+    )
+    endless_winter_storm_particle_tile_indices = [
+        tile_index
+        for _set_id, frames in single_direction_imag_animation_sets(
+            endless_winter_storm_particle_image
+        )
+        for _record_offset, tile_index in frames
+        if tile_index
+    ]
+    endless_winter_missile_particle_tile_indices = [
+        tile_index
+        for _set_id, frames in single_direction_imag_animation_sets(
+            endless_winter_missile_particle_image
+        )
+        for _record_offset, tile_index in frames
+        if tile_index
+    ]
     ice_lance_hit_effect: bytes | None = None
     ice_effect_tiles: list[bytes] = []
     source_ice_tile_indices: list[int] = []
@@ -3017,6 +3492,11 @@ def write_maindata_cam(
     tile_indices.update(referenced_tile_indices(frost_armor_icon, len(tiles)))
     tile_indices.update(referenced_tile_indices(icy_touch_icon, len(tiles)))
     tile_indices.update(referenced_tile_indices(blizzard_icon, len(tiles)))
+    tile_indices.update(endless_winter_tile_indices)
+    tile_indices.update(endless_winter_hit_tile_indices)
+    tile_indices.update(endless_winter_missile_tile_indices)
+    tile_indices.update(endless_winter_storm_particle_tile_indices)
+    tile_indices.update(endless_winter_missile_particle_tile_indices)
     tile_indices.update((HERO_PORTRAIT_TILE, HERO_ICON_TILE, BUILDING_PROFILE_TILE, BUILDING_ICON_TILE, ICE_LANCE_ICON_TILE))
     max_tile_index = max(tile_indices)
 
@@ -3143,6 +3623,105 @@ def write_maindata_cam(
                 )
             )
         ice_lance_projectile = remap_imag_tile_indices(ice_lance_projectile, projectile_tile_replacements)
+
+    if endless_winter_missile_tile_indices:
+        winter_missile_replacements: dict[int, int] = {}
+        fixed_missile_template = tiles[
+            max(
+                endless_winter_missile_tile_indices,
+                key=lambda tile_index: (
+                    struct.unpack_from("<H", tiles[tile_index].data, 2)[0]
+                    * struct.unpack_from("<H", tiles[tile_index].data, 4)[0]
+                ),
+            )
+        ].data
+        for frame_index, source_tile_index in enumerate(
+            endless_winter_missile_tile_indices
+        ):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            winter_missile_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(
+                        f"PHw3Snow{frame_index:02d}".encode("ascii")
+                    ),
+                    data=(
+                        generated_endless_winter_missile_tile(
+                            fixed_missile_template,
+                            palettes,
+                            endless_winter_missile_source_png,
+                            len(endless_winter_missile_tile_indices)
+                            - frame_index
+                            - 1,
+                        )
+                        if endless_winter_missile_source_png
+                        else blank_indexed_v3_tile(fixed_missile_template)
+                    ),
+                )
+            )
+        endless_winter_missile_image = remap_imag_tile_indices(
+            endless_winter_missile_image,
+            winter_missile_replacements,
+        )
+
+    for (
+        particle_image,
+        source_particle_tile_indices,
+        tile_prefix,
+    ) in (
+        (
+            endless_winter_storm_particle_image,
+            endless_winter_storm_particle_tile_indices,
+            b"PHw4Flake",
+        ),
+        (
+            endless_winter_missile_particle_image,
+            endless_winter_missile_particle_tile_indices,
+            b"PHw5Flake",
+        ),
+    ):
+        particle_replacements: dict[int, int] = {}
+        fixed_particle_template = tiles[
+            max(
+                source_particle_tile_indices,
+                key=lambda tile_index: (
+                    struct.unpack_from("<H", tiles[tile_index].data, 2)[0]
+                    * struct.unpack_from("<H", tiles[tile_index].data, 4)[0]
+                ),
+            )
+        ].data
+        for frame_index, source_tile_index in enumerate(
+            source_particle_tile_indices
+        ):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            particle_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(
+                        tile_prefix
+                        + f"{frame_index:02d}".encode("ascii")
+                    ),
+                    data=(
+                        generated_endless_winter_particle_tile(
+                            fixed_particle_template,
+                            palettes,
+                            endless_winter_missile_source_png,
+                            frame_index,
+                            len(source_particle_tile_indices),
+                        )
+                        if endless_winter_missile_source_png
+                        else blank_indexed_v3_tile(fixed_particle_template)
+                    ),
+                )
+            )
+        remapped_particle_image = remap_imag_tile_indices(
+            particle_image,
+            particle_replacements,
+        )
+        if tile_prefix == b"PHw4Flake":
+            endless_winter_storm_particle_image = remapped_particle_image
+        else:
+            endless_winter_missile_particle_image = remapped_particle_image
 
     if phantom_sprite_tile_indices:
         first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
@@ -3584,6 +4163,115 @@ def write_maindata_cam(
             call_to_grave_replacements,
         )
 
+    if endless_winter_vortex_source_png and endless_winter_tile_indices:
+        winter_replacements: dict[int, int] = {}
+        fixed_winter_template = tiles[
+            max(
+                endless_winter_tile_indices,
+                key=lambda tile_index: (
+                    struct.unpack_from("<H", tiles[tile_index].data, 2)[0]
+                    * struct.unpack_from("<H", tiles[tile_index].data, 4)[0]
+                ),
+            )
+        ].data
+        for frame_index, source_tile_index in enumerate(endless_winter_tile_indices):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            winter_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHw1Storm{frame_index:02d}".encode("ascii")),
+                    data=generated_endless_winter_vortex_tile(
+                        fixed_winter_template,
+                        palettes,
+                        endless_winter_vortex_source_png,
+                        frame_index,
+                        len(endless_winter_tile_indices),
+                    ),
+                )
+            )
+        endless_winter_image = remap_imag_tile_indices(
+            endless_winter_image,
+            winter_replacements,
+        )
+
+    if endless_winter_hit_source_png and endless_winter_hit_tile_indices:
+        winter_hit_replacements: dict[int, int] = {}
+        fixed_hit_template = tiles[endless_winter_hit_tile_indices[-2]].data
+        for frame_index, source_tile_index in enumerate(
+            endless_winter_hit_tile_indices
+        ):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            winter_hit_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHw2Hit{frame_index:02d}".encode("ascii")),
+                    data=generated_endless_winter_hit_tile(
+                        fixed_hit_template,
+                        palettes,
+                        endless_winter_hit_source_png,
+                        frame_index,
+                        len(endless_winter_hit_tile_indices),
+                        (
+                            struct.unpack_from(
+                                "<H",
+                                tiles[source_tile_index].data,
+                                2,
+                            )[0]
+                            * struct.unpack_from(
+                                "<H",
+                                tiles[source_tile_index].data,
+                                4,
+                            )[0]
+                        )
+                        / max(
+                            struct.unpack_from("<H", tiles[index].data, 2)[0]
+                            * struct.unpack_from("<H", tiles[index].data, 4)[0]
+                            for index in endless_winter_hit_tile_indices
+                        ),
+                    ),
+                )
+            )
+        endless_winter_hit_image = remap_imag_tile_indices(
+            endless_winter_hit_image,
+            winter_hit_replacements,
+        )
+
+    # Teleporting a Character resets its Walk animation state. Keep the
+    # periodically relocated GPL spell unit as a fully transparent anchor and
+    # render the vortex once as an attached overlay; the overlay follows the
+    # anchor without restarting its own animation on every pulse.
+    endless_winter_anchor_image = replace_embedded_attachment_id(
+        endless_winter_image,
+        b"PHW4",
+        b"\x00\x00\x00\x00",
+    )
+    anchor_blank_tile_index = max_tile_index + len(extra_tiles) + 1
+    anchor_template_index = max(
+        endless_winter_tile_indices,
+        key=lambda tile_index: (
+            struct.unpack_from("<H", tiles[tile_index].data, 2)[0]
+            * struct.unpack_from("<H", tiles[tile_index].data, 4)[0]
+        ),
+    )
+    extra_tiles.append(
+        CamEntry(
+            name=pad_name(b"PHw6Anchor00"),
+            data=blank_indexed_v3_tile(tiles[anchor_template_index].data),
+        )
+    )
+    anchor_tile_replacements = {
+        tile_index: anchor_blank_tile_index
+        for _set_id, frames in single_direction_imag_animation_sets(
+            endless_winter_anchor_image
+        )
+        for _record_offset, tile_index in frames
+        if tile_index
+    }
+    endless_winter_anchor_image = remap_imag_tile_indices(
+        endless_winter_anchor_image,
+        anchor_tile_replacements,
+    )
+
     palette_indices: set[int] = set()
     tile_entries: list[CamEntry] = []
     for tile_index in range(max_tile_index + 1):
@@ -3674,6 +4362,42 @@ def write_maindata_cam(
                 data=eternal_soul_cast_image,
             )
         )
+    image_entries.append(
+        CamEntry(
+            name=pad_name(PHANTOM_ENDLESS_WINTER_IMAGE),
+            data=endless_winter_image,
+        )
+    )
+    image_entries.append(
+        CamEntry(
+            name=pad_name(PHANTOM_ENDLESS_WINTER_HIT_IMAGE),
+            data=endless_winter_hit_image,
+        )
+    )
+    image_entries.append(
+        CamEntry(
+            name=pad_name(PHANTOM_ENDLESS_WINTER_MISSILE_IMAGE),
+            data=endless_winter_missile_image,
+        )
+    )
+    image_entries.append(
+        CamEntry(
+            name=pad_name(PHANTOM_ENDLESS_WINTER_STORM_PARTICLE_IMAGE),
+            data=endless_winter_storm_particle_image,
+        )
+    )
+    image_entries.append(
+        CamEntry(
+            name=pad_name(PHANTOM_ENDLESS_WINTER_MISSILE_PARTICLE_IMAGE),
+            data=endless_winter_missile_particle_image,
+        )
+    )
+    image_entries.append(
+        CamEntry(
+            name=pad_name(PHANTOM_ENDLESS_WINTER_ANCHOR_IMAGE),
+            data=endless_winter_anchor_image,
+        )
+    )
     write_cam(
         (
             CamSection(
@@ -4864,6 +5588,21 @@ def remap_imag_tile_indices(imag: bytes, replacements: dict[int, int]) -> bytes:
     return bytes(patched)
 
 
+def replace_embedded_attachment_id(
+    imag: bytes,
+    source_id: bytes,
+    target_id: bytes,
+) -> bytes:
+    """Redirect one stock IMAG particle attachment without touching its art."""
+    if len(source_id) != 4 or len(target_id) != 4:
+        raise ValueError("Embedded attachment IDs must contain exactly four bytes")
+    if imag.count(source_id) != 1:
+        raise ValueError(
+            f"Expected exactly one embedded {source_id!r} attachment ID"
+        )
+    return imag.replace(source_id, target_id, 1)
+
+
 def remap_imag_low16_tile_indices(imag: bytes, replacements: dict[int, int]) -> bytes:
     patched = bytearray(imag)
     for offset in range(0, len(patched) - 3, 4):
@@ -5868,6 +6607,306 @@ def generated_frost_armor_crystal_tile(
     left = (width - source.width) // 2
     top = (height - source.height) // 2 + round(math.sin(turn) * 1.2)
     canvas.alpha_composite(source, (left, top))
+    return rgba_to_indexed_tile(
+        canvas,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (
+            3,
+            height,
+            width,
+            struct.unpack_from("<H", template_tile, 6)[0],
+            32,
+            struct.unpack_from("<H", template_tile, 10)[0],
+            struct.unpack_from("<H", template_tile, 12)[0],
+            struct.unpack_from("<H", template_tile, 14)[0],
+        ),
+    )
+
+
+def generated_endless_winter_vortex_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+) -> bytes:
+    """Advance the internal ice arms while preserving the vortex ground plane."""
+    from PIL import Image, ImageEnhance
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+
+    # The generated source is a 4x2 phase sheet. Normalize every cell onto the
+    # same game-size canvas so minor source padding differences cannot cause
+    # sprite bounce. A single-image source remains supported for diagnostics.
+    source_frames: list[Image.Image] = []
+    if 1.8 <= source.width / max(1, source.height) <= 2.2:
+        for row in range(2):
+            for column in range(4):
+                left = round(source.width * column / 4)
+                right = round(source.width * (column + 1) / 4)
+                top = round(source.height * row / 2)
+                bottom = round(source.height * (row + 1) / 2)
+                source_frames.append(source.crop((left, top, right, bottom)))
+    else:
+        source_frames.append(source)
+
+    normalized_frames: list[Image.Image] = []
+    for source_frame in source_frames:
+        bbox = source_frame.getchannel("A").getbbox()
+        if bbox is None:
+            continue
+        source_frame = source_frame.crop(bbox)
+        fit = min(
+            width * 0.86 / max(1, source_frame.width),
+            height * 0.86 / max(1, source_frame.height),
+        )
+        source_frame = source_frame.resize(
+            (
+                max(2, round(source_frame.width * fit)),
+                max(2, round(source_frame.height * fit)),
+            ),
+            Image.Resampling.LANCZOS,
+        )
+        normalized = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        normalized.alpha_composite(
+            source_frame,
+            (
+                (width - source_frame.width) // 2,
+                (height - source_frame.height) // 2,
+            ),
+        )
+        normalized_frames.append(normalized)
+    if not normalized_frames:
+        return blank_indexed_v3_tile(template_tile)
+
+    phase = frame_index / max(1, frame_count)
+    source_position = phase * len(normalized_frames)
+    source_index = math.floor(source_position) % len(normalized_frames)
+    next_source_index = (source_index + 1) % len(normalized_frames)
+    blend = source_position - math.floor(source_position)
+    moving_interior = Image.blend(
+        normalized_frames[source_index],
+        normalized_frames[next_source_index],
+        blend,
+    )
+
+    # Deproject the receding ellipse to a circle, rotate the internal flow,
+    # then project it back. This advances the arms in their ground plane
+    # instead of clock-spinning the whole flattened sprite.
+    deprojected = moving_interior.resize(
+        (width, width),
+        Image.Resampling.BICUBIC,
+    )
+    deprojected = deprojected.rotate(
+        -360.0 * phase,
+        resample=Image.Resampling.BICUBIC,
+        expand=False,
+        center=(width / 2.0, width / 2.0),
+    )
+    rotated_interior = deprojected.resize(
+        (width, height),
+        Image.Resampling.BICUBIC,
+    )
+
+    # Keep the outer rim and elliptical silhouette from the first phase fixed.
+    # The broad soft blend lets the arm spokes flow almost to the edge without
+    # allowing the entire asset or its plane to turn.
+    interior_mask = Image.new("L", (width, height), 0)
+    mask_pixels = interior_mask.load()
+    center_x = (width - 1) / 2.0
+    center_y = (height - 1) / 2.0
+    radius_x = max(1.0, width * 0.47)
+    radius_y = max(1.0, height * 0.47)
+    for y in range(height):
+        for x in range(width):
+            radius = math.sqrt(
+                ((x - center_x) / radius_x) ** 2
+                + ((y - center_y) / radius_y) ** 2
+            )
+            if radius <= 0.78:
+                alpha = 255
+            elif radius >= 0.98:
+                alpha = 0
+            else:
+                transition = (radius - 0.78) / 0.20
+                smooth = transition * transition * (3.0 - 2.0 * transition)
+                alpha = round(255 * (1.0 - smooth))
+            mask_pixels[x, y] = alpha
+    canvas = Image.composite(
+        rotated_interior,
+        normalized_frames[0],
+        interior_mask,
+    )
+    canvas = ImageEnhance.Brightness(canvas).enhance(0.78)
+    return rgba_to_indexed_tile(
+        canvas,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (
+            3,
+            height,
+            width,
+            struct.unpack_from("<H", template_tile, 6)[0],
+            32,
+            struct.unpack_from("<H", template_tile, 10)[0],
+            struct.unpack_from("<H", template_tile, 12)[0],
+            struct.unpack_from("<H", template_tile, 14)[0],
+        ),
+    )
+
+
+def generated_endless_winter_missile_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    source_phase: int,
+) -> bytes:
+    """Render one generated snowflake-flick phase on a fixed projectile canvas."""
+    from PIL import Image, ImageEnhance
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+
+    phase_count = 4
+    source_phase = max(0, min(phase_count - 1, source_phase))
+    left = round(source.width * source_phase / phase_count)
+    right = round(source.width * (source_phase + 1) / phase_count)
+    cell_width = right - left
+    square_size = min(cell_width, source.height)
+    top = (source.height - square_size) // 2
+    frame = source.crop((left, top, right, top + square_size))
+    frame = frame.resize((width, height), Image.Resampling.LANCZOS)
+    frame = ImageEnhance.Brightness(frame).enhance(0.80)
+
+    return rgba_to_indexed_tile(
+        frame,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (
+            3,
+            height,
+            width,
+            struct.unpack_from("<H", template_tile, 6)[0],
+            32,
+            width // 2,
+            height // 2,
+            struct.unpack_from("<H", template_tile, 14)[0],
+        ),
+    )
+
+
+def generated_endless_winter_particle_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+) -> bytes:
+    """Render a small rotating cyan snowflake for the two particle emitters."""
+    from PIL import Image, ImageEnhance
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        sheet = loaded.convert("RGBA")
+
+    first_cell = sheet.crop((0, 0, sheet.width // 4, sheet.height))
+    bounds = first_cell.getchannel("A").getbbox()
+    if bounds is None:
+        return blank_indexed_v3_tile(template_tile)
+    flake = first_cell.crop(bounds)
+
+    phase = frame_index / max(1, frame_count)
+    pulse = 0.72 + 0.10 * math.sin(phase * math.tau)
+    target_side = max(5, round(min(width, height) * pulse))
+    flake.thumbnail(
+        (target_side, target_side),
+        Image.Resampling.LANCZOS,
+    )
+    flake = flake.rotate(
+        phase * 120.0,
+        resample=Image.Resampling.BICUBIC,
+        expand=True,
+    )
+    flake = ImageEnhance.Brightness(flake).enhance(0.72)
+
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    canvas.alpha_composite(
+        flake,
+        (
+            (width - flake.width) // 2,
+            (height - flake.height) // 2,
+        ),
+    )
+    return rgba_to_indexed_tile(
+        canvas,
+        palettes,
+        ICE_LANCE_PROJECTILE_PALETTE_INDEX,
+        (
+            3,
+            height,
+            width,
+            struct.unpack_from("<H", template_tile, 6)[0],
+            32,
+            width // 2,
+            height // 2,
+            struct.unpack_from("<H", template_tile, 14)[0],
+        ),
+    )
+
+
+def generated_endless_winter_hit_tile(
+    template_tile: bytes,
+    palettes: list[CamEntry],
+    source_png: Path,
+    frame_index: int,
+    frame_count: int,
+    stock_frame_area_ratio: float,
+) -> bytes:
+    """Grow and vertically rotate the hit tornado on a fixed ground anchor."""
+    from PIL import Image, ImageEnhance
+
+    height = struct.unpack_from("<H", template_tile, 2)[0]
+    width = struct.unpack_from("<H", template_tile, 4)[0]
+    with Image.open(source_png) as loaded:
+        source = loaded.convert("RGBA")
+    bbox = source.getchannel("A").getbbox()
+    if bbox is None:
+        return blank_indexed_v3_tile(template_tile)
+    source = source.crop(bbox)
+
+    phase = frame_index / max(1, frame_count)
+    turn = phase * math.tau
+    growth = max(0.30, min(1.0, math.sqrt(stock_frame_area_ratio)))
+    target_height = max(5, round(height * 0.94 * growth))
+    target_width = max(3, round(source.width * target_height / max(1, source.height)))
+    if target_width > round(width * 0.92):
+        target_width = round(width * 0.92)
+        target_height = max(
+            5,
+            round(source.height * target_width / max(1, source.width)),
+        )
+    source = source.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    yaw = math.cos(turn)
+    yaw_width = max(3, round(target_width * (0.78 + 0.22 * abs(yaw))))
+    source = source.resize((yaw_width, target_height), Image.Resampling.LANCZOS)
+    if yaw < 0:
+        source = source.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    source = ImageEnhance.Brightness(source).enhance(
+        0.76 + 0.07 * abs(yaw)
+    )
+
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    canvas.alpha_composite(
+        source,
+        ((width - source.width) // 2, height - source.height - 1),
+    )
     return rgba_to_indexed_tile(
         canvas,
         palettes,

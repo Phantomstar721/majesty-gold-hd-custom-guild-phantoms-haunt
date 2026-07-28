@@ -20,6 +20,9 @@ param(
     [string]$FrostArmorFrozenCasingSource = ".\assets\source\frost-armor-frozen-casing-source-v3.png",
     [string]$CallToGravePortalSource = ".\assets\source\call-to-grave-portal-source-v1-transparent.png",
     [string]$EternalSoulFlameSource = ".\assets\source\eternal-soul-icy-flame-source-v1-transparent.png",
+    [string]$EndlessWinterVortexSource = ".\assets\source\endless-winter-vortex-animation-sheet-v3-transparent.png",
+    [string]$EndlessWinterHitSource = ".\assets\source\endless-winter-hit-tornado-source-v1-transparent.png",
+    [string]$EndlessWinterMissileSource = ".\assets\source\endless-winter-snowflake-missile-sheet-v1-transparent.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
     [string]$GplCompiler = ""
 )
@@ -200,6 +203,9 @@ if ($LASTEXITCODE -ne 0) {
     --frost-armor-frozen-casing-source-png (Resolve-RepoPath $FrostArmorFrozenCasingSource) `
     --call-to-grave-portal-source-png (Resolve-RepoPath $CallToGravePortalSource) `
     --eternal-soul-flame-source-png (Resolve-RepoPath $EternalSoulFlameSource) `
+    --endless-winter-vortex-source-png (Resolve-RepoPath $EndlessWinterVortexSource) `
+    --endless-winter-hit-source-png (Resolve-RepoPath $EndlessWinterHitSource) `
+    --endless-winter-missile-source-png (Resolve-RepoPath $EndlessWinterMissileSource) `
     --ice-lance-spell-icon-rgb $iceLanceSpellIconRgb `
     --frost-armor-spell-icon-rgb $frostArmorSpellIconRgb `
     --blizzard-spell-icon-rgb $blizzardSpellIconRgb `

@@ -120,6 +120,12 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
             b"PHc2Call to Grave",
             b"PHe1Soul Flame Icon",
             b"PHe2Soul Flame",
+            b"PHw1Winter Storm",
+            b"PHw2Winter Hit",
+            b"PHw3Winter Missile",
+            b"PHw4Winter Flakes",
+            b"PHw5Missile Flakes",
+            b"PHw6Winter Anchor",
         },
         b"TILE": set(),
         b"SPLT": set(),
@@ -147,6 +153,7 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHM1"),
         *((("Unit", agent_name) for _, agent_name, _, _ in phantom_equipment_item_records())),
         ("Unit", "FrostArmorBonus"),
+        ("Unit", "PHW1"),
         ("Unit", "MBPhantomGuild"),
     },
     "phantom_actions.xml": {
@@ -157,7 +164,13 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Action", "WRa6"),
         ("Action", "WRa7"),
     },
-    "phantom_projectiles.xml": {("Unit", "PHp1")},
+    "phantom_projectiles.xml": {
+        ("Unit", "PHp1"),
+        ("Unit", "PHW2"),
+        ("Unit", "PHW7"),
+        ("Unit", "PHW8"),
+    },
+    "phantom_particles.xml": {("Unit", "PHW4"), ("Unit", "PHW5")},
     "phantom_overlays.xml": {
         ("Unit", "PHo1"),
         ("Unit", "PHo2"),
@@ -174,6 +187,8 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHc2"),
         ("Unit", "PHe1"),
         ("Unit", "PHe2"),
+        ("Unit", "PHW3"),
+        ("Unit", "PHW6"),
     },
     "phantom_sounds.xml": {
         ("Sound", "PH01"),
@@ -201,6 +216,12 @@ CUSTOM_TILE_OWNERS = {
     b"PHc2Portal": (b"PHc2Call to Grave", "u32"),
     b"PHe1FlameIcon": (b"PHe1Soul Flame Icon", "u32"),
     b"PHe2FlameCast": (b"PHe2Soul Flame", "u32"),
+    b"PHw1Storm": (b"PHw1Winter Storm", "u32"),
+    b"PHw2Hit": (b"PHw2Winter Hit", "u32"),
+    b"PHw3Snow": (b"PHw3Winter Missile", "u32"),
+    b"PHw4Flake": (b"PHw4Winter Flakes", "u32"),
+    b"PHw5Flake": (b"PHw5Missile Flakes", "u32"),
+    b"PHw6Anchor": (b"PHw6Winter Anchor", "u32"),
 }
 
 EXPECTED_CUSTOM_TILE_COUNTS = {
@@ -223,6 +244,12 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHc2Portal": 22,
     b"PHe1FlameIcon": 29,
     b"PHe2FlameCast": 6,
+    b"PHw1Storm": 15,
+    b"PHw2Hit": 8,
+    b"PHw3Snow": 4,
+    b"PHw4Flake": 13,
+    b"PHw5Flake": 7,
+    b"PHw6Anchor": 1,
 }
 
 ALIGNED_PHANTOM_DISSOLVE_TILES = {
@@ -1652,6 +1679,8 @@ def validate_ice_lance_contract(output_root: Path) -> None:
         '$createeffector(target, "ice_lance_hit_effector", 0);',
         '$Phantom_Apply_Chill(thisagent, target, $GetSpellAttribute("ice_lance", "effector_duration"));',
         "function Phantom_Apply_Chill(agent source, agent target, integer duration)",
+        "$Phantom_Apply_Chill_Tier(target, duration, desired_tier);",
+        "function Phantom_Apply_Chill_Tier(agent target, integer duration, integer desired_tier)",
         'If ($HasAttribute("PhantomChillRemaining", target) == False)',
         '$AddAttribute(target, "PhantomChillRemaining", "integer", duration);',
         '$AddAttribute(target, "PhantomChillActive", "boolean", False);',
@@ -1700,7 +1729,10 @@ def validate_ice_lance_contract(output_root: Path) -> None:
     init_guard = helper_gpl.index(
         'If ($HasAttribute("PhantomChillRemaining", target) == False)'
     )
-    init_end = helper_gpl.index("\n\tdesired_tier = 1;", init_guard)
+    init_end = helper_gpl.index(
+        'If ($HasAttribute("PhantomChillIconDelay", target) == False)',
+        init_guard,
+    )
     for init_line in (
         '$AddAttribute(target, "PhantomChillRemaining", "integer", duration);',
         '$AddAttribute(target, "PhantomChillActive", "boolean", False);',
@@ -1939,7 +1971,10 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         )
 
     icy_start = gpl.index("function Icy_Touch_Check(agent thisagent) is integer")
-    icy_end = gpl.index("function Blizzard_Check(agent thisagent) is integer", icy_start)
+    icy_end = gpl.index(
+        "function Endless_Winter_Hit(agent thisagent, agent target)",
+        icy_start,
+    )
     icy_gpl = gpl[icy_start:icy_end]
     baseline_contract = (
         "function Icy_Touch_Check(agent thisagent) is integer",
@@ -2542,16 +2577,550 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
         'ID="WRa5" Name="endless_winter" Description="Endless Winter"'
         not in actions
     ):
-        fail(f"{actions_path}: level-7 placeholder is not named Endless Winter")
-    if 'Name="blizzard"' in actions:
-        fail(f"{actions_path}: obsolete Blizzard action name is still present")
+        fail(f"{actions_path}: Phantom storm action is not named Endless Winter")
+    action_start = actions.index(
+        '<Description type="Action" subType="Standard" ID="WRa5" '
+        'Name="endless_winter"'
+    )
+    action_end = actions.index("</Description>", action_start)
+    action = actions[action_start:action_end]
+    action_contract = (
+        '<ImageSet value="Cast"/>',
+        '<CompletionImageSet value="Stand"/>',
+        'GPLFunction="Endless_Winter_Hit"',
+        '<EffectorDuration value="21000"/>',
+        '<TimeoutDuration value="55000"/>',
+        '<SpellType value="Attack"/>',
+        '<CharacterLevel value="7"/>',
+        '<SpellRank value="7"/>',
+        '<ValidationScript value="Endless_Winter_Check"/>',
+    )
+    missing_action_fields = [
+        value for value in action_contract if value not in action
+    ]
+    if missing_action_fields:
+        fail(
+            f"{actions_path}: Endless Winter action is missing "
+            f"{missing_action_fields}"
+        )
+    forbidden_action_fields = (
+        '<Sound value="Meteor_Storm"/>',
+        "<SoundPhase ",
+        '<ValidationScript value="Blizzard_Check"/>',
+        'GPLFunction="Blizzard_Hit"',
+    )
+    present_forbidden_action = [
+        value for value in forbidden_action_fields if value in action
+    ]
+    if present_forbidden_action:
+        fail(
+            f"{actions_path}: Endless Winter leaks stock Wizard behavior "
+            f"{present_forbidden_action}"
+        )
 
     units_path = output_root / "Data" / "phantom_units.xml"
     units = units_path.read_text(encoding="utf-8")
-    if 'Value="endless_winter"' in units:
+    if '<Spell ID="5" Value="endless_winter"/>' not in units:
         fail(
-            f"{units_path}: unfinished Endless Winter placeholder must not be "
-            "learnable before its implementation pass"
+            f"{units_path}: Phantom does not list its level-7 Endless Winter "
+            "spell"
+        )
+    unit_contract = (
+        'ID="PHW1" Name="endless_winter_storm"',
+        '<ImageIDBase value="PHw6"/>',
+        'GPLFunction="Endless_Winter_Unit_Created"',
+        '<Attachment kind="Movement" type="Walk" ID="Class 1"/>',
+    )
+    missing_unit_fields = [
+        value for value in unit_contract if value not in units
+    ]
+    if missing_unit_fields:
+        fail(
+            f"{units_path}: Phantom-only stock storm visual unit is missing "
+            f"{missing_unit_fields}"
+        )
+    if '<Spell ID="5" Value="meteor_storm"/>' in units or 'ID="WVg1"' in units:
+        fail(f"{units_path}: mod attempts to replace the global Wizard storm unit")
+
+    projectiles_path = output_root / "Data" / "phantom_projectiles.xml"
+    projectiles = projectiles_path.read_text(encoding="utf-8")
+    projectile_contract = (
+        'ID="PHW2" Name="endless_winter_missile"',
+        'GPLFunction="Endless_Winter_Inner_Missile_Hit"',
+        'ID="PHW7" Name="endless_winter_missile_middle"',
+        'GPLFunction="Endless_Winter_Middle_Missile_Hit"',
+        'ID="PHW8" Name="endless_winter_missile_outer"',
+        'GPLFunction="Endless_Winter_Outer_Missile_Hit"',
+    )
+    missing_projectile_fields = [
+        value for value in projectile_contract if value not in projectiles
+    ]
+    if missing_projectile_fields:
+        fail(
+            f"{projectiles_path}: Phantom-only stock-speed visual projectile "
+            f"is missing {missing_projectile_fields}"
+        )
+    if (
+        projectiles.count('<ImageIDBase value="PHw3"/>') != 3
+        or projectiles.count(
+            '<Attachment kind="Movement" type="Walk" ID="fast missile"/>'
+        )
+        != 3
+    ):
+        fail(
+            f"{projectiles_path}: all three radial-tier projectiles must reuse "
+            "the same Endless Winter art and stock fast-missile movement"
+        )
+    if 'ID="WPg3"' in projectiles or 'Name="meteor_storm_missile"' in projectiles:
+        fail(f"{projectiles_path}: mod attempts to replace the stock Wizard missile")
+
+    particles_path = output_root / "Data" / "phantom_particles.xml"
+    particles = particles_path.read_text(encoding="utf-8")
+    particle_contract = (
+        'ID="PHW4" Name="endless_winter_storm_attachment"',
+        '<ImageIDBase value="PHw4"/>',
+        '<Rate value="8.0"/>',
+        'ID="PHW5" Name="endless_winter_missile_attachment"',
+        '<ImageIDBase value="PHw5"/>',
+        '<Rate value="18.0"/>',
+    )
+    missing_particle_fields = [
+        value for value in particle_contract if value not in particles
+    ]
+    if missing_particle_fields:
+        fail(
+            f"{particles_path}: Phantom-only snowflake particle systems are "
+            f"missing {missing_particle_fields}"
+        )
+    if 'ID="XL20"' in particles or 'ID="XL21"' in particles:
+        fail(
+            f"{particles_path}: mod attempts to replace stock Wizard meteor "
+            "particle systems"
+        )
+
+    overlays_path = output_root / "Data" / "phantom_overlays.xml"
+    overlays = overlays_path.read_text(encoding="utf-8")
+    overlay_contract = (
+        'ID="PHW3" Name="endless_winter_hit_effector"',
+        '<ImageIDBase value="PHw2"/>',
+        '<AttachmentPointID value="2"/>',
+        'ID="PHW6" Name="endless_winter_vortex_effector"',
+        '<ImageIDBase value="PHw1"/>',
+    )
+    missing_overlay_fields = [
+        value for value in overlay_contract if value not in overlays
+    ]
+    if missing_overlay_fields:
+        fail(
+            f"{overlays_path}: Phantom-only hit overlay is missing "
+            f"{missing_overlay_fields}"
+        )
+    if 'ID="WRg2"' in overlays or 'Name="meteor_storm_effector2"' in overlays:
+        fail(f"{overlays_path}: mod attempts to replace the stock Wizard impact")
+
+    if 'Name="meteor_storm"' in actions or 'ID="WRg1"' in actions:
+        fail(f"{actions_path}: mod attempts to replace the global Wizard action")
+
+    hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
+    hero_data = hero_data_path.read_text(encoding="utf-8")
+    spell_data_contract = (
+        "[endless_winter_storm]",
+        "(type\t\tspell)",
+        "(subtype\tspell)",
+        "(activeScript\tEndless_Winter_Active)",
+    )
+    missing_spell_data = [
+        value for value in spell_data_contract if value not in hero_data
+    ]
+    if missing_spell_data:
+        fail(
+            f"{hero_data_path}: custom visual storm lacks its explicit stock-style "
+            f"active-script mapping {missing_spell_data}"
+        )
+
+    birth_start = gpl.index("function Phantom_birth (agent thisagent)")
+    birth_end = gpl.index(
+        "\nfunction Phantom_has_cowl_item",
+        birth_start,
+    )
+    birth = gpl[birth_start:birth_end]
+    if '$LearnSpell(thisagent, "endless_winter");' in birth:
+        fail(
+            f"{gpl_path}: Phantom birth still grants the temporary level-1 "
+            "Endless Winter test spell"
+        )
+    runtime_contract = (
+        "function Endless_Winter_Hit(agent thisagent, agent target)",
+        "function Endless_Winter_Check(agent thisagent) is integer",
+        "cast_range = $Phantom_effective_casting_range(thisagent);",
+        "targets = $compile_enemies(thisagent, cast_range);",
+        "closest_enemy = $Pick_Closest(thisagent, targets);",
+        "If ($isvalidgamepiece(target))",
+        "If ($IsDead(target) == False)",
+        "If ($AgentInList(target, targets))",
+        "closest_distance = $DistanceBetweenAgents(thisagent, closest_enemy);",
+        "target_distance = $DistanceBetweenAgents(thisagent, target);",
+        "If (target_distance == closest_distance)",
+        "closest_enemy = target;",
+        '$CreateSpellUnit(thisagent, "endless_winter_storm", closest_enemy);',
+        "function Endless_Winter_Unit_Created(agent thisagent, agent target)",
+        "$SetParent(thisagent, target);",
+        '$GetSpellAttribute("endless_winter", "effector_duration")',
+        '"endless_winter_vortex_effector"',
+        '$AddAttribute(',
+        '"EndlessWinterTracking"',
+        "$Endless_Winter_Track",
+        '"EndlessWinterCleanup"',
+        '"function"',
+        "$Endless_Winter_Cleanup",
+        '$RunThread(',
+        'thisagent\'s "EndlessWinterCleanup"',
+        "duration + 100",
+        '$NewThread(thisagent\'s "EndlessWinterTracking", 25, thisagent);',
+        '$NewThread(thisagent\'s "activeScript", 1600, thisagent);',
+        "$Endless_Winter_Track(thisagent);",
+        "$Endless_Winter_Active(thisagent);",
+        "function Endless_Winter_Cleanup(agent thisagent)",
+        '$KillThread(thisagent\'s "EndlessWinterTracking");',
+        '$KillThread(thisagent\'s "activeScript");',
+        "$DeleteGamePiece(thisagent);",
+        "function Endless_Winter_Track(agent thisagent)",
+        "function Endless_Winter_Active(agent thisagent)",
+        "tracked_target = $Parent(thisagent);",
+        "anchor_location = $LocationOf(thisagent);",
+        "target_location = $LocationOf(tracked_target);",
+        "$GetX(anchor_location) != $GetX(target_location)",
+        "$GetY(anchor_location) != $GetY(target_location)",
+        "$TeleportToUnit(thisagent, 50000, tracked_target, 0);",
+        "targets = $compile_enemies(thisagent, 175);",
+        "distance = $DistanceBetweenCoords(",
+        "$LocationOf(thisagent),",
+        "$LocationOf(target)",
+        "distance <= #Phantom_Icy_Touch_Range",
+        '$CreateMissile("endless_winter_missile", thisagent, target);',
+        "distance <= 80",
+        '$CreateMissile("endless_winter_missile_middle", thisagent, target);',
+        '$CreateMissile("endless_winter_missile_outer", thisagent, target);',
+        "function Endless_Winter_Inner_Missile_Hit(agent thisagent, agent target)",
+        "$Endless_Winter_Missile_Hit(target, 8, 2);",
+        "function Endless_Winter_Middle_Missile_Hit(agent thisagent, agent target)",
+        "$Endless_Winter_Missile_Hit(target, 6, 1);",
+        "function Endless_Winter_Outer_Missile_Hit(agent thisagent, agent target)",
+        "$Endless_Winter_Missile_Hit(target, 4, 1);",
+        "function Endless_Winter_Missile_Hit(agent target, integer damage, integer chill_tier)",
+        '$CreateEffector(target, "endless_winter_hit_effector", 0);',
+        "$player_spell_attack(target, damage, damage);",
+        "$Phantom_Apply_Chill_Tier(",
+        '$GetSpellAttribute("ice_lance", "effector_duration")',
+    )
+    missing_runtime = [
+        value for value in runtime_contract if value not in gpl
+    ]
+    if missing_runtime:
+        fail(
+            f"{gpl_path}: Endless Winter diverges from its finalized runtime "
+            f"contract {missing_runtime}"
+        )
+    runtime_start = gpl.index(
+        "function Endless_Winter_Hit(agent thisagent, agent target)"
+    )
+    runtime_end = gpl.index(
+        "function Blizzard_Check(agent thisagent) is integer",
+        runtime_start,
+    )
+    runtime = gpl[runtime_start:runtime_end]
+    forbidden_runtime = (
+        '"EndlessWinterTarget"',
+        "$Phantom_Apply_Chill(",
+        "$spell_attack(",
+        "$DistanceBetweenAgents(thisagent, tracked_target)",
+        '$CreateSpellUnit(thisagent, "endless_winter_storm", thisagent);',
+        "meteor_storm_unit_created",
+        "$meteor_storm_active(",
+        '"meteor_storm_missile"',
+        '"meteor_storm_effector2"',
+        '$NewThread(thisagent\'s "activeScript", 1600, thisagent, target);',
+        "function Endless_Winter_Active(agent thisagent, agent tracked_target)",
+        'thisagent\'s "Target" = target;',
+    )
+    present_forbidden_runtime = [
+        value for value in forbidden_runtime if value in runtime
+    ]
+    if present_forbidden_runtime:
+        fail(
+            f"{gpl_path}: Phantom visual shell contains non-stock mechanics "
+            f"{present_forbidden_runtime}"
+        )
+    selection_start = runtime.index(
+        "function Endless_Winter_Hit(agent thisagent, agent target)"
+    )
+    closest_pick = runtime.index(
+        "closest_enemy = $Pick_Closest(thisagent, targets);",
+        selection_start,
+    )
+    current_valid = runtime.index(
+        "If ($isvalidgamepiece(target))",
+        closest_pick,
+    )
+    current_alive = runtime.index(
+        "If ($IsDead(target) == False)",
+        current_valid,
+    )
+    current_eligible = runtime.index(
+        "If ($AgentInList(target, targets))",
+        current_alive,
+    )
+    closest_distance = runtime.index(
+        "closest_distance = $DistanceBetweenAgents(thisagent, closest_enemy);",
+        current_eligible,
+    )
+    current_distance = runtime.index(
+        "target_distance = $DistanceBetweenAgents(thisagent, target);",
+        closest_distance,
+    )
+    tied_distance = runtime.index(
+        "If (target_distance == closest_distance)",
+        current_distance,
+    )
+    prefer_current = runtime.index(
+        "closest_enemy = target;",
+        tied_distance,
+    )
+    create_storm = runtime.index(
+        '$CreateSpellUnit(thisagent, "endless_winter_storm", closest_enemy);',
+        prefer_current,
+    )
+    if not (
+        closest_pick
+        < current_valid
+        < current_alive
+        < current_eligible
+        < closest_distance
+        < current_distance
+        < tied_distance
+        < prefer_current
+        < create_storm
+    ):
+        fail(
+            f"{gpl_path}: Endless Winter must retain stock closest-target "
+            "selection and prefer the current live eligible combat target only "
+            "when its stock distance exactly ties the closest candidate"
+        )
+    if (
+        runtime.count("closest_enemy = target;") != 1
+        or runtime.count("If (target_distance == closest_distance)") != 1
+    ):
+        fail(
+            f"{gpl_path}: Endless Winter current-target tie preference must "
+            "occur exactly once"
+        )
+    active_start = runtime.index(
+        "function Endless_Winter_Active(agent thisagent)"
+    )
+    inner_tier = runtime.index(
+        "distance <= #Phantom_Icy_Touch_Range"
+        , active_start
+    )
+    inner_missile = runtime.index(
+        '$CreateMissile("endless_winter_missile", thisagent, target);',
+        inner_tier,
+    )
+    middle_tier = runtime.index(
+        "distance <= 80",
+        inner_missile,
+    )
+    middle_missile = runtime.index(
+        '$CreateMissile("endless_winter_missile_middle", thisagent, target);',
+        middle_tier,
+    )
+    outer_missile = runtime.index(
+        '$CreateMissile("endless_winter_missile_outer", thisagent, target);',
+        middle_missile,
+    )
+    inner_callback = runtime.index(
+        "function Endless_Winter_Inner_Missile_Hit(agent thisagent, agent target)",
+        outer_missile,
+    )
+    active_block = runtime[active_start:inner_callback]
+    if "$DistanceBetweenAgents(" in active_block:
+        fail(
+            f"{gpl_path}: Endless Winter radial damage tiers must use "
+            "center-to-center coordinate distance, not agent-edge distance"
+        )
+    inner_route = runtime.index(
+        "$Endless_Winter_Missile_Hit(target, 8, 2);",
+        inner_callback,
+    )
+    middle_callback = runtime.index(
+        "function Endless_Winter_Middle_Missile_Hit(agent thisagent, agent target)",
+        inner_route,
+    )
+    middle_route = runtime.index(
+        "$Endless_Winter_Missile_Hit(target, 6, 1);",
+        middle_callback,
+    )
+    outer_callback = runtime.index(
+        "function Endless_Winter_Outer_Missile_Hit(agent thisagent, agent target)",
+        middle_route,
+    )
+    outer_route = runtime.index(
+        "$Endless_Winter_Missile_Hit(target, 4, 1);",
+        outer_callback,
+    )
+    common_hit = runtime.index(
+        "function Endless_Winter_Missile_Hit(agent target, integer damage, integer chill_tier)",
+        outer_route,
+    )
+    damage_application = runtime.index(
+        "$player_spell_attack(target, damage, damage);",
+        common_hit,
+    )
+    chill_application = runtime.index(
+        "$Phantom_Apply_Chill_Tier(",
+        damage_application,
+    )
+    if not (
+        inner_tier
+        < inner_missile
+        < middle_tier
+        < middle_missile
+        < outer_missile
+        < inner_callback
+        < inner_route
+        < middle_callback
+        < middle_route
+        < outer_callback
+        < outer_route
+        < common_hit
+        < damage_application
+        < chill_application
+    ):
+        fail(
+            f"{gpl_path}: Endless Winter must select the radial tier at the "
+            "storm anchor before launch, route each identical-looking missile "
+            "to its fixed damage/Chill callback, then apply Chill after damage"
+        )
+    if (
+        runtime.count("$DistanceBetweenCoords(") != 1
+        or runtime.count("$LocationOf(thisagent),") != 1
+        or runtime.count("$LocationOf(target)") != 1
+        or runtime.count(
+            '$CreateMissile("endless_winter_missile", thisagent, target);'
+        )
+        != 1
+        or runtime.count(
+            '$CreateMissile("endless_winter_missile_middle", thisagent, target);'
+        )
+        != 1
+        or runtime.count(
+            '$CreateMissile("endless_winter_missile_outer", thisagent, target);'
+        )
+        != 1
+        or runtime.count("$Endless_Winter_Missile_Hit(target, 8, 2);") != 1
+        or runtime.count("$Endless_Winter_Missile_Hit(target, 6, 1);") != 1
+        or runtime.count("$Endless_Winter_Missile_Hit(target, 4, 1);") != 1
+        or runtime.count("$Phantom_Apply_Chill_Tier(") != 1
+    ):
+        fail(
+            f"{gpl_path}: Endless Winter radial routing must be exclusive and "
+            "must use one center-to-center coordinate measurement and apply "
+            "exactly one fixed damage/Chill tier per impact"
+        )
+    schedule = runtime.index(
+        '$NewThread(thisagent\'s "activeScript", 1600, thisagent);'
+    )
+    tracking_schedule = runtime.index(
+        '$NewThread(thisagent\'s "EndlessWinterTracking", 25, thisagent);'
+    )
+    cleanup_schedule = runtime.index(
+        'thisagent\'s "EndlessWinterCleanup"',
+    )
+    immediate_tracking = runtime.index(
+        "$Endless_Winter_Track(thisagent);",
+        tracking_schedule,
+    )
+    immediate_pulse = runtime.index(
+        "$Endless_Winter_Active(thisagent);",
+        schedule,
+    )
+    cleanup_start = runtime.index(
+        "function Endless_Winter_Cleanup(agent thisagent)"
+    )
+    cleanup_tracking_kill = runtime.index(
+        '$KillThread(thisagent\'s "EndlessWinterTracking");',
+        cleanup_start,
+    )
+    cleanup_active_kill = runtime.index(
+        '$KillThread(thisagent\'s "activeScript");',
+        cleanup_tracking_kill,
+    )
+    cleanup_delete = runtime.index(
+        "$DeleteGamePiece(thisagent);",
+        cleanup_active_kill,
+    )
+    tracking_start = runtime.index(
+        "function Endless_Winter_Track(agent thisagent)",
+        cleanup_delete,
+    )
+    tracking_read = runtime.index(
+        "tracked_target = $Parent(thisagent);",
+        tracking_start,
+    )
+    anchor_location_read = runtime.index(
+        "anchor_location = $LocationOf(thisagent);",
+        tracking_read,
+    )
+    target_location_read = runtime.index(
+        "target_location = $LocationOf(tracked_target);",
+        anchor_location_read,
+    )
+    x_guard = runtime.index(
+        "$GetX(anchor_location) != $GetX(target_location)",
+        target_location_read,
+    )
+    y_guard = runtime.index(
+        "$GetY(anchor_location) != $GetY(target_location)",
+        x_guard,
+    )
+    relocation = runtime.index(
+        "$TeleportToUnit(thisagent, 50000, tracked_target, 0);",
+        y_guard,
+    )
+    active_start = runtime.index(
+        "function Endless_Winter_Active(agent thisagent)",
+        relocation,
+    )
+    pulse_scan = runtime.index(
+        "targets = $compile_enemies(thisagent, 175);",
+        active_start,
+    )
+    if not (
+        cleanup_schedule
+        < tracking_schedule
+        < schedule
+        < immediate_tracking
+        < immediate_pulse
+        < cleanup_start
+        < cleanup_tracking_kill
+        < cleanup_active_kill
+        < cleanup_delete
+        < tracking_start
+        < tracking_read
+        < anchor_location_read
+        < target_location_read
+        < x_guard
+        < y_guard
+        < relocation
+        < active_start
+        < pulse_scan
+    ):
+        fail(
+            f"{gpl_path}: Endless Winter must recover its engine-managed parent "
+            "target, explicitly terminate its periodic thread and host at the "
+            "visual lifetime boundary, track exact world-coordinate movement "
+            "independently from damage, skip Majesty's unsafe zero-distance "
+            "teleport, relocate when needed, then scan the impact radius on "
+            "the stock pulse cadence"
         )
 
 
@@ -3321,6 +3890,131 @@ def validate(output_root: Path) -> None:
     maindata_path = output_root / "Data" / "phantom_maindata.cam"
     sections, captured = archive_results["phantom_maindata.cam"]
     validate_custom_tile_references(maindata_path, sections, captured)
+    required_winter_images = (
+        b"PHw1Winter Storm",
+        b"PHw2Winter Hit",
+        b"PHw3Winter Missile",
+        b"PHw4Winter Flakes",
+        b"PHw5Missile Flakes",
+        b"PHw6Winter Anchor",
+    )
+    missing_winter_images = [
+        name for name in required_winter_images if (b"IMAG", name) not in captured
+    ]
+    if missing_winter_images:
+        fail(
+            f"{maindata_path}: Phantom-only Endless Winter images are missing "
+            f"{missing_winter_images}"
+        )
+    forbidden_stock_winter_images = (
+        b"WRg1meteor_swarm_E1",
+        b"WRg2meteor_blast",
+        b"WPg3meteor_missile",
+        b"XL20MeteorStrmEffct",
+        b"XL21MeteorStrmMiss",
+    )
+    present_stock_winter_images = [
+        name
+        for name in forbidden_stock_winter_images
+        if (b"IMAG", name) in captured
+    ]
+    if present_stock_winter_images:
+        fail(
+            f"{maindata_path}: mod overrides stock Wizard Meteor Storm images "
+            f"{present_stock_winter_images}"
+        )
+    winter_storm_image = captured[(b"IMAG", b"PHw1Winter Storm")]
+    winter_missile_image = captured[(b"IMAG", b"PHw3Winter Missile")]
+    winter_anchor_image = captured[(b"IMAG", b"PHw6Winter Anchor")]
+    if b"XL20" in winter_storm_image or b"PHW4" not in winter_storm_image:
+        fail(
+            f"{maindata_path}: Endless Winter storm still references the "
+            "stock orange XL20 particle attachment"
+        )
+    if b"XL21" in winter_missile_image or b"PHW5" not in winter_missile_image:
+        fail(
+            f"{maindata_path}: Endless Winter missile still references the "
+            "stock orange XL21 particle attachment"
+        )
+    if b"PHW4" in winter_anchor_image or b"XL20" in winter_anchor_image:
+        fail(
+            f"{maindata_path}: invisible Endless Winter anchor still contains "
+            "a visible storm particle attachment"
+        )
+    winter_tile_groups = {
+        prefix: [
+            entry.name.rstrip(b"\x00")
+            for entry in sections.get(b"TILE", [])
+            if entry.name.rstrip(b"\x00").startswith(prefix)
+        ]
+        for prefix in (
+            b"PHw1Storm",
+            b"PHw2Hit",
+            b"PHw3Snow",
+            b"PHw4Flake",
+            b"PHw5Flake",
+            b"PHw6Anchor",
+        )
+    }
+    expected_winter_tile_counts = {
+        b"PHw1Storm": 15,
+        b"PHw2Hit": 8,
+        b"PHw3Snow": 4,
+        b"PHw4Flake": 13,
+        b"PHw5Flake": 7,
+        b"PHw6Anchor": 1,
+    }
+    wrong_winter_counts = {
+        prefix: len(winter_tile_groups[prefix])
+        for prefix, expected in expected_winter_tile_counts.items()
+        if len(winter_tile_groups[prefix]) != expected
+    }
+    if wrong_winter_counts:
+        fail(
+            f"{maindata_path}: Phantom-only Endless Winter TILE counts are "
+            f"wrong {wrong_winter_counts}"
+        )
+    minimum_unique_winter_frames = {
+        b"PHw1Storm": 10,
+        b"PHw2Hit": 6,
+        b"PHw3Snow": 4,
+        b"PHw4Flake": 8,
+        b"PHw5Flake": 5,
+    }
+    for prefix, minimum_unique in minimum_unique_winter_frames.items():
+        frames = [
+            captured[(b"TILE", name)] for name in winter_tile_groups[prefix]
+        ]
+        unique_count = len(set(frames))
+        if unique_count < minimum_unique:
+            fail(
+                f"{maindata_path}: {prefix!r} has only {unique_count} unique "
+                f"frames; expected at least {minimum_unique} animated phases"
+            )
+        frame_dimensions = {
+            (
+                struct.unpack_from("<H", frame, 4)[0],
+                struct.unpack_from("<H", frame, 2)[0],
+            )
+            for frame in frames
+        }
+        if len(frame_dimensions) != 1:
+            fail(
+                f"{maindata_path}: {prefix!r} does not use a fixed frame "
+                f"canvas; dimensions={sorted(frame_dimensions)}"
+            )
+    invisible_snowflake_tiles = [
+        entry.name.rstrip(b"\x00")
+        for entry in sections.get(b"TILE", [])
+        if entry.name.rstrip(b"\x00").startswith(b"PHw3Snow")
+        and indexed_v3_body_bounds(captured[(b"TILE", entry.name.rstrip(b"\x00"))])
+        is None
+    ]
+    if invisible_snowflake_tiles:
+        fail(
+            f"{maindata_path}: Phantom-only snowflake missile has blank phases "
+            f"{invisible_snowflake_tiles}"
+        )
     phantom_image = captured.get((b"IMAG", b"PHM1Phantom"))
     if phantom_image is None:
         fail(f"{maindata_path}: IMAG/PHM1Phantom was not found")
