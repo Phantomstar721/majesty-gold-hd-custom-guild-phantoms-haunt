@@ -97,7 +97,7 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
         b"STRT": {b"UNTN", b"ACTN", b"AP07"},
     },
     "phantom_gpltext.cam": {
-        b"STRT": {b"QITM", b"HPTX"},
+        b"STRT": {b"QITM", b"AITX", b"HPTX"},
     },
     "phantom_maindata.cam": {
         b"IMAG": {
@@ -313,6 +313,27 @@ def parse_xml(path: Path) -> ET.ElementTree:
 def validate_manifest(output_root: Path) -> None:
     manifest_path = output_root / "PhantomGuildPoc.mmxml"
     tree = parse_xml(manifest_path)
+    root = tree.getroot()
+    mods = root.findall("./Mod")
+    if len(mods) != 1:
+        fail(
+            f"{manifest_path}: package must expose exactly one selectable mod; "
+            f"found {len(mods)}"
+        )
+    configurations = mods[0].findall("./DataConfiguration")
+    if len(configurations) != 1:
+        fail(
+            f"{manifest_path}: mod must contain exactly one DataConfiguration; "
+            f"found {len(configurations)}"
+        )
+    datasets = configurations[0].findall("./Dataset")
+    if len(datasets) != 1 or datasets[0].get("base") != "Any":
+        dataset_bases = [dataset.get("base") for dataset in datasets]
+        fail(
+            f"{manifest_path}: universal package must contain exactly one "
+            f'Dataset with base="Any"; found {dataset_bases}'
+        )
+
     referenced: set[Path] = set()
     for element_name in ("CAM", "Descriptions", "Target", "Source"):
         for element in tree.findall(f".//{element_name}"):
@@ -3767,13 +3788,228 @@ def validate_phantom_healing_contract(output_root: Path) -> None:
         )
 
 
+def validate_paladin_recruitment_restriction(output_root: Path) -> None:
+    building_data_path = output_root / "GPL" / "Phantom_Building_Data.dat"
+    building_data = building_data_path.read_text(encoding="utf-8")
+    building_contract = (
+        "(birthscript Phantoms_Haunt_Construction_Birth)",
+        "(birthScript2 Phantoms_Haunt_Birth)",
+        "(IGdeathscript Phantoms_Haunt_Destroyed)",
+    )
+    missing_building_contract = [
+        value for value in building_contract if value not in building_data
+    ]
+    if missing_building_contract:
+        fail(
+            f"{building_data_path}: Paladin availability lifecycle is missing "
+            f"{missing_building_contract}"
+        )
+    stale_lifecycle = (
+        "(birthscript basic_birth)",
+        "(birthScript2 Guild_Birth)",
+        "(IGdeathscript guild_destroyed_a)",
+    )
+    present_stale = [value for value in stale_lifecycle if value in building_data]
+    if present_stale:
+        fail(
+            f"{building_data_path}: Phantoms Haunt still bypasses its Paladin "
+            f"availability wrappers {present_stale}"
+        )
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    required_functions = (
+        "Function Phantom_Player_Has_Placed_Haunt(agent ThisAgent) is boolean",
+        "Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)",
+        "Function Phantoms_Haunt_Birth(agent ThisAgent)",
+        "Function Phantoms_Haunt_Destroyed(agent ThisAgent)",
+        "Function Random_Warriors_Guild_Hero_Type(agent ThisAgent) is string",
+        "Function Random_Hero_Type(agent ThisAgent) is string",
+    )
+    missing_functions = [value for value in required_functions if value not in gpl]
+    if missing_functions:
+        fail(
+            f"{gpl_path}: Paladin recruitment restriction is missing "
+            f"{missing_functions}"
+        )
+    duplicated_functions = [
+        value for value in required_functions if gpl.count(value) != 1
+    ]
+    if duplicated_functions:
+        fail(
+            f"{gpl_path}: Paladin restriction functions must each appear once "
+            f"{duplicated_functions}"
+        )
+    if "Function Embassy_Spawn" in gpl:
+        fail(
+            f"{gpl_path}: Embassy_Spawn must remain stock; restrict only its "
+            "random hero selectors"
+        )
+
+    predicate_start = gpl.index(required_functions[0])
+    predicate_end = gpl.index(required_functions[1], predicate_start)
+    predicate = gpl[predicate_start:predicate_end]
+    predicate_contract = (
+        '#CheckTitles,\n\t\t"Phantoms_Haunt"',
+        "return ($ListSize(Haunts) > 0);",
+    )
+    missing_predicate = [
+        value for value in predicate_contract if value not in predicate
+    ]
+    if missing_predicate:
+        fail(
+            f"{gpl_path}: placed same-player Haunt predicate is malformed "
+            f"{missing_predicate}"
+        )
+    if "#ATTRIB_FirstStageBuilt" in predicate:
+        fail(
+            f"{gpl_path}: placed-Haunt restriction must include unfinished "
+            "foundations"
+        )
+
+    construction_start = gpl.index(required_functions[1])
+    construction_end = gpl.index(required_functions[2], construction_start)
+    construction = gpl[construction_start:construction_end]
+    construction_contract = (
+        "$basic_birth(ThisAgent);",
+        '"Hero",',
+        '"Paladin"',
+        '$DisableUnitType("Paladin");',
+        "If ($ListSize(Haunts) == 0)",
+        "If ($ListSize(Paladins) > 0)",
+        "#Phantom_Paladin_Warning_Message",
+        "$MessageFlag(",
+        '"Advisor_Message_Arrive"',
+        "$LocalChatMessage(",
+    )
+    missing_construction = [
+        value for value in construction_contract if value not in construction
+    ]
+    if missing_construction:
+        fail(
+            f"{gpl_path}: Haunt foundation restriction/warning is malformed "
+            f"{missing_construction}"
+        )
+    if not (
+        construction.index("$basic_birth(ThisAgent);")
+        < construction.index("$ListObjects(")
+        < construction.rindex("$ListObjects(")
+        < construction.index('$DisableUnitType("Paladin");')
+        < construction.index("$MessageFlag(")
+        < construction.index("$LocalChatMessage(")
+    ):
+        fail(
+            f"{gpl_path}: Haunt construction must preserve basic_birth before "
+            "enumerating Haunts and Paladins, disabling recruitment, and warning "
+            "the player"
+        )
+    if construction.count("$ListObjects(") != 2:
+        fail(
+            f"{gpl_path}: Haunt construction must enumerate exactly the existing "
+            "Haunts and living Paladins before deciding whether to warn"
+        )
+
+    birth_start = gpl.index(required_functions[2])
+    birth_end = gpl.index(required_functions[3], birth_start)
+    birth = gpl[birth_start:birth_end]
+    birth_contract = (
+        "$Guild_Birth(ThisAgent);",
+        '"Hero",',
+        '"Paladin"',
+        "Foreach Paladin in Paladins do",
+        "If ($IsDead(Paladin) == False)",
+        "$Unit_Dismissed(Paladin);",
+    )
+    missing_birth = [value for value in birth_contract if value not in birth]
+    if missing_birth:
+        fail(
+            f"{gpl_path}: completed Haunt Paladin dismissal is malformed "
+            f"{missing_birth}"
+        )
+    if not (
+        birth.index("$Guild_Birth(ThisAgent);")
+        < birth.index("$ListObjects(")
+        < birth.index("Foreach Paladin in Paladins do")
+        < birth.index("$Unit_Dismissed(Paladin);")
+    ):
+        fail(
+            f"{gpl_path}: completion must preserve Guild_Birth before "
+            "irreversibly dismissing living Paladins"
+        )
+
+    death_start = gpl.index(required_functions[3])
+    death_end = gpl.index(required_functions[4], death_start)
+    death = gpl[death_start:death_end]
+    death_contract = (
+        'If ($ListSize(Haunts) == 0)',
+        '$EnableUnitType("Paladin");',
+        "$guild_destroyed_common(ThisAgent, $Homeless);",
+    )
+    missing_death = [value for value in death_contract if value not in death]
+    if missing_death:
+        fail(
+            f"{gpl_path}: last-placed-Haunt destruction contract is "
+            f"malformed {missing_death}"
+        )
+    if "#ATTRIB_FirstStageBuilt" in death:
+        fail(
+            f"{gpl_path}: foundation destruction must restore Paladins when "
+            "the final placed Haunt is removed"
+        )
+    if not (
+        death.index("$ListObjects(")
+        < death.index('$EnableUnitType("Paladin");')
+        < death.index("$guild_destroyed_common(ThisAgent, $Homeless);")
+    ):
+        fail(
+            f"{gpl_path}: Haunt destruction must re-enable Paladins before "
+            "running the stock guild destruction flow"
+        )
+
+    warriors_start = gpl.index(required_functions[4])
+    warriors_end = gpl.index(required_functions[5], warriors_start)
+    warriors = gpl[warriors_start:warriors_end]
+    warriors_filtered_end = warriors.index("Random = $RandomNumber(3) + 1;")
+    warriors_filtered = warriors[:warriors_filtered_end]
+    if (
+        "Random = $RandomNumber(2) + 1;" not in warriors_filtered
+        or '"Paladin"' in warriors_filtered
+        or 'return "Paladin";' not in warriors[warriors_filtered_end:]
+    ):
+        fail(
+            f"{gpl_path}: Warriors Guild Embassy selection must omit Paladins "
+            "only while a placed Haunt exists"
+        )
+
+    random_start = gpl.index(required_functions[5])
+    random_end = gpl.index("function spell_extra_value", random_start)
+    random_hero = gpl[random_start:random_end]
+    random_filtered_end = random_hero.index("Random = $RandomNumber(16) + 1;")
+    random_filtered = random_hero[:random_filtered_end]
+    random_stock = random_hero[random_filtered_end:]
+    random_guard = (
+        'ThisAgent\'s "Title" == "Embassy" || '
+        'ThisAgent\'s "Subtype" == "Outpost"'
+    )
+    if (
+        random_guard not in random_filtered
+        or "Random = $RandomNumber(15) + 1;" not in random_filtered
+        or '"Paladin"' in random_filtered
+        or 'return "Paladin";' not in random_stock
+    ):
+        fail(
+            f"{gpl_path}: Embassy/Outpost random hero selection must omit "
+            "Paladins while preserving the stock fallback for quest events"
+        )
+
+
 def validate_deal_demon_test_setup(output_root: Path) -> None:
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
     contract = (
         'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
-        'elf_guild = $SpawnUnit(palace, "Elven_Bungalow"',
-        'agrela_temple = $SpawnUnit(palace, "Temple_Agrela1"',
+        'dauros_temple = $SpawnUnit(palace, "Temple_Dauros1"',
+        'embassy = $SpawnUnit(palace, "Embassy"',
         "Foreach Guild in Guilds do",
         'Guild\'s "SpecialScript" = $Hero_Generator;',
         '$NewThread( Guild\'s "SpecialScript", 60000 + $randomnumber(60000), Guild );',
@@ -3785,12 +4021,12 @@ def validate_deal_demon_test_setup(output_root: Path) -> None:
         )
 
     deal = gpl.index("function DEAL_DEMON()")
-    deal_end = gpl.index("Function Potion_Check", deal)
+    deal_end = gpl.index("function RISE_RATMEN()", deal)
     deal_gpl = gpl[deal:deal_end]
     forbidden_player_generators = (
         'phantoms_haunt\'s "SpecialScript"',
-        'elf_guild\'s "SpecialScript"',
-        'agrela_temple\'s "SpecialScript"',
+        'dauros_temple\'s "SpecialScript"',
+        'embassy\'s "SpecialScript"',
     )
     present_forbidden = [
         value for value in forbidden_player_generators if value in deal_gpl
@@ -3813,30 +4049,83 @@ def validate_deal_demon_test_setup(output_root: Path) -> None:
         'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
         stock_thread,
     )
-    elf_spawn = deal_gpl.index(
-        'elf_guild = $SpawnUnit(palace, "Elven_Bungalow"',
+    dauros_spawn = deal_gpl.index(
+        'dauros_temple = $SpawnUnit(palace, "Temple_Dauros1"',
         phantom_spawn,
     )
-    agrela_spawn = deal_gpl.index(
-        'agrela_temple = $SpawnUnit(palace, "Temple_Agrela1"',
-        elf_spawn,
+    embassy_spawn = deal_gpl.index(
+        'embassy = $SpawnUnit(palace, "Embassy"',
+        dauros_spawn,
     )
     if not (
         stock_loop
         < stock_generator
         < stock_thread
         < phantom_spawn
-        < elf_spawn
-        < agrela_spawn
+        < dauros_spawn
+        < embassy_spawn
     ):
         fail(
             f"{gpl_path}: stock enemy guild generation and player test "
             "building spawn order are malformed"
         )
-    if '$SpawnUnit(palace, "Temple_Agrela",' in gpl:
+    forbidden_old_test_spawns = (
+        '$SpawnUnit(palace, "Temple_Agrela1"',
+        '$SpawnUnit(palace, "Elven_Bungalow"',
+    )
+    present_old_spawns = [
+        value for value in forbidden_old_test_spawns if value in deal_gpl
+    ]
+    if present_old_spawns:
         fail(
-            f"{gpl_path}: Temple_Agrela is a runtime title; scripted spawning "
-            "must use the level-one prototype Temple_Agrela1"
+            f"{gpl_path}: Deal with the Demon retains obsolete test buildings "
+            f"{present_old_spawns}"
+        )
+
+
+def validate_rise_ratmen_test_setup(output_root: Path) -> None:
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    rise_start = gpl.index("function RISE_RATMEN()")
+    rise_end = gpl.index("Function Potion_Check", rise_start)
+    rise = gpl[rise_start:rise_end]
+    contract = (
+        'AIRootAgent\'s "Quest_Number" = #QNumber_rise_ratmen;',
+        "$Setup_Quest_Music(AiRootAgent);",
+        'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
+        'dauros_temple = $SpawnUnit(palace, "Temple_Dauros1"',
+        'warriors_guild = $SpawnUnit(palace, "Warriors_Guild"',
+        'embassy = $SpawnUnit(palace, "Embassy"',
+        'AIRootAgent\'s "VictoryCondition" = $ratmen_victory;',
+        'AIRootAgent\'s "VictoryCondition2" = $ratmen_Events;',
+        '$NewThread(AIRootAgent\'s "VictoryCondition2", $random_time(210000));',
+    )
+    missing = [value for value in contract if value not in rise]
+    if missing:
+        fail(
+            f"{gpl_path}: Rise of the Ratmen expansion test setup is missing "
+            f"{missing}"
+        )
+
+    ordered = [rise.index(value) for value in contract]
+    if ordered != sorted(ordered):
+        fail(
+            f"{gpl_path}: Rise of the Ratmen stock setup and test-building "
+            "spawn order are malformed"
+        )
+    forbidden_generators = (
+        'phantoms_haunt\'s "SpecialScript"',
+        'dauros_temple\'s "SpecialScript"',
+        'warriors_guild\'s "SpecialScript"',
+        'embassy\'s "SpecialScript"',
+    )
+    present_forbidden = [
+        value for value in forbidden_generators if value in rise
+    ]
+    if present_forbidden:
+        fail(
+            f"{gpl_path}: Rise of the Ratmen player test buildings must not "
+            f"run Hero_Generator {present_forbidden}"
         )
 
 
@@ -3858,7 +4147,9 @@ def validate(output_root: Path) -> None:
     validate_phantom_potion_purchase_contract(output_root)
     validate_phantom_equipment_upgrade_contract(output_root)
     validate_phantom_healing_contract(output_root)
+    validate_paladin_recruitment_restriction(output_root)
     validate_deal_demon_test_setup(output_root)
+    validate_rise_ratmen_test_setup(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:
@@ -3874,6 +4165,29 @@ def validate(output_root: Path) -> None:
     if qitm is None:
         fail(f"{gpltext_path}: STRT/QITM was not found")
     validate_indexed_item_strings(gpltext_path, qitm)
+    advisor_text = archive_results["phantom_gpltext.cam"][1].get(
+        (b"STRT", b"AITX")
+    )
+    if advisor_text is None:
+        fail(f"{gpltext_path}: STRT/AITX was not found")
+    advisor_count = struct.unpack_from("<H", advisor_text, 0)[0]
+    if advisor_count <= 177:
+        fail(
+            f"{gpltext_path}: STRT/AITX has {advisor_count} strings; "
+            "Paladin construction warning requires slot 177"
+        )
+    warning_offset = struct.unpack_from("<I", advisor_text, 4 + 177 * 4)[0]
+    warning_id = struct.unpack_from("<I", advisor_text, warning_offset)[0]
+    warning_end = advisor_text.index(b"\x00", warning_offset + 4)
+    warning_text = advisor_text[warning_offset + 4 : warning_end]
+    if warning_id != 177 or b"\x01" in warning_text or (
+        b"Completing this Phantoms Haunt will cause all Paladins to leave Ardania"
+        not in warning_text
+    ):
+        fail(
+            f"{gpltext_path}: STRT/AITX slot 177 is not the known-good "
+            "plain-text Paladin construction warning"
+        )
 
     textdata_path = output_root / "Data" / "phantom_textdata.cam"
     textdata_captured = archive_results["phantom_textdata.cam"][1]
@@ -3886,6 +4200,14 @@ def validate(output_root: Path) -> None:
     help_text = archive_results["phantom_gpltext.cam"][1].get((b"STRT", b"HPTX"))
     if help_text is None or b"The Phantoms Haunt gathers" not in help_text:
         fail(f"{gpltext_path}: building help text was not renamed to Phantoms Haunt")
+    if (
+        b"Starting construction prevents Paladin recruitment" not in help_text
+        or b"all existing Paladins to leave Ardania" not in help_text
+    ):
+        fail(
+            f"{gpltext_path}: Phantoms Haunt help text does not warn about "
+            "the Paladin incompatibility"
+        )
 
     maindata_path = output_root / "Data" / "phantom_maindata.cam"
     sections, captured = archive_results["phantom_maindata.cam"]

@@ -1095,9 +1095,9 @@ def phantom_building_data() -> str:
 \t\t(max_members 4)
 \t\t(Lived_In_Script Phantom_Lived_In)
 \t\t(Sleep_for 30000)
-\t\t(birthscript basic_birth)
-\t\t(birthScript2 Guild_Birth)
-\t\t(IGdeathscript guild_destroyed_a)
+\t\t(birthscript Phantoms_Haunt_Construction_Birth)
+\t\t(birthScript2 Phantoms_Haunt_Birth)
+\t\t(IGdeathscript Phantoms_Haunt_Destroyed)
 \t\t(upgradescript basic_upgrade)
 \t\t(Armor_Physical_Base 10)
 \t\t(Armor_Magical_Base 10)
@@ -1125,7 +1125,228 @@ def phantom_gpl() -> str:
     item_expressions += "expression #Phantom_Call_To_Grave_Confidence 10\n"
     item_expressions += "expression #Phantom_Eternal_Soul_Confidence 25\n"
     item_expressions += "expression #Phantom_Endless_Winter_Confidence 30\n"
+    item_expressions += "expression #Phantom_Paladin_Warning_Message 177\n"
     return item_expressions + """
+
+Function Phantom_Player_Has_Placed_Haunt(agent ThisAgent) is boolean
+
+Declare
+\tlist Haunts;
+
+Begin
+\t$ListObjects(
+\t\tThisAgent,
+\t\t"Building",
+\t\t-1,
+\t\tHaunts,
+\t\t#MyPlayer,
+\t\t#CheckTitles,
+\t\t"Phantoms_Haunt"
+\t);
+\treturn ($ListSize(Haunts) > 0);
+End
+
+Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)
+
+Declare
+\tlist Haunts, Paladins;
+
+Begin
+\t$basic_birth(ThisAgent);
+
+\tIf ($GetUnitPlayerNumber(ThisAgent) != #Monster_Player)
+\t\tbegin
+\t\t\t$ListObjects(
+\t\t\t\tThisAgent,
+\t\t\t\t"Building",
+\t\t\t\t-1,
+\t\t\t\tHaunts,
+\t\t\t\t#MyPlayer,
+\t\t\t\t#CheckTitles,
+\t\t\t\t"Phantoms_Haunt"
+\t\t\t);
+
+\t\t\t$ListObjects(
+\t\t\t\tThisAgent,
+\t\t\t\t"Hero",
+\t\t\t\t-1,
+\t\t\t\tPaladins,
+\t\t\t\t#MyPlayer,
+\t\t\t\t#CheckTitles,
+\t\t\t\t"Paladin"
+\t\t\t);
+
+\t\t\t$DisableUnitType("Paladin");
+
+\t\t\tIf ($ListSize(Haunts) == 0)
+\t\t\t\tIf ($ListSize(Paladins) > 0)
+\t\t\t\t\tbegin
+\t\t\t\t\t\t$MessageFlag(ThisAgent, #Phantom_Paladin_Warning_Message);
+\t\t\t\t\t\t$PlaySound(ThisAgent, "Advisor_Message_Arrive", "VFX_Advisor");
+\t\t\t\t\t\t$LocalChatMessage(
+\t\t\t\t\t\t\t$GetUnitPlayerNumber(ThisAgent),
+\t\t\t\t\t\t\t#Phantom_Paladin_Warning_Message,
+\t\t\t\t\t\t\tThisAgent
+\t\t\t\t\t\t);
+\t\t\t\t\tend
+\t\tend
+End
+
+Function Phantoms_Haunt_Birth(agent ThisAgent)
+
+Declare
+\tlist Paladins;
+\tagent Paladin;
+
+Begin
+\t$Guild_Birth(ThisAgent);
+
+\tIf ($GetUnitPlayerNumber(ThisAgent) != #Monster_Player)
+\t\tbegin
+\t\t\t$DisableUnitType("Paladin");
+\t\t\t$ListObjects(
+\t\t\t\tThisAgent,
+\t\t\t\t"Hero",
+\t\t\t\t-1,
+\t\t\t\tPaladins,
+\t\t\t\t#MyPlayer,
+\t\t\t\t#CheckTitles,
+\t\t\t\t"Paladin"
+\t\t\t);
+
+\t\t\tForeach Paladin in Paladins do
+\t\t\t\tIf ($IsDead(Paladin) == False)
+\t\t\t\t\t$Unit_Dismissed(Paladin);
+\t\tend
+End
+
+Function Phantoms_Haunt_Destroyed(agent ThisAgent)
+
+Declare
+\tlist Haunts;
+
+Begin
+\tIf ($GetUnitPlayerNumber(ThisAgent) != #Monster_Player)
+\t\tbegin
+\t\t\t$ListObjects(
+\t\t\t\tThisAgent,
+\t\t\t\t"Building",
+\t\t\t\t-1,
+\t\t\t\tHaunts,
+\t\t\t\t#MyPlayer,
+\t\t\t\t#CheckTitles,
+\t\t\t\t"Phantoms_Haunt"
+\t\t\t);
+
+\t\t\tIf ($ListSize(Haunts) == 0)
+\t\t\t\t$EnableUnitType("Paladin");
+\t\tend
+
+\t$guild_destroyed_common(ThisAgent, $Homeless);
+End
+
+Function Random_Warriors_Guild_Hero_Type(agent ThisAgent) is string
+
+Declare
+\tinteger Random;
+
+Begin
+\tIf ($Phantom_Player_Has_Placed_Haunt(ThisAgent))
+\t\tbegin
+\t\t\tRandom = $RandomNumber(2) + 1;
+\t\t\tIf (Random == 1)
+\t\t\t\treturn "Warrior";
+\t\t\tElse
+\t\t\t\treturn "Warrior_of_Discord";
+\t\tend
+
+\tRandom = $RandomNumber(3) + 1;
+\tIf (Random == 1)
+\t\treturn "Warrior";
+\tElse if (Random == 2)
+\t\treturn "Paladin";
+\tElse
+\t\treturn "Warrior_of_Discord";
+End
+
+Function Random_Hero_Type(agent ThisAgent) is string
+
+Declare
+\tinteger Random;
+
+Begin
+\tIf (ThisAgent's "Title" == "Embassy" || ThisAgent's "Subtype" == "Outpost")
+\t\tIf ($Phantom_Player_Has_Placed_Haunt(ThisAgent))
+\t\t\tbegin
+\t\t\t\tRandom = $RandomNumber(15) + 1;
+
+\t\t\t\tIf (Random == 1)
+\t\t\t\t\treturn "Adept";
+\t\t\t\tElse if (Random == 2)
+\t\t\t\t\treturn "Barbarian";
+\t\t\t\tElse if (Random == 3)
+\t\t\t\t\treturn "Cultist";
+\t\t\t\tElse if (Random == 4)
+\t\t\t\t\treturn "Healer";
+\t\t\t\tElse if (Random == 5)
+\t\t\t\t\treturn "Monk";
+\t\t\t\tElse if (Random == 6)
+\t\t\t\t\treturn "Priestess";
+\t\t\t\tElse if (Random == 7)
+\t\t\t\t\treturn "Ranger";
+\t\t\t\tElse if (Random == 8)
+\t\t\t\t\treturn "Rogue";
+\t\t\t\tElse if (Random == 9)
+\t\t\t\t\treturn "Solarus";
+\t\t\t\tElse if (Random == 10)
+\t\t\t\t\treturn "Warrior";
+\t\t\t\tElse if (Random == 11)
+\t\t\t\t\treturn "Wizard";
+\t\t\t\tElse if (Random == 12)
+\t\t\t\t\treturn "Warrior_of_Discord";
+\t\t\t\tElse if (Random == 13)
+\t\t\t\t\treturn "Dwarf";
+\t\t\t\tElse if (Random == 14)
+\t\t\t\t\treturn "Elf";
+\t\t\t\tElse
+\t\t\t\t\treturn "Gnome";
+\t\t\tend
+
+\tRandom = $RandomNumber(16) + 1;
+
+\tIf (Random == 1)
+\t\treturn "Adept";
+\tElse if (Random == 2)
+\t\treturn "Barbarian";
+\tElse if (Random == 3)
+\t\treturn "Cultist";
+\tElse if (Random == 4)
+\t\treturn "Healer";
+\tElse if (Random == 5)
+\t\treturn "Monk";
+\tElse if (Random == 6)
+\t\treturn "Priestess";
+\tElse if (Random == 7)
+\t\treturn "Ranger";
+\tElse if (Random == 8)
+\t\treturn "Rogue";
+\tElse if (Random == 9)
+\t\treturn "Solarus";
+\tElse if (Random == 10)
+\t\treturn "Warrior";
+\tElse if (Random == 11)
+\t\treturn "Wizard";
+\tElse if (Random == 12)
+\t\treturn "Paladin";
+\tElse if (Random == 13)
+\t\treturn "Warrior_of_Discord";
+\tElse if (Random == 14)
+\t\treturn "Dwarf";
+\tElse if (Random == 15)
+\t\treturn "Elf";
+\tElse
+\t\treturn "Gnome";
+End
 
 function spell_extra_value(agent thisagent) is integer
 
@@ -1184,7 +1405,7 @@ end
 function DEAL_DEMON()
 
 declare
-\tagent AIRootAgent,palace,guild,lair,phantoms_haunt,elf_guild,agrela_temple;
+\tagent AIRootAgent,palace,guild,lair,phantoms_haunt,dauros_temple,embassy;
 \tlist guilds,palaces,lairs;
 
 begin
@@ -1209,9 +1430,9 @@ begin
 
 \tphantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt", $RandomCoord(palace, 275, 475), "MaxHP");
 
-\telf_guild = $SpawnUnit(palace, "Elven_Bungalow", $RandomCoord(palace, 275, 475), "MaxHP");
+\tdauros_temple = $SpawnUnit(palace, "Temple_Dauros1", $RandomCoord(palace, 275, 475), "MaxHP");
 
-\tagrela_temple = $SpawnUnit(palace, "Temple_Agrela1", $RandomCoord(palace, 275, 475), "MaxHP");
+\tembassy = $SpawnUnit(palace, "Embassy", $RandomCoord(palace, 275, 475), "MaxHP");
 
 \t$listobjects(palace,"lair",-1,lairs,#NoHiddenMap);
 \tforeach lair in lairs do
@@ -1224,6 +1445,32 @@ begin
 \t$NewThread( AIRootAgent's "VictoryCondition", #VictoryCondition_callback_frequency );
 \tAIRootAgent's "VictoryCondition2" = $Demon_victory2;
 \t$newThread( AIRootAgent's "VictoryCondition2", 1200000);
+end
+
+function RISE_RATMEN()
+
+declare
+\tagent AIRootAgent,palace,phantoms_haunt,dauros_temple,warriors_guild,embassy;
+\tlist palaces;
+
+begin
+\tAIRootAgent = $RetrieveAgent("GplAIRoot");
+\tAIRootAgent's "Quest_Number" = #QNumber_rise_ratmen;
+
+\tpalaces = $ListPalaces();
+\tpalace = $listmember(palaces,1);
+
+\t$Setup_Quest_Music(AiRootAgent);
+
+\tphantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt", $RandomCoord(palace, 275, 475), "MaxHP");
+\tdauros_temple = $SpawnUnit(palace, "Temple_Dauros1", $RandomCoord(palace, 275, 475), "MaxHP");
+\twarriors_guild = $SpawnUnit(palace, "Warriors_Guild", $RandomCoord(palace, 275, 475), "MaxHP");
+\tembassy = $SpawnUnit(palace, "Embassy", $RandomCoord(palace, 275, 475), "MaxHP");
+
+\tAIRootAgent's "VictoryCondition" = $ratmen_victory;
+\t$NewThread(AIRootAgent's "VictoryCondition", #VictoryCondition_callback_frequency);
+\tAIRootAgent's "VictoryCondition2" = $ratmen_Events;
+\t$NewThread(AIRootAgent's "VictoryCondition2", $random_time(210000));
 end
 
 Function Potion_Check(agent thisagent, list potentials) is boolean
@@ -3103,13 +3350,10 @@ def mod_xml() -> str:
 \t\t<DisplayName lang="en_US">Phantoms Haunt POC</DisplayName>
 \t\t<Description lang="en_US">
 \t\t\t<Short>Adds the Phantoms Haunt and its recruitable Phantom heroes.</Short>
-\t\t\t<Long/>
+\t\t\t<Long>Compatible with Original Majesty and the Northern Expansion.</Long>
 \t\t</Description>
 \t\t<DataConfiguration>
-\t\t\t<Dataset base="Majesty">
-\t{load_block}
-\t\t\t</Dataset>
-\t\t\t<Dataset base="MajestyExpansion">
+\t\t\t<Dataset base="Any">
 \t{load_block}
 \t\t\t</Dataset>
 \t\t</DataConfiguration>
@@ -3187,6 +3431,7 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
 
 def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
     quest_item_names = read_cam_entry(source_gpltext, b"STRT", b"QITM")
+    advisor_text = read_cam_entry(source_gpltext, b"STRT", b"AITX")
     help_text = read_cam_entry(source_gpltext, b"STRT", b"HPTX")
     equipment_item_text: dict[int, str] = {}
     for item_id, _, _, display_name, _ in phantom_equipment_item_specs():
@@ -3218,12 +3463,23 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
             82: "Frost Armor\n\x01FFDDAA(+10 armor)",
         },
     )
+    patched_advisor_text = patch_indexed_strt_strings(
+        advisor_text.data,
+        {
+            177: (
+                "Warning: Completing this Phantoms Haunt will cause all "
+                "Paladins to leave Ardania. Cancel construction to keep them."
+            ),
+        },
+    )
     patched_help_text = patch_strt_strings(
         help_text.data,
         {
             fourcc_id("hP34"): (
                 "- Recruits Phantoms\n\n"
                 "- Phantoms are ghostly ice casters with custom class gear\n\n"
+                "\x01FF8888Warning: Starting construction prevents Paladin recruitment. "
+                "Completing the Haunt causes all existing Paladins to leave Ardania.\n\n"
                 "\x01BCBCFFThe Phantoms Haunt gathers cold, restless spirits into service as arcane heroes. "
                 "Its members fight like fragile spellcasters, striking from range with Ice Lance and other frost magic."
             ),
@@ -3236,6 +3492,7 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
                 padding=b"\x00\x00\x00\x00",
                 entries=(
                     CamEntry(name=pad_name(b"QITM"), data=patched_quest_item_names),
+                    CamEntry(name=pad_name(b"AITX"), data=patched_advisor_text),
                     CamEntry(name=pad_name(b"HPTX"), data=patched_help_text),
                 ),
             ),

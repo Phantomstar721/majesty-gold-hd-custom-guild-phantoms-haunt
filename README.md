@@ -151,11 +151,30 @@ Confirmed working in-game:
   through appended tile records, without modifying the stock Wizard Guild art.
 - Occupied Haunts use an eight-frame full-building active animation so
   the cyan windows and arcane highlights pulse while heroes are inside.
+
+Confirmed Paladin/Haunt interaction:
+
+- Placing a player-owned `Phantoms Haunt` foundation immediately disables stock
+  Paladin recruitment while leaving the Dauros-gated Paladin entry visible in
+  the Warriors Guild. If living Paladins exist, the first placed foundation
+  posts a map message flag, plays the stock advisor alert, and records a plain,
+  readable chat warning; cancelling or destroying the final placed Haunt
+  restores recruitment.
+- Completing a Haunt irreversibly dismisses that player's living Paladins
+  through stock `Unit_Dismissed`/`flee_map`. Destroying the completed Haunt
+  restores future recruitment but does not recall Paladins already leaving.
+  The Embassy and Outpost random selectors also omit Paladins while any Haunt
+  foundation exists; the stock quest-special-event fallback remains intact.
+- Known timing edge: a Paladin already queued but not yet spawned when the first
+  Haunt foundation is placed does not cause the warning to appear. Recruitment
+  is still disabled immediately, and the Paladin leaves after spawning.
 - `A Deal with the Demon` is patched for testing so it starts with a Phantoms
-  Haunt, an Elven Bungalow, and a Temple to Agrela. These player-owned test
-  buildings do not run `Hero_Generator`; their heroes must be recruited
-  manually. The stock generator remains attached only to the quest's
-  `#NotMyPlayer` guild list.
+  Haunt, a Temple to Dauros, and an Embassy. These player-owned test buildings
+  do not run `Hero_Generator`; the stock generator remains attached only to the
+  quest's `#NotMyPlayer` guild list.
+- Expansion quest `Rise of the Ratmen` is the full compatibility test bed. It
+  starts with a Phantoms Haunt, Temple to Dauros, Warriors Guild, and Embassy
+  while preserving the quest's stock victory and event threads.
 
 Next planned work:
 
@@ -1418,6 +1437,13 @@ Build output goes to:
 ```text
 .\dist\PhantomGuildPoc
 ```
+
+The generated manifest exposes one selectable mod with a single
+`<Dataset base="Any">`. This is intentional: the same package loads in both
+Original Majesty and Northern Expansion quests. Do not represent compatibility
+as sibling `Majesty` and `MajestyExpansion` datasets inside one mod entry; the
+game recognizes only the first sibling and silently excludes the other mode.
+The post-build validator enforces the universal single-dataset layout.
 
 ## Update The Private Workshop Item
 
