@@ -18,7 +18,7 @@ SHADOW_MARKERS = {
 }
 # Keep the finished-building projection extending toward the upper-left in
 # sprite coordinates, matching Majesty's light source over the viewer's right
-# shoulder, while fitting the complete shadow inside the fixed 301px TILE.
+# shoulder, while fitting the complete shadow inside the reduced Haunt TILE.
 SHADOW_SHEAR = 0.45
 SHADOW_VERTICAL_SCALE = 0.75
 MAX_SHADOW_BODY_GAP = 14
@@ -37,29 +37,59 @@ SHADOW_PROFILES: dict[str, tuple[float, float]] = {
     "destroyed": (0.12, 0.92),
 }
 
-TILE_SPECS: dict[int, tuple[str, int, int]] = {
-    1502: ("build_0", 301, 229),
-    1503: ("build_1", 301, 229),
-    1504: ("build_2", 301, 229),
-    1505: ("inactive", 301, 229),
-    1506: ("active_0", 301, 229),
-    1508: ("destroyed", 283, 158),
-    1529: ("damaged", 301, 229),
-    1530: ("damaged_b", 301, 225),
-    1531: ("collapsed_intermediate", 301, 207),
+TILE_SPECS_BY_LEVEL: dict[int, dict[int, tuple[str, int, int]]] = {
+    1: {
+        1502: ("build_0", 276, 229),
+        1503: ("build_1", 276, 229),
+        1504: ("build_2", 276, 229),
+        1505: ("inactive", 276, 229),
+        1506: ("active_0", 276, 229),
+        1508: ("destroyed", 260, 158),
+        1529: ("damaged", 276, 229),
+        1530: ("damaged_b", 276, 225),
+        1531: ("collapsed_intermediate", 276, 207),
+    },
+    2: {
+        1558: ("build_0", 276, 250),
+        1559: ("build_2", 276, 250),
+        1561: ("inactive", 276, 250),
+        1562: ("active_0", 276, 250),
+        1508: ("destroyed", 260, 165),
+        1532: ("damaged", 276, 242),
+        1533: ("damaged_b", 276, 224),
+        1534: ("collapsed_intermediate", 276, 204),
+    },
+    3: {
+        1563: ("build_0", 276, 275),
+        1564: ("build_2", 276, 275),
+        1565: ("inactive", 276, 275),
+        1566: ("active_0", 276, 275),
+        1508: ("destroyed", 260, 170),
+        1535: ("damaged", 276, 265),
+        1536: ("damaged_b", 276, 242),
+        1537: ("collapsed_intermediate", 276, 218),
+    },
 }
 
 BUILD_FRAME_DIMS: list[tuple[int, int, int]] = []
 
-EMPTY_TILE_DIMS: dict[int, tuple[int, int]] = {
-    **{tile_index: (115, 106) for tile_index in range(1511, 1517)},
+EMPTY_TILE_DIMS_BY_LEVEL: dict[int, dict[int, tuple[int, int]]] = {
+    1: {tile_index: (115, 106) for tile_index in range(1511, 1517)},
+    2: {tile_index: (115, 106) for tile_index in range(1517, 1523)},
+    3: {tile_index: (115, 106) for tile_index in range(1523, 1529)},
 }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sheet", required=True, type=Path)
+    parser.add_argument("--level", type=int, choices=(1, 2, 3), default=1)
+    parser.add_argument("--active-source", type=Path)
+    parser.add_argument("--damaged-source", type=Path)
+    parser.add_argument("--destroyed-source", type=Path)
     parser.add_argument("--construction-sheet", type=Path)
+    parser.add_argument("--construction-early-source", type=Path)
+    parser.add_argument("--construction-late-source", type=Path)
     parser.add_argument("--damaged-b-sample", required=True, type=Path)
     parser.add_argument("--collapsed-intermediate-sample", required=True, type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
@@ -67,7 +97,29 @@ def main() -> int:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     sheet = Image.open(args.sheet).convert("RGBA")
-    variants = split_variants(sheet)
+    if args.level == 1:
+        variants = split_variants(sheet)
+    else:
+        if not args.active_source or not args.damaged_source or not args.destroyed_source:
+            parser.error(
+                "levels 2 and 3 require --active-source, --damaged-source, "
+                "and --destroyed-source"
+            )
+        active = crop_generated_magenta(
+            Image.open(args.active_source).convert("RGBA")
+        )
+        damaged = crop_generated_magenta(
+            Image.open(args.damaged_source).convert("RGBA")
+        )
+        destroyed = crop_generated_magenta(
+            Image.open(args.destroyed_source).convert("RGBA")
+        )
+        variants = {
+            "inactive": deactivate_spectral_lights(active),
+            "active": active,
+            "damaged": damaged,
+            "destroyed": destroyed,
+        }
     variants["damaged_b"] = crop_generated_magenta(
         Image.open(args.damaged_b_sample).convert("RGBA")
     )
@@ -79,8 +131,16 @@ def main() -> int:
         if args.construction_sheet
         else {}
     )
+    if args.construction_early_source:
+        construction_variants[0] = crop_generated_magenta(
+            Image.open(args.construction_early_source).convert("RGBA")
+        )
+    if args.construction_late_source:
+        construction_variants[2] = crop_generated_magenta(
+            Image.open(args.construction_late_source).convert("RGBA")
+        )
 
-    specs = dict(TILE_SPECS)
+    specs = dict(TILE_SPECS_BY_LEVEL[args.level])
     for position, (tile_index, width, height) in enumerate(BUILD_FRAME_DIMS):
         progress = position / max(1, len(BUILD_FRAME_DIMS) - 1)
         if progress < 0.25:
@@ -92,13 +152,23 @@ def main() -> int:
         specs[tile_index] = (variant, width, height)
 
     for tile_index, (variant_name, width, height) in specs.items():
-        image = render_variant(variants, variant_name, width, height, construction_variants)
+        image = render_variant(
+            variants,
+            variant_name,
+            width,
+            height,
+            construction_variants,
+            level=args.level,
+        )
         path_base = args.out_dir / f"building_tile_{tile_index:05d}"
         image.save(path_base.with_suffix(".png"))
         path_base.with_suffix(".rgb").write_bytes(image.convert("RGB").tobytes())
 
-    active_width = TILE_SPECS[1506][1]
-    active_height = TILE_SPECS[1506][2]
+    active_spec = next(
+        spec for spec in specs.values() if spec[0] == "active_0"
+    )
+    active_width = active_spec[1]
+    active_height = active_spec[2]
     for frame_index in range(ACTIVE_FRAME_COUNT):
         image = render_variant(
             variants,
@@ -106,18 +176,49 @@ def main() -> int:
             active_width,
             active_height,
             construction_variants,
+            level=args.level,
         )
         path_base = args.out_dir / f"building_active_frame_{frame_index:02d}"
         image.save(path_base.with_suffix(".png"))
         path_base.with_suffix(".rgb").write_bytes(image.convert("RGB").tobytes())
 
-    for tile_index, (width, height) in EMPTY_TILE_DIMS.items():
+    for tile_index, (width, height) in EMPTY_TILE_DIMS_BY_LEVEL[args.level].items():
         image = Image.new("RGB", (width, height), (0, 0, 0))
         path_base = args.out_dir / f"building_tile_{tile_index:05d}"
         image.save(path_base.with_suffix(".png"))
         path_base.with_suffix(".rgb").write_bytes(image.tobytes())
 
     return 0
+
+
+def deactivate_spectral_lights(image: Image.Image) -> Image.Image:
+    """Create the inactive state without changing approved architecture."""
+    inactive = image.copy()
+    pixels = inactive.load()
+    for y in range(inactive.height):
+        for x in range(inactive.width):
+            red, green, blue, alpha = pixels[x, y]
+            if alpha == 0:
+                continue
+            spectral = (
+                blue > 125
+                and green > 105
+                and blue > red * 1.25
+                and green > red * 1.05
+            )
+            if spectral:
+                luminance = int(0.299 * red + 0.587 * green + 0.114 * blue)
+                pixels[x, y] = (
+                    max(10, int(luminance * 0.28)),
+                    max(18, int(luminance * 0.42)),
+                    max(28, int(luminance * 0.58)),
+                    alpha,
+                )
+    # The approved L2/L3 architecture is already authored with its own surface
+    # lighting. Only extinguish the spectral highlights here; globally dimming
+    # the frame makes the complete building look as though it were painted
+    # with Majesty's reserved ground-shadow controls.
+    return inactive
 
 
 def split_variants(sheet: Image.Image) -> dict[str, Image.Image]:
@@ -227,11 +328,19 @@ def render_variant(
     width: int,
     height: int,
     construction_variants: dict[int, Image.Image],
+    *,
+    level: int,
 ) -> Image.Image:
     if variant_name.startswith("build_"):
         stage = int(variant_name.rsplit("_", 1)[1])
         if stage in construction_variants:
-            return render_construction_variant(construction_variants[stage], stage, width, height)
+            return render_construction_variant(
+                construction_variants[stage],
+                stage,
+                width,
+                height,
+                level=level,
+            )
         return render_build_stage(variants, stage, width, height)
 
     base_name = variant_name.split("_", 1)[0]
@@ -247,24 +356,49 @@ def render_variant(
     margin_x = 3
     margin_y = 2
     scale = min((width - margin_x * 2) / source.width, (height - margin_y * 2) / source.height)
-    scale *= {
+    scale_multiplier = {
         "damaged_b": 0.88,
         "collapsed_intermediate": 0.92,
     }.get(variant_name, 1.0)
+    if level in (2, 3) and variant_name == "damaged_b":
+        scale_multiplier = 1.0
+    scale *= scale_multiplier
+    if level in (2, 3) and (
+        variant_name in {"inactive", "damaged", "damaged_b"}
+        or variant_name.startswith("active_")
+    ):
+        scale *= 0.96
     scaled_size = (max(1, int(source.width * scale)), max(1, int(source.height * scale)))
     source = source.resize(scaled_size, Image.Resampling.LANCZOS).filter(ImageFilter.SHARPEN)
     source = lift_dark_visible_pixels(source)
     source = harden_alpha_edge(source)
     x = (width - source.width) // 2
-    x += state_x_offset(variant_name)
+    x += state_x_offset(variant_name, level=level)
     y = height - source.height - margin_y
     target.alpha_composite(source, (x, y))
     scrub_purple_fringe(target)
+    shadow_shear, shadow_vertical_scale = shadow_profile(variant_name)
+    if level in (2, 3) and (
+        variant_name in {"inactive", "damaged", "damaged_b"}
+        or variant_name.startswith("active_")
+    ):
+        # Taller upgrade art magnifies the stock L1 projection until it clips
+        # the fixed left edge. Preserve the building scale and shorten only
+        # the horizontal lay-down component for these full-height states.
+        shadow_shear *= 0.68
     add_cast_shadow(
         target,
-        *shadow_profile(variant_name),
+        shadow_shear,
+        shadow_vertical_scale,
     )
-    if variant_name in {"damaged_b", "collapsed_intermediate"}:
+    if (
+        variant_name in {"damaged_b", "collapsed_intermediate"}
+        or level in (2, 3)
+        and (
+            variant_name in {"inactive", "damaged"}
+            or variant_name.startswith("active_")
+        )
+    ):
         assert_transparent_side_gutter(
             target,
             label=variant_name,
@@ -273,7 +407,14 @@ def render_variant(
     return target.convert("RGB")
 
 
-def render_construction_variant(source: Image.Image, stage: int, width: int, height: int) -> Image.Image:
+def render_construction_variant(
+    source: Image.Image,
+    stage: int,
+    width: int,
+    height: int,
+    *,
+    level: int,
+) -> Image.Image:
     source = grade_for_ice_palette(source)
     target = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     margin_x = 2
@@ -282,7 +423,9 @@ def render_construction_variant(source: Image.Image, stage: int, width: int, hei
     # The proof-sheet art nearly exhausts the fixed TILE canvas before its
     # projected shadow is added. Leave a real safety margin instead of letting
     # the early construction silhouettes flatten against a frame edge.
-    scale *= (0.94, 0.94, 0.96)[stage]
+    scale *= {
+        (3, 2): 0.84,
+    }.get((level, stage), (0.94, 0.94, 0.96)[stage])
     scaled_size = (max(1, int(source.width * scale)), max(1, int(source.height * scale)))
     source = source.resize(scaled_size, Image.Resampling.LANCZOS).filter(ImageFilter.SHARPEN)
     source = lift_dark_visible_pixels(source)
@@ -301,20 +444,24 @@ def render_construction_variant(source: Image.Image, stage: int, width: int, hei
         # The y-dependent taper and frame-1 bottom clearance—not a narrower
         # horizontal domain—are what prevent shadow wrapping at the foreground.
         shadow_facing_depth=MAX_SHADOW_BODY_GAP,
-        shadow_bottom_clearance=(10, 0, 0)[stage],
+        shadow_bottom_clearance=(
+            9
+            if level in (2, 3) and stage == 0
+            else (10, 0, 0)[stage]
+        ),
     )
     assert_transparent_side_gutter(target, label=f"construction frame {stage}")
     return target.convert("RGB")
 
 
-def state_x_offset(variant_name: str) -> int:
+def state_x_offset(variant_name: str, *, level: int) -> int:
     # The old offsets compensated for near-magenta background pixels that kept
     # each half-sheet at its full cell width. With a true chroma crop, both
     # building states already share the tile center.
     return {
         "damaged_b": 10,
         "collapsed_intermediate": 8,
-    }.get(variant_name, 0)
+    }.get(variant_name, 0) if level == 1 else 0
 
 
 def render_build_stage(variants: dict[str, Image.Image], stage: int, width: int, height: int) -> Image.Image:

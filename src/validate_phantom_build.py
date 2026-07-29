@@ -27,6 +27,7 @@ PHANTOM_ICEROD_TIER_NAMES = (
     "Deep Icerod",
     "Eternal Icerod",
 )
+STOCK_GUILD_DIALOG_BACKING_TILES = {466, 474, 495}
 
 
 def phantom_equipment_item_records() -> list[tuple[int, str, str, bytes]]:
@@ -103,6 +104,8 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
         b"IMAG": {
             b"PHM1Phantom",
             b"PHG1Phantom Guild",
+            b"PHG2Phantom Guild L2",
+            b"PHG3Phantom Guild L3",
             b"WRa2Ice Lance",
             b"PHp1fire_blast_M",
             b"WRa3Frost Armor",
@@ -155,6 +158,8 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "FrostArmorBonus"),
         ("Unit", "PHW1"),
         ("Unit", "MBPhantomGuild"),
+        ("Unit", "MBPhantomGuild2"),
+        ("Unit", "MBPhantomGuild3"),
     },
     "phantom_actions.xml": {
         ("Action", "WRa2"),
@@ -201,6 +206,10 @@ CUSTOM_TILE_OWNERS = {
     b"PHG1BuildIcon": (b"PHG1Phantom Guild", "low16"),
     b"PHG1Bld": (b"PHG1Phantom Guild", "low16"),
     b"PHG1Act": (b"PHG1Phantom Guild", "low16"),
+    b"PHG2Bld": (b"PHG2Phantom Guild L2", "low16"),
+    b"PHG2Act": (b"PHG2Phantom Guild L2", "low16"),
+    b"PHG3Bld": (b"PHG3Phantom Guild L3", "low16"),
+    b"PHG3Act": (b"PHG3Phantom Guild L3", "low16"),
     b"PHp1IceTile": (b"PHp1fire_blast_M", "u32"),
     b"PHM1PhantomTile": (b"PHM1Phantom", "low16"),
     b"PHM1CastGlow": (b"PHM1Phantom", "low16"),
@@ -229,6 +238,10 @@ EXPECTED_CUSTOM_TILE_COUNTS = {
     b"PHG1BuildIcon": 1,
     b"PHG1Bld": 14,
     b"PHG1Act": 8,
+    b"PHG2Bld": 13,
+    b"PHG2Act": 8,
+    b"PHG3Bld": 13,
+    b"PHG3Act": 8,
     b"PHp1IceTile": 128,
     b"PHM1PhantomTile": 204,
     b"PHM1CastGlow": 32,
@@ -270,6 +283,12 @@ SHADOWED_BUILDING_TILES = {
     *(f"PHG1Bld{index:04d}".encode("ascii") for index in range(5)),
     *(f"PHG1Bld{index:04d}".encode("ascii") for index in range(11, 14)),
     *(f"PHG1Act{index:02d}".encode("ascii") for index in range(8)),
+    b"PHG2Bld0000",
+    *(f"PHG2Bld{index:04d}".encode("ascii") for index in range(7, 13)),
+    *(f"PHG2Act{index:02d}".encode("ascii") for index in range(8)),
+    b"PHG3Bld0000",
+    *(f"PHG3Bld{index:04d}".encode("ascii") for index in range(7, 13)),
+    *(f"PHG3Act{index:02d}".encode("ascii") for index in range(8)),
 }
 
 LOWER_LEFT_BALCONY_PIT_TILES = {
@@ -279,11 +298,19 @@ LOWER_LEFT_BALCONY_PIT_TILES = {
 
 CONSTRUCTION_BUILDING_TILES = {
     *(f"PHG1Bld{index:04d}".encode("ascii") for index in range(3)),
+    b"PHG2Bld0010",
+    b"PHG2Bld0011",
+    b"PHG3Bld0010",
+    b"PHG3Bld0011",
 }
 
 TRANSITIONAL_DESTRUCTION_TILES = {
     b"PHG1Bld0012",  # source tile 1530, Damaged B
     b"PHG1Bld0013",  # source tile 1531, Collapsed Intermediate
+    b"PHG2Bld0008",  # source tile 1533, Damaged B
+    b"PHG2Bld0009",  # source tile 1534, Collapsed Intermediate
+    b"PHG3Bld0008",  # source tile 1536, Damaged B
+    b"PHG3Bld0009",  # source tile 1537, Collapsed Intermediate
 }
 
 EXPECTED_BUILDING_DESTRUCTION_ATTACHMENTS = {
@@ -485,6 +512,12 @@ def validate_archive(path: Path) -> tuple[dict[bytes, list[Entry]], dict[tuple[b
             validate_strt(path, entry, payload)
             captured[(entry.section, entry.name)] = payload
 
+        for entry in sections.get(b"SMNU", []):
+            if entry.name == b"AP07":
+                captured[(entry.section, entry.name)] = bytes(
+                    data[entry.offset : entry.offset + entry.size]
+                )
+
         imag_names = {
             owner[0] for owner in CUSTOM_TILE_OWNERS.values()
         } | {b"PHTIraw textures"}
@@ -559,7 +592,11 @@ def validate_tile(path: Path, entry: Entry, tile: bytes, palette_count: int) -> 
     elif entry.name == b"PHG1BuildIcon":
         expected_dimensions = (25, 25)
     elif entry.name.startswith(b"PHG1Act"):
-        expected_dimensions = (301, 229)
+        expected_dimensions = (276, 229)
+    elif entry.name.startswith(b"PHG2Act"):
+        expected_dimensions = (276, 250)
+    elif entry.name.startswith(b"PHG3Act"):
+        expected_dimensions = (276, 275)
     elif entry.name == b"PHTIPanel0001":
         expected_dimensions = (200, 245)
     if expected_dimensions and (width, height) != expected_dimensions:
@@ -567,6 +604,44 @@ def validate_tile(path: Path, entry: Entry, tile: bytes, palette_count: int) -> 
             f"{path}: {entry.label} is {width}x{height}; "
             f"expected {expected_dimensions[0]}x{expected_dimensions[1]}"
         )
+
+    building_hotspots = {
+        b"PHG1Bld0000": (136, 80),
+        b"PHG1Bld0001": (137, 80),
+        b"PHG1Bld0002": (137, 80),
+        b"PHG1Bld0003": (137, 80),
+        b"PHG1Bld0004": (134, 11),
+        b"PHG1Bld0005": (55, 56),
+        b"PHG1Bld0006": (55, 56),
+        b"PHG1Bld0007": (55, 56),
+        b"PHG1Bld0008": (55, 56),
+        b"PHG1Bld0009": (55, 56),
+        b"PHG1Bld0010": (55, 56),
+        b"PHG1Bld0011": (137, 80),
+        b"PHG1Bld0012": (137, 76),
+        b"PHG1Bld0013": (137, 58),
+    }
+    expected_hotspot = building_hotspots.get(entry.name)
+    if entry.name.startswith(b"PHG1Act"):
+        expected_hotspot = (137, 80)
+    if expected_hotspot is not None:
+        if row_stride != width:
+            fail(
+                f"{path}: {entry.label} retains stale row stride {row_stride}; "
+                f"expected native width {width}"
+            )
+        actual_hotspot = struct.unpack_from("<HH", tile, 10)
+        if actual_hotspot != expected_hotspot:
+            fail(
+                f"{path}: {entry.label} has hotspot {actual_hotspot}; "
+                f"expected reduced-envelope hotspot {expected_hotspot}"
+            )
+    elif entry.name.startswith((b"PHG2Bld", b"PHG2Act", b"PHG3Bld", b"PHG3Act")):
+        if row_stride != width:
+            fail(
+                f"{path}: {entry.label} retains stale row stride {row_stride}; "
+                f"expected native width {width}"
+            )
 
     palette_mode = struct.unpack_from("<H", tile, 20)[0]
     palette_value = struct.unpack_from("<I", tile, 22)[0]
@@ -792,17 +867,25 @@ def validate_shadow_body_seam(path: Path, entry: Entry, pixels: list[list[int]])
                 )
 
     if entry.name in LOWER_LEFT_BALCONY_PIT_TILES:
+        # Reducing the Level 1 TILE from the inherited 301-pixel Fervus
+        # envelope to the Haunt's 276-pixel envelope rescales and recenters
+        # this known balcony notch. Keep the regression check on the notch
+        # itself instead of the obsolete stock-canvas coordinates.
+        pit_x_start = 44 if width == 276 else 58
+        pit_y_start = 136
         pit_values = [
             pixels[y][x]
-            for y in range(136, 139)
-            for x in range(58, 67)
+            for y in range(pit_y_start, pit_y_start + 3)
+            for x in range(pit_x_start, pit_x_start + 9)
         ]
         transparent = sum(value == 0 for value in pit_values)
         red = sum(value == 247 for value in pit_values)
         magenta = sum(248 <= value <= 250 for value in pit_values)
         if transparent:
             fail(
-                f"{path}: {entry.label} lower-left balcony pit x=58..66,y=136..138 "
+                f"{path}: {entry.label} lower-left balcony pit "
+                f"x={pit_x_start}..{pit_x_start + 8},"
+                f"y={pit_y_start}..{pit_y_start + 2} "
                 f"still contains {transparent} transparent pixels"
             )
         if not red or not magenta:
@@ -1490,8 +1573,15 @@ def validate_interface_panel_reference(
     image = captured.get((b"IMAG", b"PHTIraw textures"))
     if image is None:
         fail(f"{path}: IMAG/PHTIraw textures was not found")
-    if panel_entries[0].index not in referenced_indices(image, "u32", len(tiles)):
+    references = referenced_indices(image, "u32", len(tiles))
+    if panel_entries[0].index not in references:
         fail(f"{path}: IMAG/PHTIraw textures does not reference PHTIPanel0001")
+    stale_backings = references & STOCK_GUILD_DIALOG_BACKING_TILES
+    if stale_backings:
+        fail(
+            f"{path}: IMAG/PHTIraw textures still references stock guild "
+            f"dialog backing TILEs {sorted(stale_backings)}"
+        )
 
 
 def validate_bcd_copy(output_root: Path) -> None:
@@ -1547,6 +1637,292 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
     for stale_name in ("Phantoms Guild", "Phantoms_Guild", "Phantom_Guild"):
         if stale_name in generated_text:
             fail(f"{output_root}: generated text retains stale building name {stale_name!r}")
+
+
+def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
+    units_path = output_root / "Data" / "phantom_units.xml"
+    tree = parse_xml(units_path)
+    expected_levels = (
+        (
+            "MBPhantomGuild",
+            "Phantoms_Haunt",
+            "PHG1",
+            None,
+            "Phantoms_Haunt2",
+            False,
+        ),
+        (
+            "MBPhantomGuild2",
+            "Phantoms_Haunt2",
+            "PHG2",
+            "Phantoms_Haunt",
+            "Phantoms_Haunt3",
+            True,
+        ),
+        (
+            "MBPhantomGuild3",
+            "Phantoms_Haunt3",
+            "PHG3",
+            "Phantoms_Haunt2",
+            None,
+            True,
+        ),
+    )
+    for (
+        description_id,
+        unit_name,
+        image_base,
+        upgrade_from,
+        upgrade_to,
+        not_buildable,
+    ) in expected_levels:
+        description = tree.find(f'.//Description[@ID="{description_id}"]')
+        if description is None or description.get("Name") != unit_name:
+            fail(
+                f"{units_path}: missing or malformed Haunt upgrade description "
+                f"{description_id}/{unit_name}"
+            )
+        image = description.find("./Engine/ImageIDBase")
+        if image is None or image.get("value") != image_base:
+            fail(
+                f"{units_path}: {description_id} must use ImageIDBase={image_base}"
+            )
+        game = description.find("./Game")
+        if game is None:
+            fail(f"{units_path}: {description_id} has no Game block")
+        actual_from = game.find("./UpgradeFrom")
+        actual_to = game.find("./UpgradeTo")
+        if (
+            (actual_from.get("value") if actual_from is not None else None)
+            != upgrade_from
+            or (actual_to.get("value") if actual_to is not None else None)
+            != upgrade_to
+        ):
+            fail(
+                f"{units_path}: {description_id} upgrade links are malformed"
+            )
+        flags = {flag.get("value") for flag in game.findall("./Flags")}
+        if ("NotBuildable" in flags) != not_buildable:
+            fail(
+                f"{units_path}: {description_id} has incorrect NotBuildable state"
+            )
+        produced = {unit.get("ID") for unit in game.findall("./Produces/Unit")}
+        if produced != {"Phantom"}:
+            fail(f"{units_path}: {description_id} must recruit only Phantoms")
+
+    building_data_path = output_root / "GPL" / "Phantom_Building_Data.dat"
+    building_data = building_data_path.read_text(encoding="utf-8")
+    building_contract = (
+        "[Phantoms_Haunt]",
+        "(Level 1)",
+        "[Phantoms_Haunt2]",
+        "(Level 2)",
+        "[Phantoms_Haunt3]",
+        "(Level 3)",
+    )
+    missing_building = [
+        value for value in building_contract if value not in building_data
+    ]
+    if missing_building:
+        fail(
+            f"{building_data_path}: three-level Haunt data is missing "
+            f"{missing_building}"
+        )
+    if "(max_level 1)" in building_data:
+        fail(f"{building_data_path}: Haunt is still capped at level 1")
+    if building_data.count("(upgradescript basic_upgrade)") != 2:
+        fail(
+            f"{building_data_path}: exactly levels 1 and 2 must use basic_upgrade"
+        )
+
+    gpl_path = output_root / "GPL" / "Phantom.gpl"
+    gpl = gpl_path.read_text(encoding="utf-8")
+    gameplay_contract = (
+        "Function Phantom_Player_Max_Completed_Haunt_Level(agent ThisAgent) is integer",
+        '$GetAttribute(Haunt, #ATTRIB_CurrentStageBuilt) == 1',
+        'If (Haunt\'s "Level" > Best_Level)',
+        "Function Phantom_Haunt_Player_Perk_Watch(agent Palace)",
+        '$LearnSpell(Phantom, "icy_touch");',
+        '$ForgetSpell(Phantom, "icy_touch");',
+        '$LearnSpell(Phantom, "endless_winter");',
+        '$ForgetSpell(Phantom, "endless_winter");',
+        '#CheckTitles,\n\t\t"Priestess"',
+        "expression #Phantom_Rush_Movement_Bonus -22",
+        "expression #Phantom_Rush_Action_Bonus -10",
+        "Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)",
+        "#ATTRIB_MovementRateModifier,\n\t\t#Phantom_Rush_Movement_Bonus",
+        "#ATTRIB_ActionRateModifier,\n\t\t#Phantom_Rush_Action_Bonus",
+        "$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 1);",
+        "Function Phantom_Rush_Unto_Death_End(agent ThisAgent)",
+        "#ATTRIB_MovementRateModifier,\n\t\t- #Phantom_Rush_Movement_Bonus",
+        "#ATTRIB_ActionRateModifier,\n\t\t- #Phantom_Rush_Action_Bonus",
+        "$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 0);",
+        "$Phantom_Rush_Unto_Death_Begin(Priestess);",
+        "$Phantom_Rush_Unto_Death_End(Priestess);",
+        'Priestess\'s "PhantomRushUntoDeathActive" = True;',
+        'Priestess\'s "PhantomRushUntoDeathActive" = False;',
+        "function Phantom_Priestess_Follow_Support_Check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean",
+        "If ($ListSize(Guards) < 2)",
+        "Best_One = $Pick_Closest(ThisAgent, Potentials);",
+        'ThisAgent\'s "BasicScript" = $Phantom_Priestess_Follow_Support;',
+        'ThisAgent\'s "BackScript" = $Phantom_Priestess_Follow_Support;',
+        'ThisAgent\'s "ActiveScript" = $Phantom_Priestess_Follow_Support;',
+        "function Phantom_Priestess_Follow_Support(agent ThisAgent)",
+        '#ATTRIB_MaxAttackRange) -\n\t\t\t\t\t\t\t#follow_support_buffer',
+        'ThisAgent\'s "Destination" = $LocationOf(Target);',
+        'ThisAgent\'s "Target" = ThisAgent;',
+        'ThisAgent\'s "Destination",\n\t\t\t\t\t\t\t\t"avoid_vehicles"',
+        "Function Phantom_Priestess_Follow_Check(agent ThisAgent) is boolean",
+        "If ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) < 3)",
+        "$Phantom_Priestess_Follow_Support_Check(",
+        '"Phantom",',
+        "function Priestess_tree(agent ThisAgent)",
+        "$Build_Horde(ThisAgent, 95) == False",
+        "$Phantom_Priestess_Follow_Check(ThisAgent) == False",
+        "$Purchase_Bazaar(ThisAgent, 70) == False",
+        "$Hall_Champs_Check(ThisAgent, 40) == False",
+        "function follow_support_check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean",
+        'If (ThisAgent\'s "Title" == "Phantom")',
+        "$Wizard_tree(thisagent);",
+        "Healing = 10;",
+    )
+    missing_gameplay = [value for value in gameplay_contract if value not in gpl]
+    if missing_gameplay:
+        fail(
+            f"{gpl_path}: Haunt level perk contract is missing "
+            f"{missing_gameplay}"
+        )
+    perk_watcher_start = gpl.index(
+        "Function Phantom_Haunt_Player_Perk_Watch(agent Palace)"
+    )
+    perk_watcher_end = gpl.index(
+        "Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)",
+        perk_watcher_start,
+    )
+    perk_watcher = gpl[perk_watcher_start:perk_watcher_end]
+    if "#ATTRIB_MovementRateModifier" in perk_watcher:
+        fail(
+            f"{gpl_path}: Rush unto Death applies its modifier directly in "
+            "the watcher instead of routing through the stock-shaped clone"
+        )
+    if "#ATTRIB_Speed" in perk_watcher:
+        fail(
+            f"{gpl_path}: Rush unto Death bypasses stock Winged Feet with a "
+            "direct write to the AI-facing Speed attribute"
+        )
+    forbidden_rush_transform = (
+        "$ChangeUnitType(",
+        "$RevertUnitType(",
+        "Phantom_Rush_Priestess",
+    )
+    present_rush_transform = [
+        value for value in forbidden_rush_transform if value in perk_watcher
+    ]
+    if present_rush_transform:
+        fail(
+            f"{gpl_path}: Rush unto Death still contains the rejected "
+            f"unit-type transformation path {present_rush_transform}"
+        )
+    rush_begin_start = gpl.index(
+        "Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)"
+    )
+    rush_end = gpl.index(
+        "Function Phantom_Start_Player_Perk_Watch(agent ThisAgent)",
+        rush_begin_start,
+    )
+    rush_functions = gpl[rush_begin_start:rush_end]
+    forbidden_rush_visuals = (
+        "$TurnOnSpeedTrail",
+        "$TurnOffSpeedTrail",
+        "$CreateEffector",
+        "winged_feet_icon",
+        "winged_feet_effector",
+    )
+    present_rush_visuals = [
+        value for value in forbidden_rush_visuals if value in rush_functions
+    ]
+    if present_rush_visuals:
+        fail(
+            f"{gpl_path}: invisible Rush unto Death clone contains visible "
+            f"Winged Feet behavior {present_rush_visuals}"
+        )
+    forbidden_pointer_forcing = (
+        'Priestess\'s "BasicScript" = $Phantom_Priestess_Tree;',
+        'Priestess\'s "StartingScript" = $Phantom_Priestess_Tree;',
+        'Priestess\'s "ActiveScript" = $Phantom_Priestess_Tree;',
+    )
+    present_forcing = [value for value in forbidden_pointer_forcing if value in gpl]
+    if present_forcing:
+        fail(
+            f"{gpl_path}: stock-shaped Priestess experiment still contains "
+            f"watcher pointer forcing {present_forcing}"
+        )
+    support_wrapper_start = gpl.index(
+        "Function Phantom_Priestess_Follow_Check(agent ThisAgent) is boolean"
+    )
+    support_wrapper_end = gpl.index(
+        "function Priestess_tree(agent ThisAgent)",
+        support_wrapper_start,
+    )
+    support_wrapper = gpl[support_wrapper_start:support_wrapper_end]
+    if "$ListObjects" in support_wrapper or "Potentials" in support_wrapper:
+        fail(
+            f"{gpl_path}: Priestess support wrapper drifted from the proven "
+            "stock Follow_Support selector into custom candidate logic"
+        )
+    if "expression #support_max 2" in gpl:
+        fail(
+            f"{gpl_path}: Priestess follower cap leaks into the global stock "
+            "support_max expression"
+        )
+    priestess_selector_start = gpl.index(
+        "function Phantom_Priestess_Follow_Support_Check("
+    )
+    priestess_selector_end = gpl.index(
+        "function Phantom_Priestess_Follow_Support(agent ThisAgent)",
+        priestess_selector_start,
+    )
+    priestess_selector = gpl[priestess_selector_start:priestess_selector_end]
+    if "Best_One = $ListMember(Potentials, 1);" in priestess_selector:
+        fail(
+            f"{gpl_path}: Priestess selector still chooses arbitrary list "
+            "order instead of the closest eligible Phantom"
+        )
+    active_follow_start = gpl.index(
+        "function Phantom_Priestess_Follow_Support(agent ThisAgent)"
+    )
+    active_follow_end = gpl.index(
+        "Function Phantom_Priestess_Assigned_To(agent Phantom) is boolean",
+        active_follow_start,
+    )
+    active_follow = gpl[active_follow_start:active_follow_end]
+    if 'Target\'s "ActiveScript" == $Travel_To' in active_follow:
+        fail(
+            f"{gpl_path}: Priestess active follow clone still contains the "
+            "disproved moving-target distance condition"
+        )
+    priestess_tree = gpl.index("function Priestess_tree(agent ThisAgent)")
+    build_horde = gpl.index("$Build_Horde(ThisAgent, 95) == False", priestess_tree)
+    support_check = gpl.index(
+        "$Phantom_Priestess_Follow_Check(ThisAgent) == False",
+        build_horde,
+    )
+    nearby_check = gpl.index("$Check_Nearby(ThisAgent) == False", support_check)
+    if not priestess_tree < build_horde < support_check < nearby_check:
+        fail(
+            f"{gpl_path}: stock Priestess_tree must call Phantom support "
+            "immediately after skeleton upkeep and before nearby decisions"
+        )
+    if gpl.count(
+        "If ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 2)"
+    ) < 2:
+        fail(f"{gpl_path}: Icy Touch is not gated in both check and cast paths")
+    if gpl.count(
+        "If ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 3)"
+    ) < 2:
+        fail(
+            f"{gpl_path}: Endless Winter is not gated in both check and cast paths"
+        )
 
 
 def validate_phantom_item_cleanup(output_root: Path) -> None:
@@ -2577,7 +2953,7 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
     )
     phantom_guard = confidence.index('if (thisagent\'s "Title" == "Phantom")')
     for spell, value in phantom_contract:
-        check = f'if ($isspellavailable(thisagent,"{spell}",1))'
+        check = f'$isspellavailable(thisagent,"{spell}",1)'
         value_adjustment = f"value += {value};"
         if confidence.count(check) != 1 or confidence.count(value_adjustment) != 1:
             fail(
@@ -3592,10 +3968,13 @@ def validate_phantom_healing_contract(output_root: Path) -> None:
         "Best_Phantom = Phantom;",
         "If ($IsValidGamePiece(Best_Phantom))",
         '$CreateEffector(Best_Phantom, "life_drain_effector2", Effector_Duration);',
-        "$Heal(ThisAgent, Best_Phantom, 5);",
+        "Healing = 5;",
+        "If ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) >= 2)",
+        "Healing = 10;",
+        "$Heal(ThisAgent, Best_Phantom, Healing);",
         'My_Skeletons = $ListTitles(My_Skeletons, "Skeleton");',
         "If ($IsValidGamePiece(Best_Skeleton))",
-        "$Heal(ThisAgent, Best_Skeleton, 5);",
+        "$Heal(ThisAgent, Best_Skeleton, Healing);",
         "$Spell_Attack(ThisAgent, Target, 15);",
     )
     missing = [value for value in contract if value not in gpl]
@@ -3752,16 +4131,23 @@ def validate_phantom_healing_contract(output_root: Path) -> None:
         "If ($GetAttribute(ThisAgent, #ATTRIB_HP) < $GetAttribute(ThisAgent, #ATTRIB_MaxHP))",
         drain,
     )
-    self_heal = gpl.index("$Heal(ThisAgent, ThisAgent, 5);", self_heal_check)
+    self_heal = gpl.index(
+        "$Heal(ThisAgent, ThisAgent, Healing);",
+        self_heal_check,
+    )
     phantom_list = gpl.index('Phantoms = $ListTitles(Phantoms, "Phantom");', self_heal)
     phantom_target = gpl.index("Best_Phantom = Phantom;", phantom_list)
-    phantom_heal = gpl.index("$Heal(ThisAgent, Best_Phantom, 5);", phantom_target)
+    phantom_heal = gpl.index(
+        "$Heal(ThisAgent, Best_Phantom, Healing);",
+        phantom_target,
+    )
     skeleton_list = gpl.index(
         'My_Skeletons = $ListTitles(My_Skeletons, "Skeleton");', phantom_heal
     )
     skeleton_target = gpl.index("Best_Skeleton = Skeleton;", skeleton_list)
     skeleton_heal = gpl.index(
-        "$Heal(ThisAgent, Best_Skeleton, 5);", skeleton_target
+        "$Heal(ThisAgent, Best_Skeleton, Healing);",
+        skeleton_target,
     )
     drain_damage = gpl.index("$Spell_Attack(ThisAgent, Target, 15);", skeleton_heal)
     if not (
@@ -4094,6 +4480,8 @@ def validate_rise_ratmen_test_setup(output_root: Path) -> None:
         "$Setup_Quest_Music(AiRootAgent);",
         'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
         'dauros_temple = $SpawnUnit(palace, "Temple_Dauros1"',
+        'fervus_temple = $SpawnUnit(palace, "Temple_Fervus1"',
+        'krypta_temple = $SpawnUnit(palace, "Temple_Krypta1"',
         'warriors_guild = $SpawnUnit(palace, "Warriors_Guild"',
         'embassy = $SpawnUnit(palace, "Embassy"',
         'AIRootAgent\'s "VictoryCondition" = $ratmen_victory;',
@@ -4116,6 +4504,8 @@ def validate_rise_ratmen_test_setup(output_root: Path) -> None:
     forbidden_generators = (
         'phantoms_haunt\'s "SpecialScript"',
         'dauros_temple\'s "SpecialScript"',
+        'fervus_temple\'s "SpecialScript"',
+        'krypta_temple\'s "SpecialScript"',
         'warriors_guild\'s "SpecialScript"',
         'embassy\'s "SpecialScript"',
     )
@@ -4136,6 +4526,7 @@ def validate(output_root: Path) -> None:
     validate_descriptions(output_root)
     validate_bcd_copy(output_root)
     validate_phantoms_haunt_identity(output_root)
+    validate_phantoms_haunt_upgrade_contract(output_root)
     validate_phantom_item_cleanup(output_root)
     validate_ice_lance_contract(output_root)
     validate_icy_touch_contract(output_root)
@@ -4192,11 +4583,41 @@ def validate(output_root: Path) -> None:
     textdata_path = output_root / "Data" / "phantom_textdata.cam"
     textdata_captured = archive_results["phantom_textdata.cam"][1]
     unit_names = textdata_captured.get((b"STRT", b"UNTN"))
+    guild_menu = textdata_captured.get((b"SMNU", b"AP07"))
     guild_strings = textdata_captured.get((b"STRT", b"AP07"))
+    guild_menu_bytes = bytes(guild_menu) if guild_menu is not None else None
+    guild_strings_bytes = bytes(guild_strings) if guild_strings is not None else None
     if unit_names is None or b"Phantoms Haunt" not in unit_names:
         fail(f"{textdata_path}: unit names do not contain Phantoms Haunt")
-    if guild_strings is None or b"PHANTOMS HAUNT" not in guild_strings:
+    if guild_strings_bytes is None or b"PHANTOMS HAUNT" not in guild_strings_bytes:
         fail(f"{textdata_path}: recruit dialog does not contain PHANTOMS HAUNT")
+    if (
+        guild_menu_bytes is None
+        or len(guild_menu_bytes) != 3572
+        or b"PHM1" not in guild_menu_bytes
+        or b"PHTI" not in guild_menu_bytes
+        or b"AVC1" in guild_menu_bytes
+    ):
+        fail(
+            f"{textdata_path}: AP07 is not the expected Phantom-remapped "
+            "stock AP10 upgradable menu layout"
+        )
+    spell_rect = struct.unpack_from("<4I", guild_menu_bytes, 0x0D34)
+    if spell_rect != (103, 162, 0, 0):
+        fail(
+            f"{textdata_path}: AP07 retains a clickable AP10 temple-spell "
+            f"control: {spell_rect}"
+        )
+    guild_string_count = struct.unpack_from("<H", guild_strings_bytes, 0)[0]
+    if (
+        guild_string_count != 31
+        or b"LVL" in guild_strings_bytes
+        or b"SPELLS" in guild_strings_bytes
+    ):
+        fail(
+            f"{textdata_path}: AP07 strings retain unsafe AP10-only level or "
+            "temple-spell controls"
+        )
     help_text = archive_results["phantom_gpltext.cam"][1].get((b"STRT", b"HPTX"))
     if help_text is None or b"The Phantoms Haunt gathers" not in help_text:
         fail(f"{gpltext_path}: building help text was not renamed to Phantoms Haunt")
@@ -4212,6 +4633,32 @@ def validate(output_root: Path) -> None:
     maindata_path = output_root / "Data" / "phantom_maindata.cam"
     sections, captured = archive_results["phantom_maindata.cam"]
     validate_custom_tile_references(maindata_path, sections, captured)
+    profile_entry = next(
+        (
+            entry
+            for entry in sections.get(b"TILE", [])
+            if entry.name == b"PHG1Profile"
+        ),
+        None,
+    )
+    if profile_entry is None:
+        fail(f"{maindata_path}: custom Haunt profile TILE was not found")
+    tile_count = len(sections.get(b"TILE", []))
+    for building_image_name in (
+        b"PHG1Phantom Guild",
+        b"PHG2Phantom Guild L2",
+        b"PHG3Phantom Guild L3",
+    ):
+        building_image = captured.get((b"IMAG", building_image_name))
+        if (
+            building_image is None
+            or profile_entry.index
+            not in referenced_indices(building_image, "low16", tile_count)
+        ):
+            fail(
+                f"{maindata_path}: IMAG/{building_image_name!r} does not "
+                "retain the custom Haunt profile after upgrading"
+            )
     required_winter_images = (
         b"PHw1Winter Storm",
         b"PHw2Winter Hit",
@@ -4366,10 +4813,15 @@ def validate(output_root: Path) -> None:
         sections.get(b"TILE", []),
         captured,
     )
-    building_image = captured.get((b"IMAG", b"PHG1Phantom Guild"))
-    if building_image is None:
-        fail(f"{maindata_path}: IMAG/PHG1Phantom Guild was not found")
-    validate_building_destruction_attachments(maindata_path, building_image)
+    for building_image_name in (
+        b"PHG1Phantom Guild",
+        b"PHG2Phantom Guild L2",
+        b"PHG3Phantom Guild L3",
+    ):
+        building_image = captured.get((b"IMAG", building_image_name))
+        if building_image is None:
+            fail(f"{maindata_path}: IMAG/{building_image_name!r} was not found")
+        validate_building_destruction_attachments(maindata_path, building_image)
 
     interface_path = output_root / "Data" / "phantom_interfacedata.cam"
     sections, captured = archive_results["phantom_interfacedata.cam"]

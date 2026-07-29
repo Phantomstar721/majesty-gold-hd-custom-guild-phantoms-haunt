@@ -20,13 +20,17 @@ MOD_ID = uuid.UUID("8c48289e-7c70-4426-8913-133f3544a182")
 HERO_ID = "PHM1"
 BUILDING_ID = "MBPhantomGuild"
 BUILDING_TEXT_ID = "PHG1"
-# Majesty keys recruit-panel behavior in the exe by AP dialog id. AP07 is the
-# stock Elf recruit panel, so borrowing it keeps this mod Workshop-only.
+# Majesty keys recruit-panel behavior in the exe by AP dialog id. Keep AP07 as
+# the Haunt's proven recruit-capable external ID, but feed it AP10's stock
+# upgradable Fervus menu layout so the engine has native level/upgrade controls.
 PHANTOM_GUILD_DIALOG_ID = b"AP07"
-SOURCE_RECRUIT_GUILD_DIALOG_ID = PHANTOM_GUILD_DIALOG_ID
+SOURCE_RECRUIT_GUILD_DIALOG_ID = b"AP10"
+AP10_SPELL_BUTTON_RECT_OFFSET = 0x0D34
 SOURCE_HERO_IMAGE = b"AVN1Wizard"
 SOURCE_PHANTOM_SPRITE_IMAGE = b"AVG1Priestess"
 SOURCE_BUILDING_IMAGE = b"ABQ1Temple, Fervus1"
+SOURCE_BUILDING_LEVEL_2_IMAGE = b"ABQ2Temple, Fervus2"
+SOURCE_BUILDING_LEVEL_3_IMAGE = b"ABQ3Temple, Fervus3"
 SOURCE_TELEPORT_EFFECT_IMAGE = b"WRd1teleport_e"
 SOURCE_ICE_LANCE_ICON = b"XL15PowerShock"
 SOURCE_ICE_LANCE_PROJECTILE = b"WPc2fire_blast_M"
@@ -40,6 +44,8 @@ SOURCE_METEOR_STORM_PARTICLE_IMAGE = b"XL20MeteorStrmEffct"
 SOURCE_METEOR_MISSILE_PARTICLE_IMAGE = b"XL21MeteorStrmMiss"
 PHANTOM_HERO_IMAGE = b"PHM1Phantom"
 PHANTOM_BUILDING_IMAGE = b"PHG1Phantom Guild"
+PHANTOM_BUILDING_LEVEL_2_IMAGE = b"PHG2Phantom Guild L2"
+PHANTOM_BUILDING_LEVEL_3_IMAGE = b"PHG3Phantom Guild L3"
 RAW_TEXTURES_IMAGE = b"INTIraw textures"
 PHANTOM_RAW_TEXTURES_IMAGE = b"PHTIraw textures"
 PHANTOM_ICE_LANCE_ICON = b"WRa2Ice Lance"
@@ -73,7 +79,11 @@ HERO_ICON_TILE = 6299
 BUILDING_PROFILE_TILE = 1509
 BUILDING_ICON_TILE = 1510
 HERO_INTERFACE_PANEL_TILE = 4793
-BUILDING_DIALOG_BACKING_TILE = 466
+# AP07's stock Elf layout uses 466. The borrowed AP10/Fervus layout uses 474
+# for its main backing and 495 for its green secondary panel. Remap all three
+# inside the Haunt-private PHTI clone so no stock dialog art is affected.
+BUILDING_DIALOG_BACKING_TILES = (466, 474, 495)
+BUILDING_DIALOG_BACKING_TEMPLATE_TILE = 466
 BUILDING_SPRITE_PALETTE_INDEX = 560
 PHANTOM_HERO_ICON_PALETTE_INDEX = 560
 PHANTOM_HERO_PORTRAIT_PALETTE_INDEX = 560
@@ -154,6 +164,8 @@ def main() -> int:
     parser.add_argument("--building-profile-rgb", type=Path)
     parser.add_argument("--building-icon-rgb", type=Path)
     parser.add_argument("--building-sprite-rgb-dir", type=Path)
+    parser.add_argument("--building-level-2-sprite-rgb-dir", type=Path)
+    parser.add_argument("--building-level-3-sprite-rgb-dir", type=Path)
     parser.add_argument("--hero-sprite-png-dir", type=Path)
     parser.add_argument("--interface-panel-rgb", type=Path)
     parser.add_argument("--building-dialog-panel-rgb", type=Path)
@@ -211,6 +223,8 @@ def main() -> int:
         args.building_profile_rgb,
         args.building_icon_rgb,
         args.building_sprite_rgb_dir,
+        args.building_level_2_sprite_rgb_dir,
+        args.building_level_3_sprite_rgb_dir,
         args.hero_sprite_png_dir,
         args.interface_panel_rgb,
         args.ice_lance_icon_rgb,
@@ -440,12 +454,74 @@ def phantom_units_xml() -> str:
 \t\t<Game version="1">
 \t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
 \t\t\t<Cost value="1"/>
+\t\t\t<UpgradeTo value="Phantoms_Haunt2"/>
 \t\t\t<Multiplier value="1.0"/>
 \t\t\t<IncomeType value="2"/>
 \t\t\t<IncomeAmount value="5"/>
 \t\t\t<MaxHP value="250"/>
 \t\t\t<MaxGuildMembers value="4"/>
 \t\t\t<SightRange value="150"/>
+\t\t\t<Flags value="IsGuild"/>
+\t\t\t<Flags value="HasHPBar"/>
+\t\t\t<Flags value="HasGoldToolTip"/>
+\t\t\t<HelpID value="hP34"/>
+\t\t\t<Produces>
+\t\t\t\t<Unit ID="Phantom"/>
+\t\t\t</Produces>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Building" ID="MBPhantomGuild2" Name="Phantoms_Haunt2" Description="Phantoms Haunt Level 2">
+\t\t<Engine version="1">
+\t\t\t<Info value="BlockGround"/>
+\t\t\t<Info value="BlockFlying"/>
+\t\t\t<Info value="ModifyTerrainTextureOnPlacement"/>
+\t\t\t<CanUse value="HumanPlayer"/>
+\t\t\t<Menu value="1"/>
+\t\t\t<ImageIDBase value="PHG2"/>
+\t\t\t<DefaultSound value="Phantoms_Haunt"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
+\t\t\t<Cost value="1"/>
+\t\t\t<UpgradeTo value="Phantoms_Haunt3"/>
+\t\t\t<UpgradeFrom value="Phantoms_Haunt"/>
+\t\t\t<Multiplier value="1.0"/>
+\t\t\t<IncomeType value="2"/>
+\t\t\t<IncomeAmount value="5"/>
+\t\t\t<MaxHP value="350"/>
+\t\t\t<MaxGuildMembers value="4"/>
+\t\t\t<SightRange value="175"/>
+\t\t\t<Flags value="NotBuildable"/>
+\t\t\t<Flags value="IsGuild"/>
+\t\t\t<Flags value="HasHPBar"/>
+\t\t\t<Flags value="HasGoldToolTip"/>
+\t\t\t<HelpID value="hP34"/>
+\t\t\t<Produces>
+\t\t\t\t<Unit ID="Phantom"/>
+\t\t\t</Produces>
+\t\t</Game>
+\t</Description>
+\t<Description type="Unit" subType="Building" ID="MBPhantomGuild3" Name="Phantoms_Haunt3" Description="Phantoms Haunt Level 3">
+\t\t<Engine version="1">
+\t\t\t<Info value="BlockGround"/>
+\t\t\t<Info value="BlockFlying"/>
+\t\t\t<Info value="ModifyTerrainTextureOnPlacement"/>
+\t\t\t<CanUse value="HumanPlayer"/>
+\t\t\t<Menu value="1"/>
+\t\t\t<ImageIDBase value="PHG3"/>
+\t\t\t<DefaultSound value="Phantoms_Haunt"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
+\t\t\t<Cost value="1"/>
+\t\t\t<UpgradeFrom value="Phantoms_Haunt2"/>
+\t\t\t<Multiplier value="1.0"/>
+\t\t\t<IncomeType value="2"/>
+\t\t\t<IncomeAmount value="5"/>
+\t\t\t<MaxHP value="475"/>
+\t\t\t<MaxGuildMembers value="4"/>
+\t\t\t<SightRange value="200"/>
+\t\t\t<Flags value="NotBuildable"/>
 \t\t\t<Flags value="IsGuild"/>
 \t\t\t<Flags value="HasHPBar"/>
 \t\t\t<Flags value="HasGoldToolTip"/>
@@ -1089,7 +1165,6 @@ def phantom_building_data() -> str:
 \t\t(subtype Guild)
 \t\t(title Phantoms_Haunt)
 \t\t(Level 1)
-\t\t(max_level 1)
 \t\t(member_title Phantom)
 \t\t(member_basicscript Phantom_tree)
 \t\t(max_members 4)
@@ -1099,6 +1174,45 @@ def phantom_building_data() -> str:
 \t\t(birthScript2 Phantoms_Haunt_Birth)
 \t\t(IGdeathscript Phantoms_Haunt_Destroyed)
 \t\t(upgradescript basic_upgrade)
+\t\t(Armor_Physical_Base 10)
+\t\t(Armor_Magical_Base 10)
+\t\t(IntentExt PHANTOMSGUILD)
+\t}
+[end]
+
+[Phantoms_Haunt2]
+\t{Guild
+\t\t(type building)
+\t\t(subtype Guild)
+\t\t(title Phantoms_Haunt)
+\t\t(Level 2)
+\t\t(member_title Phantom)
+\t\t(member_basicscript Phantom_tree)
+\t\t(max_members 4)
+\t\t(Lived_In_Script Phantom_Lived_In)
+\t\t(Sleep_for 30000)
+\t\t(birthScript Phantoms_Haunt_Birth)
+\t\t(IGdeathscript Phantoms_Haunt_Destroyed)
+\t\t(upgradescript basic_upgrade)
+\t\t(Armor_Physical_Base 10)
+\t\t(Armor_Magical_Base 10)
+\t\t(IntentExt PHANTOMSGUILD)
+\t}
+[end]
+
+[Phantoms_Haunt3]
+\t{Guild
+\t\t(type building)
+\t\t(subtype Guild)
+\t\t(title Phantoms_Haunt)
+\t\t(Level 3)
+\t\t(member_title Phantom)
+\t\t(member_basicscript Phantom_tree)
+\t\t(max_members 4)
+\t\t(Lived_In_Script Phantom_Lived_In)
+\t\t(Sleep_for 30000)
+\t\t(birthScript Phantoms_Haunt_Birth)
+\t\t(IGdeathscript Phantoms_Haunt_Destroyed)
 \t\t(Armor_Physical_Base 10)
 \t\t(Armor_Magical_Base 10)
 \t\t(IntentExt PHANTOMSGUILD)
@@ -1126,6 +1240,8 @@ def phantom_gpl() -> str:
     item_expressions += "expression #Phantom_Eternal_Soul_Confidence 25\n"
     item_expressions += "expression #Phantom_Endless_Winter_Confidence 30\n"
     item_expressions += "expression #Phantom_Paladin_Warning_Message 177\n"
+    item_expressions += "expression #Phantom_Rush_Movement_Bonus -22\n"
+    item_expressions += "expression #Phantom_Rush_Action_Bonus -10\n"
     return item_expressions + """
 
 Function Phantom_Player_Has_Placed_Haunt(agent ThisAgent) is boolean
@@ -1146,6 +1262,221 @@ Begin
 \treturn ($ListSize(Haunts) > 0);
 End
 
+Function Phantom_Player_Max_Completed_Haunt_Level(agent ThisAgent) is integer
+
+Declare
+\tlist Haunts;
+\tagent Haunt;
+\tinteger Best_Level;
+
+Begin
+\tBest_Level = 0;
+\t$ListObjects(
+\t\tThisAgent,
+\t\t"Building",
+\t\t-1,
+\t\tHaunts,
+\t\t#MyPlayer,
+\t\t#CheckTitles,
+\t\t"Phantoms_Haunt"
+\t);
+
+\tForeach Haunt in Haunts do
+\t\tIf ($IsDead(Haunt) == False)
+\t\t\tIf ($GetAttribute(Haunt, #ATTRIB_CurrentStageBuilt) == 1)
+\t\t\t\tIf (Haunt's "Level" > Best_Level)
+\t\t\t\t\tBest_Level = Haunt's "Level";
+
+\treturn Best_Level;
+End
+
+// Stock-shaped, persistent Winged Feet clone for Rush unto Death. It retains
+// the proven paired movement/action mechanism at mild custom values while
+// deliberately omitting the stock visible effectors and speed trail.
+Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)
+
+Declare
+
+Begin
+\t$AdjustAttribute(
+\t\tThisAgent,
+\t\t#ATTRIB_MovementRateModifier,
+\t\t#Phantom_Rush_Movement_Bonus
+\t);
+\t$AdjustAttribute(
+\t\tThisAgent,
+\t\t#ATTRIB_ActionRateModifier,
+\t\t#Phantom_Rush_Action_Bonus
+\t);
+\t$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 1);
+End
+
+Function Phantom_Rush_Unto_Death_End(agent ThisAgent)
+
+Declare
+
+Begin
+\t$AdjustAttribute(
+\t\tThisAgent,
+\t\t#ATTRIB_MovementRateModifier,
+\t\t- #Phantom_Rush_Movement_Bonus
+\t);
+\t$AdjustAttribute(
+\t\tThisAgent,
+\t\t#ATTRIB_ActionRateModifier,
+\t\t- #Phantom_Rush_Action_Bonus
+\t);
+\t$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 0);
+End
+
+Function Phantom_Start_Player_Perk_Watch(agent ThisAgent)
+
+Declare
+\tagent Palace;
+
+Begin
+\tPalace = $GetPalace(ThisAgent);
+\tIf ($IsValidGamePiece(Palace) == False)
+\t\treturn;
+
+\tIf ($HasAttribute("PhantomHauntPerkWatch", Palace) == False)
+\t\t$AddAttribute(
+\t\t\tPalace,
+\t\t\t"PhantomHauntPerkWatch",
+\t\t\t"function",
+\t\t\t$Phantom_Haunt_Player_Perk_Watch
+\t\t);
+
+\tIf ($IsRunning(Palace's "PhantomHauntPerkWatch") == False)
+\t\t$NewThread(Palace's "PhantomHauntPerkWatch", 500, Palace);
+End
+
+Function Phantom_Haunt_Player_Perk_Watch(agent Palace)
+
+Declare
+\tinteger Haunt_Level,Icy_Level,Winter_Level;
+\tlist Priestesses,Phantoms;
+\tagent Priestess,Phantom;
+
+Begin
+\tIf ($IsValidGamePiece(Palace) == False)
+\t\treturn;
+
+\tHaunt_Level = $Phantom_Player_Max_Completed_Haunt_Level(Palace);
+
+\t$ListObjects(
+\t\tPalace,
+\t\t"Hero",
+\t\t-1,
+\t\tPriestesses,
+\t\t#MyPlayer,
+\t\t#CheckTitles,
+\t\t"Priestess"
+\t);
+
+\tForeach Priestess in Priestesses do
+\t\tIf ($IsDead(Priestess) == False)
+\t\t\tbegin
+\t\t\t\tIf ($HasAttribute("PhantomRushUntoDeathActive", Priestess) == False)
+\t\t\t\t\t$AddAttribute(
+\t\t\t\t\t\tPriestess,
+\t\t\t\t\t\t"PhantomRushUntoDeathActive",
+\t\t\t\t\t\t"boolean",
+\t\t\t\t\t\tFalse
+\t\t\t\t\t);
+
+\t\t\t\tIf (Haunt_Level >= 3)
+\t\t\t\t\tbegin
+\t\t\t\t\t\tIf (
+\t\t\t\t\t\t\t$GetAttribute(
+\t\t\t\t\t\t\t\tPriestess,
+\t\t\t\t\t\t\t\t#ATTRIB_HasEffectWingedFeet
+\t\t\t\t\t\t\t) == 0
+\t\t\t\t\t\t)
+\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t$Phantom_Rush_Unto_Death_Begin(Priestess);
+\t\t\t\t\t\t\t\tPriestess's "PhantomRushUntoDeathActive" = True;
+\t\t\t\t\t\t\tend
+\t\t\t\t\tend
+\t\t\t\tElse If (Priestess's "PhantomRushUntoDeathActive" == True)
+\t\t\t\t\tbegin
+\t\t\t\t\t\t$Phantom_Rush_Unto_Death_End(Priestess);
+\t\t\t\t\t\tPriestess's "PhantomRushUntoDeathActive" = False;
+\t\t\t\t\tend
+\t\t\tend
+
+\t$ListObjects(
+\t\tPalace,
+\t\t"Hero",
+\t\t-1,
+\t\tPhantoms,
+\t\t#MyPlayer,
+\t\t#CheckTitles,
+\t\t"Phantom"
+\t);
+
+\tIcy_Level = $GetSpellAttribute("icy_touch", "character_level");
+\tWinter_Level = $GetSpellAttribute("endless_winter", "character_level");
+
+\tForeach Phantom in Phantoms do
+\t\tIf ($IsDead(Phantom) == False)
+\t\t\tbegin
+\t\t\t\tIf ($HasAttribute("PhantomIcyTouchHauntUnlocked", Phantom) == False)
+\t\t\t\t\t$AddAttribute(
+\t\t\t\t\t\tPhantom,
+\t\t\t\t\t\t"PhantomIcyTouchHauntUnlocked",
+\t\t\t\t\t\t"boolean",
+\t\t\t\t\t\tFalse
+\t\t\t\t\t);
+\t\t\t\tIf ($HasAttribute("PhantomEndlessWinterHauntUnlocked", Phantom) == False)
+\t\t\t\t\t$AddAttribute(
+\t\t\t\t\t\tPhantom,
+\t\t\t\t\t\t"PhantomEndlessWinterHauntUnlocked",
+\t\t\t\t\t\t"boolean",
+\t\t\t\t\t\tFalse
+\t\t\t\t\t);
+
+\t\t\t\tIf (
+\t\t\t\t\tHaunt_Level >= 2 &&
+\t\t\t\t\t$GetAttribute(Phantom, #ATTRIB_ExperienceLevel) >= Icy_Level
+\t\t\t\t)
+\t\t\t\t\tbegin
+\t\t\t\t\t\tIf (Phantom's "PhantomIcyTouchHauntUnlocked" == False)
+\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t$LearnSpell(Phantom, "icy_touch");
+\t\t\t\t\t\t\t\tPhantom's "PhantomIcyTouchHauntUnlocked" = True;
+\t\t\t\t\t\t\tend
+\t\t\t\t\tend
+\t\t\t\tElse
+\t\t\t\t\tbegin
+\t\t\t\t\t\t$ForgetSpell(Phantom, "icy_touch");
+\t\t\t\t\t\tPhantom's "PhantomIcyTouchHauntUnlocked" = False;
+\t\t\t\t\tend
+
+\t\t\t\tIf (
+\t\t\t\t\tHaunt_Level >= 3 &&
+\t\t\t\t\t$GetAttribute(Phantom, #ATTRIB_ExperienceLevel) >= Winter_Level
+\t\t\t\t)
+\t\t\t\t\tbegin
+\t\t\t\t\t\tIf (Phantom's "PhantomEndlessWinterHauntUnlocked" == False)
+\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t$LearnSpell(Phantom, "endless_winter");
+\t\t\t\t\t\t\t\tPhantom's "PhantomEndlessWinterHauntUnlocked" = True;
+\t\t\t\t\t\t\tend
+\t\t\t\t\tend
+\t\t\t\tElse
+\t\t\t\t\tbegin
+\t\t\t\t\t\t$ForgetSpell(Phantom, "endless_winter");
+\t\t\t\t\t\tPhantom's "PhantomEndlessWinterHauntUnlocked" = False;
+\t\t\t\t\tend
+\t\t\tend
+
+\t// Recheck while a Haunt exists. The old one-shot pass could run while
+\t// every Phantom was home, reject all candidates, and never try again.
+\tIf (Haunt_Level > 0)
+\t\t$NewThread(Palace's "PhantomHauntPerkWatch", 1000, Palace);
+End
+
 Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)
 
 Declare
@@ -1153,6 +1484,7 @@ Declare
 
 Begin
 \t$basic_birth(ThisAgent);
+\t$Phantom_Start_Player_Perk_Watch(ThisAgent);
 
 \tIf ($GetUnitPlayerNumber(ThisAgent) != #Monster_Player)
 \t\tbegin
@@ -1200,6 +1532,7 @@ Declare
 
 Begin
 \t$Guild_Birth(ThisAgent);
+\t$Phantom_Start_Player_Perk_Watch(ThisAgent);
 
 \tIf ($GetUnitPlayerNumber(ThisAgent) != #Monster_Player)
 \t\tbegin
@@ -1348,6 +1681,562 @@ Begin
 \t\treturn "Gnome";
 End
 
+// Preserve the stock Ranger/Wizard support selector for every normal hero,
+// while preventing Phantoms (which intentionally use Wizard_tree) from
+// inheriting the Wizard-only Barbarian/Monk escort behavior.
+function follow_support_check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean
+
+declare
+\tlist Potentials;
+\tagent Best_One;
+\tagent Diddly;
+\tlist New_Potentials,Guards;
+\tinteger Range;
+
+begin
+\tIf (ThisAgent's "Title" == "Phantom")
+\t\treturn False;
+
+\tIf ($RandomNumber(100) + 1 > Chance)
+\t\treturn False;
+
+\tRange = $GetAttribute(ThisAgent, #ATTRIB_SightRange) * #Follow_support_Check_Mod;
+\t$ListObjects(ThisAgent, "Hero", Range, Potentials, #MyTeam);
+\tPotentials = $ListTitles(Potentials, WhatToSupport);
+
+\tIf ($ListSize(Potentials) > 0)
+\t\tbegin
+\t\t\tForeach Diddly in Potentials do
+\t\t\t\tbegin
+\t\t\t\t\tIf (
+\t\t\t\t\t\t(Diddly's "BackScript" == $Use_Building) &&
+\t\t\t\t\t\t(Diddly's "Target" == Diddly's "Home")
+\t\t\t\t\t)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tRange - Range;
+\t\t\t\t\t\tend
+\t\t\t\t\tElse
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tGuards = $ListTitlesInRadius(
+\t\t\t\t\t\t\t\tDiddly,
+\t\t\t\t\t\t\t\t"Hero",
+\t\t\t\t\t\t\t\tThisAgent's "Title",
+\t\t\t\t\t\t\t\tRange
+\t\t\t\t\t\t\t);
+\t\t\t\t\t\t\tIf ($ListSize(Guards) < #support_max)
+\t\t\t\t\t\t\t\tNew_Potentials << Diddly;
+\t\t\t\t\t\tend
+\t\t\t\tend
+\t\tend
+\tElse
+\t\treturn False;
+
+\tPotentials = New_Potentials;
+\tIf ($ListSize(Potentials) == 0)
+\t\treturn False;
+
+\tBest_One = $ListMember(Potentials, 1);
+\tThisAgent's "BasicScript" = $Follow_Support;
+\tThisAgent's "BackScript" = $Follow_Support;
+\tThisAgent's "ActiveScript" = $Follow_Support;
+\tThisAgent's "BackTarget" = Best_One;
+\t$SpecifyIntent(ThisAgent, #intent_following_and_supporting);
+\tThisAgent's "Counter" = 0;
+\treturn True;
+end
+
+// Priestess-only clone of the proven stock selector. The evaluating Priestess
+// is included in the nearby same-title guard count, so a threshold of 2 allows
+// her to claim an unguarded Phantom but rejects one with an established
+// Priestess already nearby. Rangers and Wizards retain stock #support_max.
+function Phantom_Priestess_Follow_Support_Check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean
+
+declare
+\tlist Potentials;
+\tagent Best_One;
+\tagent Diddly;
+\tlist New_Potentials,Guards;
+\tinteger Range;
+
+begin
+\tIf (ThisAgent's "Title" == "Phantom")
+\t\treturn False;
+
+\tIf ($RandomNumber(100) + 1 > Chance)
+\t\treturn False;
+
+\tRange = $GetAttribute(ThisAgent, #ATTRIB_SightRange) * #Follow_support_Check_Mod;
+\t$ListObjects(ThisAgent, "Hero", Range, Potentials, #MyTeam);
+\tPotentials = $ListTitles(Potentials, WhatToSupport);
+
+\tIf ($ListSize(Potentials) > 0)
+\t\tbegin
+\t\t\tForeach Diddly in Potentials do
+\t\t\t\tbegin
+\t\t\t\t\tIf (
+\t\t\t\t\t\t(Diddly's "BackScript" == $Use_Building) &&
+\t\t\t\t\t\t(Diddly's "Target" == Diddly's "Home")
+\t\t\t\t\t)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tRange - Range;
+\t\t\t\t\t\tend
+\t\t\t\t\tElse
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tGuards = $ListTitlesInRadius(
+\t\t\t\t\t\t\t\tDiddly,
+\t\t\t\t\t\t\t\t"Hero",
+\t\t\t\t\t\t\t\tThisAgent's "Title",
+\t\t\t\t\t\t\t\tRange
+\t\t\t\t\t\t\t);
+\t\t\t\t\t\t\tIf ($ListSize(Guards) < 2)
+\t\t\t\t\t\t\t\tNew_Potentials << Diddly;
+\t\t\t\t\t\tend
+\t\t\t\tend
+\t\tend
+\tElse
+\t\treturn False;
+
+\tPotentials = New_Potentials;
+\tIf ($ListSize(Potentials) == 0)
+\t\treturn False;
+
+\tBest_One = $Pick_Closest(ThisAgent, Potentials);
+\tThisAgent's "BasicScript" = $Phantom_Priestess_Follow_Support;
+\tThisAgent's "BackScript" = $Phantom_Priestess_Follow_Support;
+\tThisAgent's "ActiveScript" = $Phantom_Priestess_Follow_Support;
+\tThisAgent's "BackTarget" = Best_One;
+\t$SpecifyIntent(ThisAgent, #intent_following_and_supporting);
+\tThisAgent's "Counter" = 0;
+\treturn True;
+end
+
+// Priestess-only clone of stock Follow_Support. The sole movement change is
+// to travel toward a snapshot coordinate of the Phantom instead of passing the
+// moving Phantom agent to Travel_To. Coordinate travel avoids repeatedly
+// terminating when moving-agent pursuit briefly reports IsMoving == False.
+function Phantom_Priestess_Follow_Support(agent ThisAgent)
+
+declare
+\tagent Target,New_Target;
+\tinteger TargetRange;
+
+begin
+\tTarget = ThisAgent's "BackTarget";
+
+\tIf ($NotValid(Target))
+\t\tbegin
+\t\t\tThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+\t\t\t$Reset_Tasks(ThisAgent);
+\t\tend
+\tElse
+\t\tbegin
+\t\t\tIf (
+\t\t\t\t$GetPlayerTeamNumber(ThisAgent) !=
+\t\t\t\t$GetPlayerTeamNumber(Target)
+\t\t\t)
+\t\t\t\tbegin
+\t\t\t\t\tThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+\t\t\t\t\t$Reset_Tasks(ThisAgent);
+\t\t\t\t\treturn;
+\t\t\t\tend
+
+\t\t\tIf ($HasLowHP(ThisAgent))
+\t\t\t\tbegin
+\t\t\t\t\tThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+\t\t\t\t\t$Reset_Tasks(ThisAgent);
+\t\t\t\tend
+\t\t\tElse
+\t\t\t\tbegin
+\t\t\t\t\tIf (
+\t\t\t\t\t\t(Target's "BackScript" == $Use_Building) &&
+\t\t\t\t\t\t(Target's "Target" == Target's "Home")
+\t\t\t\t\t)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+\t\t\t\t\t\t\t$Reset_Tasks(ThisAgent);
+\t\t\t\t\t\t\treturn;
+\t\t\t\t\t\tend
+
+\t\t\t\t\tTargetRange = $DistanceBetweenAgents(ThisAgent, Target);
+\t\t\t\t\tIf (
+\t\t\t\t\t\tTargetRange >
+\t\t\t\t\t\t(
+\t\t\t\t\t\t\t$GetAttribute(ThisAgent, #ATTRIB_MaxAttackRange) -
+\t\t\t\t\t\t\t#follow_support_buffer
+\t\t\t\t\t\t)
+\t\t\t\t\t)
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\tThisAgent's "Destination" = $LocationOf(Target);
+\t\t\t\t\t\t\tThisAgent's "ActiveScript" = $Travel_To;
+\t\t\t\t\t\t\tThisAgent's "BackScript" =
+\t\t\t\t\t\t\t\t$Phantom_Priestess_Follow_Support;
+\t\t\t\t\t\t\tThisAgent's "Target" = ThisAgent;
+\t\t\t\t\t\t\t$Move(
+\t\t\t\t\t\t\t\tThisAgent,
+\t\t\t\t\t\t\t\tThisAgent's "Destination",
+\t\t\t\t\t\t\t\t"avoid_vehicles"
+\t\t\t\t\t\t\t);
+\t\t\t\t\t\t\tThisAgent's "Counter" = 0;
+\t\t\t\t\t\tend
+\t\t\t\t\tElse
+\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t$Cleanse_Hostiles(ThisAgent);
+\t\t\t\t\t\t\tIf ($ListSize(ThisAgent's "Hostiles") > 0)
+\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\tNew_Target =
+\t\t\t\t\t\t\t\t\t\t$Pick_Closest(ThisAgent, ThisAgent's "Hostiles");
+\t\t\t\t\t\t\t\t\tThisAgent's "ActiveScript" = $Attack_Object;
+\t\t\t\t\t\t\t\t\tThisAgent's "BackScript" = $Attack_Object;
+\t\t\t\t\t\t\t\t\tThisAgent's "Target" = New_Target;
+\t\t\t\t\t\t\t\t\treturn;
+\t\t\t\t\t\t\t\tend
+
+\t\t\t\t\t\t\t$Cleanse_Hostiles(Target);
+\t\t\t\t\t\t\tIf ($ListSize(Target's "Hostiles") > 0)
+\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\tNew_Target =
+\t\t\t\t\t\t\t\t\t\t$Pick_Closest(ThisAgent, Target's "Hostiles");
+\t\t\t\t\t\t\t\t\tThisAgent's "ActiveScript" = $Attack_Object;
+\t\t\t\t\t\t\t\t\tThisAgent's "BackScript" = $Attack_Object;
+\t\t\t\t\t\t\t\t\tThisAgent's "Target" = New_Target;
+\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\tElse If (
+\t\t\t\t\t\t\t\tTarget's "BackScript" == $Attack_Object ||
+\t\t\t\t\t\t\t\tTarget's "ActiveScript" == $Attack_Object
+\t\t\t\t\t\t\t)
+\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\tIf ($IsValidGamePiece(Target's "Target"))
+\t\t\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\t\t\tNew_Target = Target's "Target";
+\t\t\t\t\t\t\t\t\t\t\tTargetRange =
+\t\t\t\t\t\t\t\t\t\t\t\t$DistanceBetweenAgents(New_Target, Target);
+\t\t\t\t\t\t\t\t\t\t\tIf (
+\t\t\t\t\t\t\t\t\t\t\t\tTargetRange <
+\t\t\t\t\t\t\t\t\t\t\t\t$GetAttribute(
+\t\t\t\t\t\t\t\t\t\t\t\t\tThisAgent,
+\t\t\t\t\t\t\t\t\t\t\t\t\t#ATTRIB_MaxAttackRange
+\t\t\t\t\t\t\t\t\t\t\t\t)
+\t\t\t\t\t\t\t\t\t\t\t)
+\t\t\t\t\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\t\t\t\t\tThisAgent's "ActiveScript" =
+\t\t\t\t\t\t\t\t\t\t\t\t\t\t$Attack_Object;
+\t\t\t\t\t\t\t\t\t\t\t\t\tThisAgent's "BackScript" =
+\t\t\t\t\t\t\t\t\t\t\t\t\t\t$Attack_Object;
+\t\t\t\t\t\t\t\t\t\t\t\t\tThisAgent's "Target" = New_Target;
+\t\t\t\t\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\tElse
+\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\tIf ($RandomNumber(100) > 85)
+\t\t\t\t\t\t\t\t\t\t$PerformAction(
+\t\t\t\t\t\t\t\t\t\t\tThisAgent,
+\t\t\t\t\t\t\t\t\t\t\tThisAgent's "Idle_Action",
+\t\t\t\t\t\t\t\t\t\t\tTarget
+\t\t\t\t\t\t\t\t\t\t);
+
+\t\t\t\t\t\t\t\t\tThisAgent's "Counter" += 1;
+\t\t\t\t\t\t\t\t\tIf (ThisAgent's "Counter" >= #followBored)
+\t\t\t\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\t\t\t\t$Move(
+\t\t\t\t\t\t\t\t\t\t\t\tThisAgent,
+\t\t\t\t\t\t\t\t\t\t\t\t$RandomCoord(ThisAgent, 150)
+\t\t\t\t\t\t\t\t\t\t\t);
+\t\t\t\t\t\t\t\t\t\t\tThisAgent's "Counter" = 0;
+\t\t\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\t\t\tend
+\t\t\t\t\t\tend
+\t\t\t\tend
+\t\tend
+end
+
+Function Phantom_Priestess_Assigned_To(agent Phantom) is boolean
+
+Declare
+\tlist Priestesses;
+\tagent Priestess;
+
+Begin
+\t$ListObjects(
+\t\tPhantom,
+\t\t"Hero",
+\t\t-1,
+\t\tPriestesses,
+\t\t#MyPlayer,
+\t\t#CheckTitles,
+\t\t"Priestess"
+\t);
+
+\tForeach Priestess in Priestesses do
+\t\tIf ($IsDead(Priestess) == False)
+\t\t\tIf (Priestess's "BasicScript" == $Follow_Support)
+\t\t\t\tIf (Priestess's "BackTarget" == Phantom)
+\t\t\t\t\treturn True;
+
+\treturn False;
+End
+
+Function Phantom_Priestess_Support_Check(agent ThisAgent, integer Chance) is boolean
+
+Declare
+\tinteger Distance,Best_Distance;
+\tlist Phantoms;
+\tagent Phantom,Best_Phantom;
+
+Begin
+\tIf (ThisAgent's "Title" != "Priestess")
+\t\treturn False;
+
+\tIf ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) < 3)
+\t\treturn False;
+
+\tIf ($RandomNumber(100) + 1 > Chance)
+\t\treturn False;
+
+\t$ListObjects(
+\t\tThisAgent,
+\t\t"Hero",
+\t\t-1,
+\t\tPhantoms,
+\t\t#MyPlayer,
+\t\t#CheckTitles,
+\t\t"Phantom"
+\t);
+
+\tBest_Distance = 1000000;
+\tForeach Phantom in Phantoms do
+\t\tIf ($IsDead(Phantom) == False)
+\t\t\tIf (
+\t\t\t\t(Phantom's "BackScript" != $Use_Building) ||
+\t\t\t\t(Phantom's "Target" != Phantom's "Home")
+\t\t\t)
+\t\t\t\tIf ($Phantom_Priestess_Assigned_To(Phantom) == False)
+\t\t\t\t\tbegin
+\t\t\t\t\t\tDistance = $DistanceBetweenAgents(ThisAgent, Phantom);
+\t\t\t\t\t\tIf (Distance < Best_Distance)
+\t\t\t\t\t\t\tbegin
+\t\t\t\t\t\t\t\tBest_Distance = Distance;
+\t\t\t\t\t\t\t\tBest_Phantom = Phantom;
+\t\t\t\t\t\t\tend
+\t\t\t\t\tend
+
+\tIf ($IsValidGamePiece(Best_Phantom) == False)
+\t\treturn False;
+
+\tThisAgent's "BasicScript" = $Phantom_Follow_Support;
+\tThisAgent's "BackScript" = $Phantom_Follow_Support;
+\tThisAgent's "ActiveScript" = $Phantom_Follow_Support;
+\tThisAgent's "BackTarget" = Best_Phantom;
+\t$SpecifyIntent(ThisAgent, #intent_following_and_supporting);
+\tThisAgent's "Counter" = 0;
+\treturn True;
+End
+
+Function Phantom_End_Priestess_Support(agent ThisAgent)
+
+Declare
+
+Begin
+\tThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+\t$Reset_Tasks(ThisAgent);
+End
+
+Function Phantom_Follow_Support(agent ThisAgent)
+
+Declare
+\tagent Target,New_Target;
+\tinteger Target_Range;
+
+Begin
+\tTarget = ThisAgent's "BackTarget";
+
+\tIf ($IsValidGamePiece(Target) == False)
+\t\tbegin
+\t\t\t$Phantom_End_Priestess_Support(ThisAgent);
+\t\t\treturn;
+\t\tend
+
+\tIf ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) < 3)
+\t\tbegin
+\t\t\t$Phantom_End_Priestess_Support(ThisAgent);
+\t\t\treturn;
+\t\tend
+
+\tIf ($GetUnitPlayerNumber(ThisAgent) != $GetUnitPlayerNumber(Target))
+\t\tbegin
+\t\t\t$Phantom_End_Priestess_Support(ThisAgent);
+\t\t\treturn;
+\t\tend
+
+\tIf ($HasLowHP(ThisAgent))
+\t\tbegin
+\t\t\t$Phantom_End_Priestess_Support(ThisAgent);
+\t\t\treturn;
+\t\tend
+
+\tIf ((Target's "BackScript" == $Use_Building) && (Target's "Target" == Target's "Home"))
+\t\tbegin
+\t\t\t$Phantom_End_Priestess_Support(ThisAgent);
+\t\t\treturn;
+\t\tend
+
+\t// Build_Horde is normally the first Priestess decision. Keeping it here
+\t// preserves control-undead and skeleton replenishment while she escorts.
+\tIf ($Build_Horde(ThisAgent, 95))
+\t\treturn;
+
+\tTarget_Range = $DistanceBetweenAgents(ThisAgent, Target);
+\tIf (
+\t\tTarget_Range >
+\t\t($GetAttribute(ThisAgent, #ATTRIB_MaxAttackRange) - #follow_support_buffer)
+\t)
+\t\tbegin
+\t\t\tThisAgent's "Destination" = $LocationOf(Target);
+\t\t\tThisAgent's "ActiveScript" = $Travel_To;
+\t\t\tThisAgent's "BackScript" = $Phantom_Follow_Support;
+\t\t\t$Move(ThisAgent, Target, "avoid_vehicles");
+\t\t\tThisAgent's "Counter" = 0;
+\t\t\treturn;
+\t\tend
+
+\t$Cleanse_Hostiles(ThisAgent);
+\tIf ($ListSize(ThisAgent's "Hostiles") > 0)
+\t\tbegin
+\t\t\tNew_Target = $Pick_Closest(ThisAgent, ThisAgent's "Hostiles");
+\t\t\tThisAgent's "ActiveScript" = $Attack_Object;
+\t\t\tThisAgent's "BackScript" = $Phantom_Follow_Support;
+\t\t\tThisAgent's "Target" = New_Target;
+\t\t\treturn;
+\t\tend
+
+\t$Cleanse_Hostiles(Target);
+\tIf ($ListSize(Target's "Hostiles") > 0)
+\t\tbegin
+\t\t\tNew_Target = $Pick_Closest(ThisAgent, Target's "Hostiles");
+\t\t\tThisAgent's "ActiveScript" = $Attack_Object;
+\t\t\tThisAgent's "BackScript" = $Phantom_Follow_Support;
+\t\t\tThisAgent's "Target" = New_Target;
+\t\t\treturn;
+\t\tend
+
+\tIf (
+\t\t(Target's "BackScript" == $Attack_Object) ||
+\t\t(Target's "ActiveScript" == $Attack_Object)
+\t)
+\t\tIf ($IsValidGamePiece(Target's "Target"))
+\t\t\tbegin
+\t\t\t\tNew_Target = Target's "Target";
+\t\t\t\tTarget_Range = $DistanceBetweenAgents(New_Target, Target);
+\t\t\t\tIf (Target_Range < $GetAttribute(ThisAgent, #ATTRIB_MaxAttackRange))
+\t\t\t\t\tbegin
+\t\t\t\t\t\tThisAgent's "ActiveScript" = $Attack_Object;
+\t\t\t\t\t\tThisAgent's "BackScript" = $Phantom_Follow_Support;
+\t\t\t\t\t\tThisAgent's "Target" = New_Target;
+\t\t\t\t\t\treturn;
+\t\t\t\t\tend
+\t\t\tend
+
+\tIf ($RandomNumber(100) > 85)
+\t\t$PerformAction(ThisAgent, ThisAgent's "Idle_Action", Target);
+
+\tThisAgent's "Counter" += 1;
+\tIf (ThisAgent's "Counter" >= #followBored)
+\t\tbegin
+\t\t\t$Move(ThisAgent, $RandomCoord(ThisAgent, 150));
+\t\t\tThisAgent's "Counter" = 0;
+\t\tend
+End
+
+Function Phantom_Priestess_Tree(agent ThisAgent)
+
+Declare
+
+Begin
+\t$CreateEffector(ThisAgent, "thought_bubble_think", #think_bubble_time);
+\t$SpecifyIntent(ThisAgent, #Intent_Thinking);
+
+\tIf ($Build_Horde(ThisAgent, 95) == False)
+\tIf ($Phantom_Priestess_Support_Check(ThisAgent, 100) == False)
+\tIf ($Check_Nearby(ThisAgent) == False)
+\tIf ($Check_Rewards(ThisAgent, False) == False)
+\tIf ($Defend_Home(ThisAgent) == False)
+\tIf ($Rest(ThisAgent) == False)
+\tIf ($Purchase_Equipment(ThisAgent) == False)
+\tIf ($Pursue_Entertainment(ThisAgent) == False)
+\tIf ($Combat_Wandering(ThisAgent, 75) == False)
+\tIf ($Combat_Wandering_Heroes(ThisAgent, 70) == False)
+\tIf ($Raid_Lair(ThisAgent, 40) == False)
+\tIf ($Raid_Enemy_Building(ThisAgent, 30) == False)
+\tIf ($Explore_Map(ThisAgent, 50) == False)
+\tIf ($Visit_Building(ThisAgent, "Royal_gardens", 15) == False)
+\tIf ($Check_Library(ThisAgent, 45, "Train_magic_resist") == False)
+\tIf ($Check_Library(ThisAgent, 70, "Learn_generic_spell") == False)
+\tIf ($Go_Home(ThisAgent, 80) == False)
+\t\tbegin
+\t\t\t$SpecifyIntent(ThisAgent, #intent_wandering);
+\t\t\tThisAgent's "Counter" = 0;
+\t\t\tThisAgent's "ActiveScript" = $Hero_Wander;
+\t\tend
+End
+
+// Keep the proven stock-shaped Rush unto Death route: retain the expansion
+// Priestess tree and call the Priestess-only clone of the stock selector.
+// Defining Priestess_tree by its stock name lets the normal hero decision cycle
+// invoke it without forcing scripts from the Palace watcher.
+Function Phantom_Priestess_Follow_Check(agent ThisAgent) is boolean
+
+Declare
+
+Begin
+\tIf ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) < 3)
+\t\treturn False;
+
+\tIf (
+\t\t$Phantom_Priestess_Follow_Support_Check(
+\t\t\tThisAgent,
+\t\t\t"Phantom",
+\t\t\t100
+\t\t) == True
+\t)
+\t\treturn True;
+
+\treturn False;
+End
+
+function Priestess_tree(agent ThisAgent)
+
+Declare
+
+Begin
+\t$CreateEffector(ThisAgent, "thought_bubble_think", #think_bubble_time);
+\t$SpecifyIntent(ThisAgent, #Intent_Thinking);
+
+\tIf ($Build_Horde(ThisAgent, 95) == False)
+\tIf ($Phantom_Priestess_Follow_Check(ThisAgent) == False)
+\tIf ($Check_Nearby(ThisAgent) == False)
+\tIf ($Check_Rewards(ThisAgent, False) == False)
+\tIf ($Defend_Home(ThisAgent) == False)
+\tIf ($Rest(ThisAgent) == False)
+\tIf ($Purchase_Equipment(ThisAgent) == False)
+\tIf ($Purchase_Bazaar(ThisAgent, 70) == False)
+\tIf ($Pursue_Entertainment(ThisAgent) == False)
+\tIf ($Hall_Champs_Check(ThisAgent, 40) == False)
+\tIf ($Combat_Wandering(ThisAgent, 75) == False)
+\tIf ($Combat_Wandering_Heroes(ThisAgent, 70) == False)
+\tIf ($Raid_Lair(ThisAgent, 40) == False)
+\tIf ($Raid_Enemy_Building(ThisAgent, 30) == False)
+\tIf ($Explore_Map(ThisAgent, 50) == False)
+\tIf ($Visit_Building(ThisAgent, "Royal_gardens", 15) == False)
+\tIf ($Check_Library(ThisAgent, 45, "Train_magic_resist") == False)
+\tIf ($Check_Library(ThisAgent, 70, "Learn_generic_spell") == False)
+\tIf ($Go_Home(ThisAgent, 80) == False)
+\t\tbegin
+\t\t\t$SpecifyIntent(ThisAgent, #intent_wandering);
+\t\t\tThisAgent's "Counter" = 0;
+\t\t\tThisAgent's "ActiveScript" = $Hero_Wander;
+\t\tend
+End
+
 function spell_extra_value(agent thisagent) is integer
 
 declare
@@ -1386,7 +2275,10 @@ begin
 \t\t\tif ($isspellavailable(thisagent,"frost_armor",1))
 \t\t\t\tvalue += #Phantom_Frost_Armor_Confidence;
 
-\t\t\tif ($isspellavailable(thisagent,"icy_touch",1))
+\t\t\tif (
+\t\t\t\t$Phantom_Player_Max_Completed_Haunt_Level(thisagent) >= 2 &&
+\t\t\t\t$isspellavailable(thisagent,"icy_touch",1)
+\t\t\t)
 \t\t\t\tvalue += #Phantom_Icy_Touch_Confidence;
 
 \t\t\tif ($isspellavailable(thisagent,"call_to_grave",1))
@@ -1395,7 +2287,10 @@ begin
 \t\t\tif ($isspellavailable(thisagent,"eternal_soul",1))
 \t\t\t\tvalue += #Phantom_Eternal_Soul_Confidence;
 
-\t\t\tif ($isspellavailable(thisagent,"endless_winter",1))
+\t\t\tif (
+\t\t\t\t$Phantom_Player_Max_Completed_Haunt_Level(thisagent) >= 3 &&
+\t\t\t\t$isspellavailable(thisagent,"endless_winter",1)
+\t\t\t)
 \t\t\t\tvalue += #Phantom_Endless_Winter_Confidence;
 \t\tend
 
@@ -1450,7 +2345,7 @@ end
 function RISE_RATMEN()
 
 declare
-\tagent AIRootAgent,palace,phantoms_haunt,dauros_temple,warriors_guild,embassy;
+\tagent AIRootAgent,palace,phantoms_haunt,dauros_temple,fervus_temple,krypta_temple,warriors_guild,embassy;
 \tlist palaces;
 
 begin
@@ -1464,6 +2359,8 @@ begin
 
 \tphantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt", $RandomCoord(palace, 275, 475), "MaxHP");
 \tdauros_temple = $SpawnUnit(palace, "Temple_Dauros1", $RandomCoord(palace, 275, 475), "MaxHP");
+\tfervus_temple = $SpawnUnit(palace, "Temple_Fervus1", $RandomCoord(palace, 275, 475), "MaxHP");
+\tkrypta_temple = $SpawnUnit(palace, "Temple_Krypta1", $RandomCoord(palace, 275, 475), "MaxHP");
 \twarriors_guild = $SpawnUnit(palace, "Warriors_Guild", $RandomCoord(palace, 275, 475), "MaxHP");
 \tembassy = $SpawnUnit(palace, "Embassy", $RandomCoord(palace, 275, 475), "MaxHP");
 
@@ -1732,7 +2629,7 @@ end
 function Drain_Life_Hit(agent thisagent, agent target)
 
 declare
-\tinteger Effector_Duration,Healing_Needed,Temp_Healing_Needed,HP,MaxHP;
+\tinteger Effector_Duration,Healing,Healing_Needed,Temp_Healing_Needed,HP,MaxHP;
 \tlist Phantoms,My_Skeletons;
 \tagent Phantom,Best_Phantom,Skeleton,Best_Skeleton;
 
@@ -1743,13 +2640,16 @@ begin
 \t\treturn;
 
 \tEffector_Duration = $GetSpellAttribute("Drain_Life", "effector_duration");
+\tHealing = 5;
+\tIf ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) >= 2)
+\t\tHealing = 10;
 
 \tIf (Target's "Type" != "Building" && Target's "Type" != "Lair")
 \t\tbegin
 \t\t\tIf ($GetAttribute(ThisAgent, #ATTRIB_HP) < $GetAttribute(ThisAgent, #ATTRIB_MaxHP))
 \t\t\t\tbegin
 \t\t\t\t\t$CreateEffector(ThisAgent, "life_drain_effector2", Effector_Duration);
-\t\t\t\t\t$Heal(ThisAgent, ThisAgent, 5);
+\t\t\t\t\t$Heal(ThisAgent, ThisAgent, Healing);
 \t\t\t\tend
 \t\t\tElse
 \t\t\t\tbegin
@@ -1783,7 +2683,7 @@ begin
 \t\t\t\t\tIf ($IsValidGamePiece(Best_Phantom))
 \t\t\t\t\t\tbegin
 \t\t\t\t\t\t\t$CreateEffector(Best_Phantom, "life_drain_effector2", Effector_Duration);
-\t\t\t\t\t\t\t$Heal(ThisAgent, Best_Phantom, 5);
+\t\t\t\t\t\t\t$Heal(ThisAgent, Best_Phantom, Healing);
 \t\t\t\t\t\tend
 \t\t\t\t\tElse
 \t\t\t\t\t\tbegin
@@ -1816,7 +2716,7 @@ begin
 \t\t\t\t\t\t\tIf ($IsValidGamePiece(Best_Skeleton))
 \t\t\t\t\t\t\t\tbegin
 \t\t\t\t\t\t\t\t\t$CreateEffector(Best_Skeleton, "life_drain_effector2", Effector_Duration);
-\t\t\t\t\t\t\t\t\t$Heal(ThisAgent, Best_Skeleton, 5);
+\t\t\t\t\t\t\t\t\t$Heal(ThisAgent, Best_Skeleton, Healing);
 \t\t\t\t\t\t\t\tend
 \t\t\t\t\t\tend
 \t\t\t\tend
@@ -2201,6 +3101,9 @@ begin
 \t$hero_birth(thisagent);
 \t$Phantom_grant_starter_items(thisagent);
 \t$LearnSpell(thisagent, "ice_lance");
+\t$ForgetSpell(thisagent, "icy_touch");
+\t$ForgetSpell(thisagent, "endless_winter");
+\t$Phantom_Start_Player_Perk_Watch(thisagent);
 \tthisagent's "Reborn_Counter" = 0;
 \tthisagent's "QuestScript" = $Phantom_Frost_Armor_Watch;
 \t$NewThread(thisagent's "QuestScript", 100, thisagent);
@@ -2977,6 +3880,9 @@ declare
 \tinteger distance;
 
 begin
+\tIf ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 2)
+\t\treturn 0;
+
 \ttarget = thisagent's "Target";
 
 \tIf ($NotValid(target))
@@ -3002,6 +3908,9 @@ declare
 \tagent target;
 
 begin
+\tIf ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 2)
+\t\treturn;
+
 \ttarget = thisagent's "Target";
 
 \tIf ($NotValid(target))
@@ -3099,6 +4008,9 @@ declare
 \tinteger target_distance;
 
 begin
+\tIf ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 3)
+\t\treturn;
+
 \tcast_range = $Phantom_effective_casting_range(thisagent);
 \ttargets = $compile_enemies(thisagent, cast_range);
 \tIf ($ListSize(targets) == 0)
@@ -3129,6 +4041,9 @@ declare
 
 begin
 \tIf ($isdead(thisagent))
+\t\treturn 0;
+
+\tIf ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 3)
 \t\treturn 0;
 
 \tcast_range = $Phantom_effective_casting_range(thisagent);
@@ -3362,6 +4277,24 @@ def mod_xml() -> str:
 """
 
 
+def patch_ap10_menu_for_ap07(data: bytes) -> bytes:
+    """Retain AP10's upgrade control but remove its unsafe temple-spell button."""
+    output = bytearray(data)
+    expected_rect = (103, 162, 93, 26)
+    actual_rect = struct.unpack_from("<4I", output, AP10_SPELL_BUTTON_RECT_OFFSET)
+    if actual_rect != expected_rect:
+        raise ValueError(
+            "Stock AP10 spell-button layout changed: "
+            f"expected {expected_rect}, found {actual_rect}"
+        )
+
+    # AP07's executable handler has no temple-spell callback. A zero-sized
+    # final control cannot be rendered or clicked, but leaves every preceding
+    # AP10 control—including native Upgrade and Heroes—at its stock offset.
+    struct.pack_into("<2I", output, AP10_SPELL_BUTTON_RECT_OFFSET + 8, 0, 0)
+    return bytes(output)
+
+
 def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
     unit_names = read_cam_entry(source_textdata, b"STRT", b"UNTN")
     action_names = read_cam_entry(source_textdata, b"STRT", b"ACTN")
@@ -3372,6 +4305,8 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
         {
             fourcc_id(HERO_ID): "Phantom",
             fourcc_id(BUILDING_TEXT_ID): "Phantoms Haunt",
+            fourcc_id("PHG2"): "Phantoms Haunt",
+            fourcc_id("PHG3"): "Phantoms Haunt",
             fourcc_id("PHIC"): "Frozen Cowl",
             fourcc_id("PHIR"): "Black Icerod",
         },
@@ -3387,11 +4322,13 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
             fourcc_id("WRa7"): "Eternal Soul",
         },
     )
-    cloned_guild_menu = (
+    cloned_guild_menu = patch_ap10_menu_for_ap07(
         source_guild_menu.data
-        # AP07 uses AVd1 for the Elf guild member/count icon. The INTI token is
-        # the broad panel texture source; INBg is mostly frame/control pieces.
+        # AP10 uses AVC1 for the Cultist guild member/count icon. Retain the
+        # older AP07 icon aliases as defensive replacements while this stock
+        # upgradable layout is emitted under the Haunt's AP07 external ID.
         .replace(b"AVd1", b"PHM1")
+        .replace(b"AVC1", b"PHM1")
         .replace(b"AVE1", b"PHM1")
         .replace(b"AVG1", b"PHM1")
         .replace(b"INTI", b"PHTI")
@@ -3403,6 +4340,14 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
             1: "RECRUIT Phantom         ",
             2: "Recruit a Phantom ",
             3: "Destroy this Phantoms Haunt.",
+            # These fields are dynamically populated only by AP10's executable
+            # handler. Under AP07 they remain misleading stock placeholders.
+            16: "",
+            17: "",
+            18: "",
+            # The corresponding AP10 control is also reduced to a zero hitbox.
+            29: "",
+            30: "",
         },
     )
 
@@ -3478,6 +4423,11 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
             fourcc_id("hP34"): (
                 "- Recruits Phantoms\n\n"
                 "- Phantoms are ghostly ice casters with custom class gear\n\n"
+                "\x01AADDFFLevel 2: unlocks Icy Touch and Gravekeeper. "
+                "Gravekeeper doubles all healing delivered by allied Priestesses' Drain Life.\n\n"
+                "\x01AADDFFLevel 3: unlocks Endless Winter and Rush unto Death. "
+                "Rush unto Death makes allied Priestesses faster and lets each Phantom attract "
+                "one Priestess as a following combat support.\n\n"
                 "\x01FF8888Warning: Starting construction prevents Paladin recruitment. "
                 "Completing the Haunt causes all existing Paladins to leave Ardania.\n\n"
                 "\x01BCBCFFThe Phantoms Haunt gathers cold, restless spirits into service as arcane heroes. "
@@ -3551,6 +4501,8 @@ def write_maindata_cam(
     building_profile_rgb: Path | None,
     building_icon_rgb: Path | None,
     building_sprite_rgb_dir: Path | None,
+    building_level_2_sprite_rgb_dir: Path | None,
+    building_level_3_sprite_rgb_dir: Path | None,
     hero_sprite_png_dir: Path | None,
     interface_panel_rgb: Path | None,
     ice_lance_icon_rgb: Path | None,
@@ -3568,6 +4520,16 @@ def write_maindata_cam(
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
     hero_imag = replace_priestess_die_holds_with_directional_third_frames(hero_imag)
     building_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_BUILDING_IMAGE).data
+    building_level_2_imag = read_cam_entry(
+        source_maindata,
+        b"IMAG",
+        SOURCE_BUILDING_LEVEL_2_IMAGE,
+    ).data
+    building_level_3_imag = read_cam_entry(
+        source_maindata,
+        b"IMAG",
+        SOURCE_BUILDING_LEVEL_3_IMAGE,
+    ).data
     teleport_effect_imag = read_cam_entry(
         source_maindata,
         b"IMAG",
@@ -3722,6 +4684,18 @@ def write_maindata_cam(
     )
     building_sprite_rgb_paths = building_sprite_replacement_paths(building_sprite_rgb_dir)
     building_active_frame_paths = building_active_replacement_paths(building_sprite_rgb_dir)
+    building_level_2_sprite_rgb_paths = building_sprite_replacement_paths(
+        building_level_2_sprite_rgb_dir
+    )
+    building_level_2_active_frame_paths = building_active_replacement_paths(
+        building_level_2_sprite_rgb_dir
+    )
+    building_level_3_sprite_rgb_paths = building_sprite_replacement_paths(
+        building_level_3_sprite_rgb_dir
+    )
+    building_level_3_active_frame_paths = building_active_replacement_paths(
+        building_level_3_sprite_rgb_dir
+    )
     hero_sprite_png_paths = hero_sprite_replacement_paths(hero_sprite_png_dir)
     hero_cast_glow_paths = cast_glow_replacement_paths(hero_sprite_png_dir)
     if len(hero_cast_glow_paths) == 4:
@@ -3740,10 +4714,34 @@ def write_maindata_cam(
         building_sprite_tile_indices = [
             tile_index for tile_index in building_sprite_tile_indices if tile_index != 1506
         ]
+    building_level_2_sprite_tile_indices = sorted(
+        referenced_low16_tile_indices(building_level_2_imag, len(tiles))
+        & set(building_level_2_sprite_rgb_paths)
+    )
+    if building_level_2_active_frame_paths:
+        building_level_2_sprite_tile_indices = [
+            tile_index
+            for tile_index in building_level_2_sprite_tile_indices
+            if tile_index != 1562
+        ]
+    building_level_3_sprite_tile_indices = sorted(
+        referenced_low16_tile_indices(building_level_3_imag, len(tiles))
+        & set(building_level_3_sprite_rgb_paths)
+    )
+    if building_level_3_active_frame_paths:
+        building_level_3_sprite_tile_indices = [
+            tile_index
+            for tile_index in building_level_3_sprite_tile_indices
+            if tile_index != 1566
+        ]
 
     tile_indices: set[int] = set()
     tile_indices.update(referenced_tile_indices(building_imag, len(tiles)))
+    tile_indices.update(referenced_tile_indices(building_level_2_imag, len(tiles)))
+    tile_indices.update(referenced_tile_indices(building_level_3_imag, len(tiles)))
     tile_indices.update(building_sprite_tile_indices)
+    tile_indices.update(building_level_2_sprite_tile_indices)
+    tile_indices.update(building_level_3_sprite_tile_indices)
     tile_indices.update(referenced_tile_indices(ice_lance_icon, len(tiles)))
     tile_indices.update(referenced_tile_indices(ice_lance_projectile, len(tiles)))
     tile_indices.update(referenced_tile_indices(frost_armor_icon, len(tiles)))
@@ -3814,6 +4812,14 @@ def write_maindata_cam(
         )
     if building_art_tile_replacements:
         building_imag = remap_imag_low16_tile_indices(building_imag, building_art_tile_replacements)
+        building_level_2_imag = remap_imag_low16_tile_indices(
+            building_level_2_imag,
+            building_art_tile_replacements,
+        )
+        building_level_3_imag = remap_imag_low16_tile_indices(
+            building_level_3_imag,
+            building_art_tile_replacements,
+        )
 
     if building_sprite_tile_indices:
         first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
@@ -3854,8 +4860,112 @@ def write_maindata_cam(
             active_frame_indices,
         )
 
+    if building_level_2_sprite_tile_indices:
+        first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
+        building_level_2_tile_replacements: dict[int, int] = {}
+        for offset, source_tile_index in enumerate(building_level_2_sprite_tile_indices):
+            custom_tile_index = first_custom_tile_index + offset
+            building_level_2_tile_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHG2Bld{offset:04d}".encode("ascii")),
+                    data=tile_from_png_native_size(
+                        remap_tile_palette_index(
+                            tiles[source_tile_index].data,
+                            BUILDING_SPRITE_PALETTE_INDEX,
+                        ),
+                        palettes,
+                        building_level_2_sprite_rgb_paths[source_tile_index],
+                    ),
+                )
+            )
+        building_level_2_imag = remap_imag_low16_tile_indices(
+            building_level_2_imag,
+            building_level_2_tile_replacements,
+        )
+
+    if building_level_2_active_frame_paths:
+        active_frame_indices = []
+        for frame_index, path in enumerate(building_level_2_active_frame_paths):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            active_frame_indices.append(custom_tile_index)
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHG2Act{frame_index:02d}".encode("ascii")),
+                    data=tile_from_png_native_size(
+                        remap_tile_palette_index(
+                            tiles[1562].data,
+                            BUILDING_SPRITE_PALETTE_INDEX,
+                        ),
+                        palettes,
+                        path,
+                    ),
+                )
+            )
+        building_level_2_imag = replace_building_state_animation_tiles(
+            building_level_2_imag,
+            BUILDING_ACTIVE_SET_ID,
+            active_frame_indices,
+        )
+
+    if building_level_3_sprite_tile_indices:
+        first_custom_tile_index = max_tile_index + len(extra_tiles) + 1
+        building_level_3_tile_replacements: dict[int, int] = {}
+        for offset, source_tile_index in enumerate(building_level_3_sprite_tile_indices):
+            custom_tile_index = first_custom_tile_index + offset
+            building_level_3_tile_replacements[source_tile_index] = custom_tile_index
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHG3Bld{offset:04d}".encode("ascii")),
+                    data=tile_from_png_native_size(
+                        remap_tile_palette_index(
+                            tiles[source_tile_index].data,
+                            BUILDING_SPRITE_PALETTE_INDEX,
+                        ),
+                        palettes,
+                        building_level_3_sprite_rgb_paths[source_tile_index],
+                    ),
+                )
+            )
+        building_level_3_imag = remap_imag_low16_tile_indices(
+            building_level_3_imag,
+            building_level_3_tile_replacements,
+        )
+
+    if building_level_3_active_frame_paths:
+        active_frame_indices = []
+        for frame_index, path in enumerate(building_level_3_active_frame_paths):
+            custom_tile_index = max_tile_index + len(extra_tiles) + 1
+            active_frame_indices.append(custom_tile_index)
+            extra_tiles.append(
+                CamEntry(
+                    name=pad_name(f"PHG3Act{frame_index:02d}".encode("ascii")),
+                    data=tile_from_png_native_size(
+                        remap_tile_palette_index(
+                            tiles[1566].data,
+                            BUILDING_SPRITE_PALETTE_INDEX,
+                        ),
+                        palettes,
+                        path,
+                    ),
+                )
+            )
+        building_level_3_imag = replace_building_state_animation_tiles(
+            building_level_3_imag,
+            BUILDING_ACTIVE_SET_ID,
+            active_frame_indices,
+        )
+
     building_imag = remap_building_attachment_points(
         building_imag,
+        BUILDING_DESTRUCTION_ATTACHMENT_REMAPS,
+    )
+    building_level_2_imag = remap_building_attachment_points(
+        building_level_2_imag,
+        BUILDING_DESTRUCTION_ATTACHMENT_REMAPS,
+    )
+    building_level_3_imag = remap_building_attachment_points(
+        building_level_3_imag,
         BUILDING_DESTRUCTION_ATTACHMENT_REMAPS,
     )
 
@@ -4568,6 +5678,14 @@ def write_maindata_cam(
     image_entries = [
         CamEntry(name=pad_name(PHANTOM_HERO_IMAGE), data=hero_imag),
         CamEntry(name=pad_name(PHANTOM_BUILDING_IMAGE), data=building_imag),
+        CamEntry(
+            name=pad_name(PHANTOM_BUILDING_LEVEL_2_IMAGE),
+            data=building_level_2_imag,
+        ),
+        CamEntry(
+            name=pad_name(PHANTOM_BUILDING_LEVEL_3_IMAGE),
+            data=building_level_3_imag,
+        ),
         CamEntry(name=pad_name(PHANTOM_ICE_LANCE_ICON), data=ice_lance_icon),
         CamEntry(name=pad_name(PHANTOM_ICE_LANCE_PROJECTILE), data=ice_lance_projectile),
         CamEntry(name=pad_name(PHANTOM_FROST_ARMOR_ICON), data=frost_armor_icon),
@@ -4766,13 +5884,16 @@ def write_interfacedata_cam(
         # tempting INBgbuilding dialog image record.
         phantom_raw_texture_image = remap_imag_tile_indices(
             raw_texture_image,
-            {BUILDING_DIALOG_BACKING_TILE: custom_tile_index},
+            {
+                tile_index: custom_tile_index
+                for tile_index in BUILDING_DIALOG_BACKING_TILES
+            },
         )
         extra_tiles.append(
             CamEntry(
                 name=pad_name(b"PHTIPanel0001"),
                 data=tile_v1_embedded_from_rgb(
-                    tiles[BUILDING_DIALOG_BACKING_TILE].data,
+                    tiles[BUILDING_DIALOG_BACKING_TEMPLATE_TILE].data,
                     control_panel_rgb.read_bytes(),
                 ),
             )
@@ -5622,11 +6743,39 @@ def tile_from_png_native_size(original_tile: bytes, palettes: list[CamEntry], pn
                 row.append(nearest_visible_palette_index(red, green, blue, colors))
         pixels.append(row)
 
-    return encode_indexed_v3_tile_like_original(
-        original_tile,
-        pixels,
-        split_shadow_controls=True,
+    encoded = bytearray(
+        encode_indexed_v3_tile_like_original(
+            original_tile,
+            pixels,
+            split_shadow_controls=True,
+        )
     )
+    if len(original_tile) >= 26 and len(encoded) >= 26:
+        original_height, original_width = struct.unpack_from(
+            "<HH",
+            original_tile,
+            2,
+        )
+        original_hotspot_x, original_hotspot_y = struct.unpack_from(
+            "<HH",
+            original_tile,
+            10,
+        )
+        # Building sources are horizontally centered and bottom-aligned in
+        # render_variant. Preserve those two anchors when replacing the stock
+        # Fervus envelope with the Haunt's smaller native canvas.
+        hotspot_x = int(
+            original_hotspot_x + (image.width - original_width) / 2.0 + 0.5
+        )
+        hotspot_y = original_hotspot_y + image.height - original_height
+        struct.pack_into(
+            "<HH",
+            encoded,
+            10,
+            max(0, min(0xFFFF, hotspot_x)),
+            max(0, min(0xFFFF, hotspot_y)),
+        )
+    return bytes(encoded)
 
 
 def remove_small_detached_alpha_components(image: "Image.Image") -> "Image.Image":
@@ -7456,6 +8605,7 @@ def encode_indexed_v3_tile_like_original(
     header = bytearray(original_tile[:26])
     struct.pack_into("<H", header, 2, height)
     struct.pack_into("<H", header, 4, width)
+    struct.pack_into("<H", header, 6, width)
 
     rows: list[bytes] = []
     for row_pixels in pixels:

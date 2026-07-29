@@ -147,6 +147,55 @@ Confirmed working in-game:
 - The complete six-spell Phantom progression is implemented and verified:
   Ice Lance at level 1, Frost Armor at level 3, Icy Touch at level 4, Call to
   Grave at level 5, Eternal Soul at level 6, and Endless Winter at level 7.
+  Icy Touch additionally requires a completed level-2 Haunt; Endless Winter
+  additionally requires a completed level-3 Haunt. Losing the last qualifying
+  Haunt removes the gated spells until the requirement is restored.
+- `Phantoms Haunt` has a stock-native three-level upgrade chain. Level 2
+  activates Gravekeeper, doubling allied Priestess Drain Life healing. The
+  level-3 Rush unto Death implementation uses a stock-shaped clone of Lunord's
+  Winged Feet begin/end mechanics for each allied Priestess. The current tuning
+  uses mild offsets (`-22 MovementRateModifier` and `-10 ActionRateModifier`),
+  uses the same `HasEffectWingedFeet` anti-stacking
+  flag, and applies the exact inverse offsets when the level-3 requirement is
+  lost. The clone is persistent and deliberately creates no icon, visual
+  effector, or speed trail. Direct runtime writes to `ATTRIB_Speed` compiled
+  but did not alter
+  existing heroes' locomotion; fractional negative `MovementRateModifier`
+  offsets caused alternating burst/slow displacement; and a rejected private
+  unit-type transformation caused a Phantom recruitment crash. None of those
+  disproved routes remains.
+  Phantom escort behavior uses a deliberately stock-shaped implementation: the
+  mod replaces
+  `Priestess_tree` by its stock name, retains the complete Northern Expansion
+  Priestess decision order, and inserts the generic stock
+  support decision immediately after `Build_Horde`. The one-follower
+  experiment routes only Priestesses through
+  `Phantom_Priestess_Follow_Support_Check`, a line-for-line clone of the proven
+  stock selector except that its local nearby-supporter threshold is `2`
+  instead of global `#support_max` (`3`). The stock query counts the evaluating
+  Priestess, leaving room for only one established follower. Rangers and
+  Wizards remain on the original function and original cap. After filtering,
+  the Priestess uses the stock `Pick_Closest` helper instead of arbitrary list
+  order, selecting the nearest Phantom with an available escort slot. Once
+  selected, Priestesses use `Phantom_Priestess_Follow_Support`, a stock active-follow
+  clone with one anti-stutter substitution. Stock passes the moving target
+  agent directly to `$Move`; the Priestess clone snapshots the Phantom's
+  current location, sets `Target = ThisAgent` for coordinate-mode
+  `Travel_To`, and walks to that stable coordinate. On arrival, the stock
+  backscript cycle refreshes the snapshot. This avoids moving-agent travel
+  terminating whenever `$IsMoving` briefly reports false while preserving the
+  stock distance threshold, combat, boredom, and disengagement behavior.
+  The full-strength stock Winged Feet path and its invisible clone were
+  confirmed smooth in-game before these milder values were selected.
+  The stock
+  `follow_support_check` path rejects only Phantoms, preventing their borrowed
+  Wizard decision tree from making them follow Barbarians or Monks while
+  preserving ordinary Ranger and Wizard support behavior.
+- Level 2 and 3 use complete custom world-art sets: upgrade construction,
+  inactive, eight-frame active pulse, two damage phases, collapse, and final
+  destroyed states. Every state is independently fitted, palette-mapped, and
+  given a geometry-derived cast shadow before its custom TILE is appended and
+  remapped into the corresponding `PHG2` or `PHG3` IMAG.
 - `Phantoms Haunt` now has a generated Phantom-only building sprite set wired
   through appended tile records, without modifying the stock Wizard Guild art.
 - Occupied Haunts use an eight-frame full-building active animation so
@@ -173,8 +222,10 @@ Confirmed Paladin/Haunt interaction:
   do not run `Hero_Generator`; the stock generator remains attached only to the
   quest's `#NotMyPlayer` guild list.
 - Expansion quest `Rise of the Ratmen` is the full compatibility test bed. It
-  starts with a Phantoms Haunt, Temple to Dauros, Warriors Guild, and Embassy
-  while preserving the quest's stock victory and event threads.
+  starts with a Phantoms Haunt, Temple to Dauros, Temple to Fervus, Temple to
+  Krypta, Warriors Guild, and Embassy while preserving the quest's stock
+  victory and event threads. This allows direct Paladin, Priestess, Phantom,
+  upgrade, stock-Fervus-panel, and Priestess-support testing in one run.
 
 Next planned work:
 
@@ -440,26 +491,42 @@ Majesty's recruit-panel behavior is keyed in `MajestyHD.exe` by stock AP dialog
 IDs. Mod files can replace menu data, strings, art, units, actions, and GPL, but
 they do not appear to register a brand-new recruiting AP handler.
 
-The current Workshop-only compromise is to borrow the stock Elf recruit dialog:
+The current Workshop-only compromise retains the stock Elf recruit handler:
 
 ```text
 AP07
 ```
 
 The Phantoms Haunt uses `AP07` because that ID already has the right recruit
-behavior. The mod replaces the AP07 strings and redirects its raw texture
-reference from `INTIraw textures` to `PHTIraw textures`, which gives the Phantom
-Guild the blue custom panel background. The AP07 menu also references the Elf
-guild member/count icon through image token `AVd1`, so the generator rewrites:
+behavior. To expose a native upgrade control, the mod now emits the stock AP10
+Temple-to-Fervus menu layout under the AP07 name. It replaces the strings and
+redirects the raw texture reference from `INTIraw textures` to
+`PHTIraw textures`. The AP10 menu references the Cultist guild member/count
+icon through image token `AVC1`, so the generator rewrites:
 
 ```text
-AVd1 -> PHM1
+AVC1 -> PHM1
 INTI -> PHTI
 ```
 
-This makes the Phantoms Haunt use the Phantom icon and custom background. Because
-AP07 is shared, the stock Elven Bungalow also inherits those AP07 visual
-overrides while this mod is active.
+This makes the Phantoms Haunt use the Phantom icon and the portions of the
+custom background that the AP10 layout addresses. Because AP07 is shared, the
+stock Elven Bungalow also inherits those AP07 visual overrides while this mod
+is active. The newer `PHTI` technique does prevent any global overwrite of the
+stock `INTIraw textures` image and therefore does not mutate the Elf art assets
+themselves, but it cannot make one global `SMNU/AP07` resource render two
+different layouts. Restoring a truly stock Elf panel while retaining this
+Haunt panel requires either a distinct recruit-capable executable dialog
+handler or moving the collision to another stock guild, which is not an
+acceptable data-only fix.
+
+AP07 does not dynamically populate AP10's level-number field; it leaves the
+stock placeholder `1` at every Haunt level. Those label, number, and tooltip
+strings are intentionally blanked. The backend `Level` values, native upgrade
+button, upgrade chain, and perk watcher remain correct. AP07 also has no safe
+callback for AP10's temple Spell window: clicking that control crashes. The
+generator therefore blanks its strings and writes a zero-sized hitbox into the
+guarded stock AP10 control rectangle while leaving Upgrade and Heroes intact.
 
 Other stock recruit guild AP IDs can be used the same way, but the same rule
 applies: the chosen stock guild's panel is the thing being borrowed. Attempts to
@@ -480,14 +547,28 @@ without a palette` crashes when the panel opened.
 
 The working background path is:
 
-- Clone the stock recruit dialog `SMNU` entry from `AP07`.
+- Clone the stock upgradable temple dialog `SMNU` entry from `AP10`, emit it as
+  `AP07`, and remove the AP10-only level readout and Spell control as described
+  above.
 - Rewrite its raw texture image token from `INTI` to `PHTI`.
 - Clone the stock `INTIraw textures` image record as `PHTIraw textures`.
-- In the cloned `PHTI` image, remap raw-texture backing tile `466` to a newly
-  appended tile.
+- In the cloned `PHTI` image, remap AP07's backing tile `466` plus AP10's
+  primary and secondary Fervus backing tiles `474` and `495` to one newly
+  appended tile. AP10's primary tile is the bright green layer that otherwise
+  survives behind the Haunt controls.
 - Encode the appended tile from the generated Phantom panel source art.
 - Emit only `PHTIraw textures` and the appended backing tile in
   `phantom_interfacedata.cam`; leave the stock `INTI` and `INBg` records alone.
+
+The key correction to the earlier investigation is that tile `466` belongs to
+the original AP07 Elf layout. After AP10 was cloned under AP07 to gain its
+upgrade control, the visible Fervus layers came from raw-texture animation sets
+whose frames reference tiles `474` and `495`. Searching only the old AP07 tile
+could never remove the green AP10 panel. The reliable diagnostic is to resolve
+the raw-texture animation-set IDs embedded in the selected `SMNU` back to their
+TILE frames, rather than guessing from a contact sheet. The replacement remains
+inside the private `PHTIraw textures` clone, so stock `INTIraw textures` art is
+not modified.
 
 The generated source panel is:
 
@@ -503,7 +584,8 @@ during testing, but the build path uses the resampled raw RGB output.
 The useful implementation anchors are:
 
 ```text
-BUILDING_DIALOG_BACKING_TILE = 466
+BUILDING_DIALOG_BACKING_TILES = (466, 474, 495)
+BUILDING_DIALOG_BACKING_TEMPLATE_TILE = 466
 RAW_TEXTURES_IMAGE = INTIraw textures
 PHANTOM_RAW_TEXTURES_IMAGE = PHTIraw textures
 ```

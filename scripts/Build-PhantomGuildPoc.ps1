@@ -7,6 +7,20 @@ param(
     [string]$ConstructionSpriteSheet = ".\assets\source\phantom-guild-construction-proof-v1.png",
     [string]$DamagedBSample = ".\assets\source\phantom-guild-damaged-b-sample-v1.png",
     [string]$CollapsedIntermediateSample = ".\assets\source\phantom-guild-collapsed-intermediate-sample-v1.png",
+    [string]$Level2ActiveSource = ".\assets\source\phantom-haunt-level-2-concept-v1.png",
+    [string]$Level2DamagedSource = ".\assets\source\phantom-haunt-level-2-damaged-source-v3.png",
+    [string]$Level2DamagedBSource = ".\assets\source\phantom-haunt-level-2-damaged-b-source-v1.png",
+    [string]$Level2CollapsedSource = ".\assets\source\phantom-haunt-level-2-collapsed-source-v5.png",
+    [string]$Level2DestroyedSource = ".\assets\source\phantom-haunt-level-2-destroyed-source-v1.png",
+    [string]$Level2ConstructionEarlySource = ".\assets\source\phantom-haunt-level-2-upgrade-early-source-v1.png",
+    [string]$Level2ConstructionLateSource = ".\assets\source\phantom-haunt-level-2-upgrade-late-source-v1.png",
+    [string]$Level3ActiveSource = ".\assets\source\phantom-haunt-level-3-concept-v1.png",
+    [string]$Level3DamagedSource = ".\assets\source\phantom-haunt-level-3-damaged-source-v2.png",
+    [string]$Level3DamagedBSource = ".\assets\source\phantom-haunt-level-3-damaged-b-source-v1.png",
+    [string]$Level3CollapsedSource = ".\assets\source\phantom-haunt-level-3-collapsed-source-v5.png",
+    [string]$Level3DestroyedSource = ".\assets\source\phantom-haunt-level-3-destroyed-source-v1.png",
+    [string]$Level3ConstructionEarlySource = ".\assets\source\phantom-haunt-level-3-upgrade-early-source-v3.png",
+    [string]$Level3ConstructionLateSource = ".\assets\source\phantom-haunt-level-3-upgrade-late-source-v3.png",
     [string]$HeroSpriteSheet = ".\assets\source\phantom-hero-major-actions-preview-v3.png",
     [string]$HeroDirection03 = ".\assets\source\phantom-hero-direction-03.png",
     [string]$HeroDirection04 = ".\assets\source\phantom-hero-direction-04.png",
@@ -151,6 +165,8 @@ $darkStaffMxIconRgb = Join-Path $tempDir "dark_staff_icon_23.rgb"
 $darkStaffIconRgb = Join-Path $tempDir "dark_staff_icon_50x19.rgb"
 $interfacePanelRgb = Join-Path $tempDir "phantom_interface_panel_200x245.rgb"
 $buildingSpriteDir = Join-Path $tempDir "building_sprites"
+$buildingLevel2SpriteDir = Join-Path $tempDir "building_level_2_sprites"
+$buildingLevel3SpriteDir = Join-Path $tempDir "building_level_3_sprites"
 $heroSpriteDir = Join-Path $tempDir "hero_sprites"
 
 Convert-ImageToRawRgb -InputPath (Resolve-RepoPath $PortraitImage) -OutputPath $portraitRgb -Width 100 -Height 100
@@ -171,6 +187,34 @@ if ($LASTEXITCODE -ne 0) {
     --out-dir $buildingSpriteDir
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom building sprite generator failed with exit code $LASTEXITCODE"
+}
+& $toolsPython $buildingSpriteGenerator `
+    --sheet (Resolve-RepoPath $BuildingSpriteSheet) `
+    --level 2 `
+    --active-source (Resolve-RepoPath $Level2ActiveSource) `
+    --damaged-source (Resolve-RepoPath $Level2DamagedSource) `
+    --destroyed-source (Resolve-RepoPath $Level2DestroyedSource) `
+    --construction-early-source (Resolve-RepoPath $Level2ConstructionEarlySource) `
+    --construction-late-source (Resolve-RepoPath $Level2ConstructionLateSource) `
+    --damaged-b-sample (Resolve-RepoPath $Level2DamagedBSource) `
+    --collapsed-intermediate-sample (Resolve-RepoPath $Level2CollapsedSource) `
+    --out-dir $buildingLevel2SpriteDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Phantom level 2 building sprite generator failed with exit code $LASTEXITCODE"
+}
+& $toolsPython $buildingSpriteGenerator `
+    --sheet (Resolve-RepoPath $BuildingSpriteSheet) `
+    --level 3 `
+    --active-source (Resolve-RepoPath $Level3ActiveSource) `
+    --damaged-source (Resolve-RepoPath $Level3DamagedSource) `
+    --destroyed-source (Resolve-RepoPath $Level3DestroyedSource) `
+    --construction-early-source (Resolve-RepoPath $Level3ConstructionEarlySource) `
+    --construction-late-source (Resolve-RepoPath $Level3ConstructionLateSource) `
+    --damaged-b-sample (Resolve-RepoPath $Level3DamagedBSource) `
+    --collapsed-intermediate-sample (Resolve-RepoPath $Level3CollapsedSource) `
+    --out-dir $buildingLevel3SpriteDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Phantom level 3 building sprite generator failed with exit code $LASTEXITCODE"
 }
 & $toolsPython $heroSpriteGenerator `
     --sheet (Resolve-RepoPath $HeroSpriteSheet) `
@@ -193,6 +237,8 @@ if ($LASTEXITCODE -ne 0) {
     --building-profile-rgb $buildingProfileRgb `
     --building-icon-rgb $buildingIconRgb `
     --building-sprite-rgb-dir $buildingSpriteDir `
+    --building-level-2-sprite-rgb-dir $buildingLevel2SpriteDir `
+    --building-level-3-sprite-rgb-dir $buildingLevel3SpriteDir `
     --hero-sprite-png-dir $heroSpriteDir `
     --interface-panel-rgb $interfacePanelRgb `
     --building-dialog-panel-rgb $interfacePanelRgb `

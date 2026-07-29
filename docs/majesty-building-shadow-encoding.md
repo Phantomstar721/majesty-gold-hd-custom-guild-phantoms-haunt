@@ -198,6 +198,28 @@ transparent after the shadow is painted. The generator and post-build
 validator now reject the two transitional Phantoms Haunt frames if they touch a
 fixed top or side boundary.
 
+### Upgrade-Level Art Sets
+
+Each Haunt level must be generated into a separate working directory. The
+Fervus upgrade IMAGs reuse some source TILE numbers (including the final
+destroyed tile), and every level emits identically named active frames; merging
+the directories would silently overwrite one level with another.
+
+The Level 2 and Level 3 production paths each provide:
+
+- separate early and late upgrade-construction sources;
+- active architecture plus a derived inactive variant;
+- eight full-building active pulse frames;
+- damaged A, derived damaged B, collapsed intermediate, and final destroyed
+  sources;
+- state-specific sizing, palette grading, cast shadows, and seam controls.
+
+The resulting tiles are appended as distinct `PHG2Bld`/`PHG2Act` and
+`PHG3Bld`/`PHG3Act` families. Only their matching cloned Fervus upgrade IMAG is
+remapped. The post-build validator treats every nonblank member of those
+families as a shadowed building TILE and independently checks ownership, RLE
+class splits, shadow/body seams, construction gutters, and reserved indices.
+
 ## Stock Destruction Overlay Attachments
 
 Fire, smoke, and dust are separate IMAG animation layers; they are not part of
