@@ -29,11 +29,15 @@ This currently builds:
   - Phantom class items are removed by `Phantom_death` before normal gravestone
     handling and by a class guard in the stock-compatible realm-exit inventory
     disposal path.
-- Phantom baseline balance: `8` Vitality, `8` Strength, `25` Magic Resistance,
-  `25` Dodge, and `180` conceptual base casting range. Artifice remains `8`;
+- Phantom baseline balance: `1600` LevelXP, `8` Vitality, `8` Strength, `25`
+  Magic Resistance, `25` Dodge, and `180` conceptual base casting range.
+  Artifice remains `8`;
   Majesty uses it for equipment-shopping choices, stealing checks, and
   Gambling Hall fallback rolls, not spell damage, casting speed, range, or
   cooldown.
+- Phantoms and Priestesses share a custom `NM11` name pool with `32`
+  gender-neutral given names and `32` death-, darkness-, grave-, and
+  cold-themed endings (`1,024` possible combinations).
 - Generated placeholder voice/soundbite WAVs. A dedicated Phantom spell-audio
   pass is intentionally deferred until the rest of the content is complete.
 - Wizard-style hero stats and Wizard decision-tree behavior through

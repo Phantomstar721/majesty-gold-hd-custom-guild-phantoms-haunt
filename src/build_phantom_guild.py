@@ -140,6 +140,21 @@ PHANTOM_ICEROD_TIER_NAMES = (
     "Deep Icerod",
     "Eternal Icerod",
 )
+SHARED_PRIESTESS_PHANTOM_GIVENS = (
+    "Aster", "Ash", "Aven", "Briar", "Corin", "Cinder", "Eiren", "Elian",
+    "Ember", "Fen", "Hollis", "Isen", "Jorin", "Kael", "Lark", "Hallow",
+    "Kestrel", "Nyven", "Onyx", "Haven", "Quinn", "Riven", "Rowan", "Sable",
+    "Seren", "Syl", "Taren", "Vale", "Vesper", "Wren", "Rune", "Zeph",
+)
+SHARED_PRIESTESS_PHANTOM_ENDINGS = (
+    "Blackblood", "Darksoul", "Lifesbane", "Shadowfriend", "Soulstealer",
+    "Spiritvoid", "Darkmoon", "Shadespawn", "Deepnight", "Gravewhisper",
+    "Gravesong", "Graveward", "Coldshadow", "Coldheart", "Frostmark",
+    "Frostveil", "Frostbound", "Winterdark", "Nightbloom", "Nightveil",
+    "Gloamward", "Hollowmoon", "Gloamsong", "Nightshade", "Veilkeeper",
+    "Mournsong", "of the Last Veil", "of Winter's Wake",
+    "of the Quiet Grave", "of the Long Night", "the Gravewise", "the Veiled",
+)
 
 
 @dataclass(frozen=True)
@@ -366,7 +381,7 @@ def phantom_units_xml() -> str:
 \t\t<Game version="1">
 \t\t\t<DialogID value="AP20"/>
 \t\t\t<Cost value="1"/>
-\t\t\t<Experience value="2000"/>
+\t\t\t<Experience value="1600"/>
 \t\t\t<MaxHP value="18"/>
 \t\t\t<SightRange value="240"/>
 \t\t\t<Speed value="4"/>
@@ -384,7 +399,7 @@ def phantom_units_xml() -> str:
 \t\t\t<ArmorBasicDamage value="0"/>
 \t\t\t<RecruitDelay value="1000"/>
 \t\t\t<PrimaryStat value="2"/>
-\t\t\t<NameGenType value="NM16"/>
+\t\t\t<NameGenType value="NM11"/>
 \t\t\t<Flags value="Heals"/>
 \t\t\t<Flags value="HasHPBar"/>
 \t\t\t<Flags value="CanHighlight"/>
@@ -4378,6 +4393,8 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
     quest_item_names = read_cam_entry(source_gpltext, b"STRT", b"QITM")
     advisor_text = read_cam_entry(source_gpltext, b"STRT", b"AITX")
     help_text = read_cam_entry(source_gpltext, b"STRT", b"HPTX")
+    priestess_name_givens = read_cam_entry(source_gpltext, b"STRT", b"HN41")
+    priestess_name_endings = read_cam_entry(source_gpltext, b"STRT", b"HN42")
     equipment_item_text: dict[int, str] = {}
     for item_id, _, _, display_name, _ in phantom_equipment_item_specs():
         if "Cowl" in display_name:
@@ -4435,6 +4452,14 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
             ),
         },
     )
+    shared_name_givens = replace_indexed_strt_strings(
+        priestess_name_givens.data,
+        SHARED_PRIESTESS_PHANTOM_GIVENS,
+    )
+    shared_name_endings = replace_indexed_strt_strings(
+        priestess_name_endings.data,
+        tuple(f" {ending}" for ending in SHARED_PRIESTESS_PHANTOM_ENDINGS),
+    )
     write_cam(
         (
             CamSection(
@@ -4444,6 +4469,8 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
                     CamEntry(name=pad_name(b"QITM"), data=patched_quest_item_names),
                     CamEntry(name=pad_name(b"AITX"), data=patched_advisor_text),
                     CamEntry(name=pad_name(b"HPTX"), data=patched_help_text),
+                    CamEntry(name=pad_name(b"HN41"), data=shared_name_givens),
+                    CamEntry(name=pad_name(b"HN42"), data=shared_name_endings),
                 ),
             ),
         ),
@@ -4485,6 +4512,26 @@ def patch_indexed_strt_strings(data: bytes, replacements: dict[int, str]) -> byt
         new_offsets.append(len(output))
         output += struct.pack("<I", string_id)
         output += text
+        output += b"\x00"
+
+    for index, offset in enumerate(new_offsets):
+        struct.pack_into("<I", output, 4 + index * 4, offset)
+
+    return bytes(output)
+
+
+def replace_indexed_strt_strings(data: bytes, strings: tuple[str, ...]) -> bytes:
+    version = data[2:4]
+    output = bytearray()
+    output += struct.pack("<H", len(strings))
+    output += version
+    output += b"\x00\x00\x00\x00" * len(strings)
+
+    new_offsets: list[int] = []
+    for string_id, text in enumerate(strings):
+        new_offsets.append(len(output))
+        output += struct.pack("<I", string_id)
+        output += text.encode("cp1252")
         output += b"\x00"
 
     for index, offset in enumerate(new_offsets):

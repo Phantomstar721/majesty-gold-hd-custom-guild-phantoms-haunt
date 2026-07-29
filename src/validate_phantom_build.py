@@ -27,6 +27,21 @@ PHANTOM_ICEROD_TIER_NAMES = (
     "Deep Icerod",
     "Eternal Icerod",
 )
+SHARED_PRIESTESS_PHANTOM_GIVENS = (
+    "Aster", "Ash", "Aven", "Briar", "Corin", "Cinder", "Eiren", "Elian",
+    "Ember", "Fen", "Hollis", "Isen", "Jorin", "Kael", "Lark", "Hallow",
+    "Kestrel", "Nyven", "Onyx", "Haven", "Quinn", "Riven", "Rowan", "Sable",
+    "Seren", "Syl", "Taren", "Vale", "Vesper", "Wren", "Rune", "Zeph",
+)
+SHARED_PRIESTESS_PHANTOM_ENDINGS = (
+    "Blackblood", "Darksoul", "Lifesbane", "Shadowfriend", "Soulstealer",
+    "Spiritvoid", "Darkmoon", "Shadespawn", "Deepnight", "Gravewhisper",
+    "Gravesong", "Graveward", "Coldshadow", "Coldheart", "Frostmark",
+    "Frostveil", "Frostbound", "Winterdark", "Nightbloom", "Nightveil",
+    "Gloamward", "Hollowmoon", "Gloamsong", "Nightshade", "Veilkeeper",
+    "Mournsong", "of the Last Veil", "of Winter's Wake",
+    "of the Quiet Grave", "of the Long Night", "the Gravewise", "the Veiled",
+)
 STOCK_GUILD_DIALOG_BACKING_TILES = {466, 474, 495}
 
 
@@ -98,7 +113,7 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
         b"STRT": {b"UNTN", b"ACTN", b"AP07"},
     },
     "phantom_gpltext.cam": {
-        b"STRT": {b"QITM", b"AITX", b"HPTX"},
+        b"STRT": {b"QITM", b"AITX", b"HPTX", b"HN41", b"HN42"},
     },
     "phantom_maindata.cam": {
         b"IMAG": {
@@ -578,6 +593,41 @@ def validate_indexed_item_strings(path: Path, data: bytes) -> None:
             fail(f"{path}: STRT/QITM slot {item_id} contains record ID {record_id}")
         if text != expected_text:
             fail(f"{path}: STRT/QITM slot {item_id} is not the known-good item text")
+
+
+def validate_shared_priestess_phantom_names(
+    path: Path,
+    givens_data: bytes,
+    endings_data: bytes,
+) -> None:
+    expected_tables = (
+        (b"HN41", givens_data, SHARED_PRIESTESS_PHANTOM_GIVENS),
+        (
+            b"HN42",
+            endings_data,
+            tuple(f" {ending}" for ending in SHARED_PRIESTESS_PHANTOM_ENDINGS),
+        ),
+    )
+    for table_name, data, expected in expected_tables:
+        count = struct.unpack_from("<H", data, 0)[0]
+        if count != len(expected):
+            fail(
+                f"{path}: STRT/{table_name.decode()} has {count} strings; "
+                f"expected {len(expected)}"
+            )
+        actual: list[str] = []
+        for index in range(count):
+            offset = struct.unpack_from("<I", data, 4 + index * 4)[0]
+            record_id = struct.unpack_from("<I", data, offset)[0]
+            if record_id != index:
+                fail(
+                    f"{path}: STRT/{table_name.decode()} slot {index} "
+                    f"contains record ID {record_id}"
+                )
+            end = data.index(b"\x00", offset + 4)
+            actual.append(data[offset + 4 : end].decode("cp1252"))
+        if tuple(actual) != expected:
+            fail(f"{path}: STRT/{table_name.decode()} name pool is not approved")
 
 
 def validate_tile(path: Path, entry: Entry, tile: bytes, palette_count: int) -> None:
@@ -2833,6 +2883,8 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     units_path = output_root / "Data" / "phantom_units.xml"
     units = units_path.read_text(encoding="utf-8")
     stat_contract = (
+        '<Experience value="1600"/>',
+        '<NameGenType value="NM11"/>',
         '<Vitality value="8"/>',
         '<MagicResistance value="25"/>',
         '<Strength value="8"/>',
@@ -4556,6 +4608,19 @@ def validate(output_root: Path) -> None:
     if qitm is None:
         fail(f"{gpltext_path}: STRT/QITM was not found")
     validate_indexed_item_strings(gpltext_path, qitm)
+    name_givens = archive_results["phantom_gpltext.cam"][1].get(
+        (b"STRT", b"HN41")
+    )
+    name_endings = archive_results["phantom_gpltext.cam"][1].get(
+        (b"STRT", b"HN42")
+    )
+    if name_givens is None or name_endings is None:
+        fail(f"{gpltext_path}: shared Priestess/Phantom name tables were not found")
+    validate_shared_priestess_phantom_names(
+        gpltext_path,
+        name_givens,
+        name_endings,
+    )
     advisor_text = archive_results["phantom_gpltext.cam"][1].get(
         (b"STRT", b"AITX")
     )
