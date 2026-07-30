@@ -177,6 +177,7 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "MBPhantomGuild3"),
     },
     "phantom_actions.xml": {
+        ("Action", "WRg1"),
         ("Action", "WRa2"),
         ("Action", "WRa3"),
         ("Action", "WRa4"),
@@ -571,6 +572,17 @@ def validate_strt(path: Path, entry: Entry, data: bytes) -> None:
         if data.find(b"\x00", offset + 4, record_end) == -1:
             fail(f"{path}: {entry.label} string {index} is not null terminated")
         previous = offset
+
+
+def strt_text_by_fourcc(data: bytes, fourcc: str) -> bytes | None:
+    record_id = int.from_bytes(fourcc.encode("ascii"), "little")
+    count = struct.unpack_from("<H", data, 0)[0]
+    for index in range(count):
+        offset = struct.unpack_from("<I", data, 4 + index * 4)[0]
+        if struct.unpack_from("<I", data, offset)[0] == record_id:
+            end = data.index(b"\x00", offset + 4)
+            return data[offset + 4 : end]
+    return None
 
 
 def validate_indexed_item_strings(path: Path, data: bytes) -> None:
@@ -1651,6 +1663,25 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
 
     units_path = output_root / "Data" / "phantom_units.xml"
     units = units_path.read_text(encoding="utf-8")
+    units_tree = parse_xml(units_path)
+    phantom = units_tree.find('.//Description[@ID="PHM1"]')
+    phantom_help = phantom.find("./Game/HelpID") if phantom is not None else None
+    if phantom_help is None or phantom_help.get("value") != "hPH0":
+        fail(f"{units_path}: Phantom must use its dedicated hPH0 help page")
+    phantom_game = phantom.find("./Game") if phantom is not None else None
+    phantom_cost = phantom_game.find("./Cost") if phantom_game is not None else None
+    phantom_recruit = (
+        phantom_game.find("./RecruitDelay") if phantom_game is not None else None
+    )
+    if (
+        phantom_cost is None
+        or phantom_cost.get("value") != "700"
+        or phantom_recruit is None
+        or phantom_recruit.get("value") != "16000"
+    ):
+        fail(
+            f"{units_path}: Phantom must cost 700 gold and recruit in 16000 ms"
+        )
     expected_building_identity = (
         'ID="MBPhantomGuild" Name="Phantoms_Haunt" Description="Phantoms Haunt"'
     )
@@ -1671,15 +1702,15 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
 
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     hero_data = hero_data_path.read_text(encoding="utf-8")
-    fearless_values = (
-        "(PercentageHPRetreat 0)",
-        "(enemy_estimation 0.1)",
-        "(self_estimation 10.0)",
+    playtest_values = (
+        "(PercentageHPRetreat 30)",
+        "(enemy_estimation 1.0)",
+        "(self_estimation 1.2)",
         "(evaluationScript\teval_enemies_nearby)",
     )
-    missing = [value for value in fearless_values if value not in hero_data]
+    missing = [value for value in playtest_values if value not in hero_data]
     if missing:
-        fail(f"{hero_data_path}: fearless testing profile is missing {missing}")
+        fail(f"{hero_data_path}: approved playtest profile is missing {missing}")
     if "(evaluationScript\twizard_eval_nearby)" in hero_data:
         fail(f"{hero_data_path}: Phantom still uses the Wizard threat evaluator")
 
@@ -1700,6 +1731,8 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
             None,
             "Phantoms_Haunt2",
             False,
+            "hP34",
+            "1400",
         ),
         (
             "MBPhantomGuild2",
@@ -1708,6 +1741,8 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
             "Phantoms_Haunt",
             "Phantoms_Haunt3",
             True,
+            "hP35",
+            "1800",
         ),
         (
             "MBPhantomGuild3",
@@ -1716,6 +1751,8 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
             "Phantoms_Haunt2",
             None,
             True,
+            "hP36",
+            "2200",
         ),
     )
     for (
@@ -1725,6 +1762,8 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         upgrade_from,
         upgrade_to,
         not_buildable,
+        help_id,
+        cost,
     ) in expected_levels:
         description = tree.find(f'.//Description[@ID="{description_id}"]')
         if description is None or description.get("Name") != unit_name:
@@ -1740,6 +1779,23 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         game = description.find("./Game")
         if game is None:
             fail(f"{units_path}: {description_id} has no Game block")
+        actual_help = game.find("./HelpID")
+        if actual_help is None or actual_help.get("value") != help_id:
+            fail(
+                f"{units_path}: {description_id} must use help page {help_id}"
+            )
+        actual_cost = game.find("./Cost")
+        actual_income = game.find("./IncomeAmount")
+        if (
+            actual_cost is None
+            or actual_cost.get("value") != cost
+            or actual_income is None
+            or actual_income.get("value") != "40"
+        ):
+            fail(
+                f"{units_path}: {description_id} must cost {cost} gold and "
+                "generate stock Krypta income 40"
+            )
         actual_from = game.find("./UpgradeFrom")
         actual_to = game.find("./UpgradeTo")
         if (
@@ -1996,7 +2052,7 @@ def validate_phantom_item_cleanup(output_root: Path) -> None:
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
     cleanup_contract = (
-        "function Phantom_death(agent thisagent)",
+        "function Phantom_Hero_Death(agent thisagent)",
         "$Phantom_remove_starter_items(thisagent);",
         "$gravestone(thisagent);",
         "function Phantom_remove_starter_items(agent thisagent)",
@@ -2807,7 +2863,7 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         '$clearlist(thisagent\'s "Hostiles");',
         ward_magic_grant,
     )
-    death = gpl.index("function Phantom_death(agent thisagent)")
+    death = gpl.index("function Phantom_Hero_Death(agent thisagent)")
     death_basic_cleanup = gpl.index(
         "$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);",
         death,
@@ -2952,7 +3008,7 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
     confidence_start = gpl.index(
         "function spell_extra_value(agent thisagent) is integer"
     )
-    confidence_end = gpl.index("\nfunction DEAL_DEMON()", confidence_start)
+    confidence_end = gpl.index("\nFunction Potion_Check", confidence_start)
     confidence = gpl[confidence_start:confidence_end]
 
     expressions = (
@@ -3036,6 +3092,8 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
     action_contract = (
         '<ImageSet value="Cast"/>',
         '<CompletionImageSet value="Stand"/>',
+        '<Sound value="Meteor_Storm"/>',
+        '<SoundPhase begin="Begin"/>',
         'GPLFunction="Endless_Winter_Hit"',
         '<EffectorDuration value="21000"/>',
         '<TimeoutDuration value="55000"/>',
@@ -3053,8 +3111,6 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
             f"{missing_action_fields}"
         )
     forbidden_action_fields = (
-        '<Sound value="Meteor_Storm"/>',
-        "<SoundPhase ",
         '<ValidationScript value="Blizzard_Check"/>',
         'GPLFunction="Blizzard_Hit"',
     )
@@ -3167,8 +3223,33 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
     if 'ID="WRg2"' in overlays or 'Name="meteor_storm_effector2"' in overlays:
         fail(f"{overlays_path}: mod attempts to replace the stock Wizard impact")
 
-    if 'Name="meteor_storm"' in actions or 'ID="WRg1"' in actions:
-        fail(f"{actions_path}: mod attempts to replace the global Wizard action")
+    wizard_action_start = actions.index(
+        '<Description type="Action" subType="Standard" ID="WRg1" '
+        'Name="meteor_storm"'
+    )
+    wizard_action_end = actions.index("</Description>", wizard_action_start)
+    wizard_action = actions[wizard_action_start:wizard_action_end]
+    wizard_action_contract = (
+        '<ImageSet value="Cast"/>',
+        '<CompletionImageSet value="Stand"/>',
+        '<Sound value="Meteor_Storm"/>',
+        '<SoundPhase begin="Begin"/>',
+        'GPLFunction="meteor_storm_hit"',
+        '<EffectorDuration value="21000"/>',
+        '<TimeoutDuration value="55000"/>',
+        '<SpellType value="Attack"/>',
+        '<CharacterLevel value="7"/>',
+        '<SpellRank value="7"/>',
+        '<ValidationScript value="meteor_storm_check"/>',
+    )
+    missing_wizard_action_fields = [
+        value for value in wizard_action_contract if value not in wizard_action
+    ]
+    if missing_wizard_action_fields:
+        fail(
+            f"{actions_path}: sound-enabled stock Wizard Meteor Storm action "
+            f"is missing {missing_wizard_action_fields}"
+        )
 
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     hero_data = hero_data_path.read_text(encoding="utf-8")
@@ -3187,7 +3268,7 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
             f"active-script mapping {missing_spell_data}"
         )
 
-    birth_start = gpl.index("function Phantom_birth (agent thisagent)")
+    birth_start = gpl.index("function Phantom_Hero_Birth (agent thisagent)")
     birth_end = gpl.index(
         "\nfunction Phantom_has_cowl_item",
         birth_start,
@@ -4422,7 +4503,7 @@ def validate_paladin_recruitment_restriction(output_root: Path) -> None:
     random_start = gpl.index(required_functions[5])
     random_end = gpl.index("function spell_extra_value", random_start)
     random_hero = gpl[random_start:random_end]
-    random_filtered_end = random_hero.index("Random = $RandomNumber(16) + 1;")
+    random_filtered_end = random_hero.index("Random = $RandomNumber(17) + 1;")
     random_filtered = random_hero[:random_filtered_end]
     random_stock = random_hero[random_filtered_end:]
     random_guard = (
@@ -4431,143 +4512,139 @@ def validate_paladin_recruitment_restriction(output_root: Path) -> None:
     )
     if (
         random_guard not in random_filtered
-        or "Random = $RandomNumber(15) + 1;" not in random_filtered
+        or "Random = $RandomNumber(16) + 1;" not in random_filtered
         or '"Paladin"' in random_filtered
+        or 'return "Phantom";' not in random_filtered
         or 'return "Paladin";' not in random_stock
+        or 'return "Phantom";' not in random_stock
     ):
         fail(
-            f"{gpl_path}: Embassy/Outpost random hero selection must omit "
-            "Paladins while preserving the stock fallback for quest events"
+            f"{gpl_path}: Embassy/Outpost random hero selection must include "
+            "Phantoms, omit Paladins while a Haunt exists, and preserve "
+            "Paladins in the stock-compatible fallback"
         )
 
 
-def validate_deal_demon_test_setup(output_root: Path) -> None:
+def validate_quest_compatibility(output_root: Path) -> None:
     gpl_path = output_root / "GPL" / "Phantom.gpl"
+    hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     gpl = gpl_path.read_text(encoding="utf-8")
-    contract = (
-        'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
-        'dauros_temple = $SpawnUnit(palace, "Temple_Dauros1"',
-        'embassy = $SpawnUnit(palace, "Embassy"',
-        "Foreach Guild in Guilds do",
-        'Guild\'s "SpecialScript" = $Hero_Generator;',
-        '$NewThread( Guild\'s "SpecialScript", 60000 + $randomnumber(60000), Guild );',
-    )
-    missing = [value for value in contract if value not in gpl]
-    if missing:
-        fail(
-            f"{gpl_path}: Deal with the Demon test setup is missing {missing}"
-        )
+    hero_data = hero_data_path.read_text(encoding="utf-8")
 
-    deal = gpl.index("function DEAL_DEMON()")
-    deal_end = gpl.index("function RISE_RATMEN()", deal)
-    deal_gpl = gpl[deal:deal_end]
-    forbidden_player_generators = (
-        'phantoms_haunt\'s "SpecialScript"',
-        'dauros_temple\'s "SpecialScript"',
-        'embassy\'s "SpecialScript"',
-    )
-    present_forbidden = [
-        value for value in forbidden_player_generators if value in deal_gpl
-    ]
-    if present_forbidden:
-        fail(
-            f"{gpl_path}: player-owned Deal with the Demon test guilds must "
-            f"not auto-recruit through Hero_Generator: {present_forbidden}"
-        )
-    stock_loop = deal_gpl.index("Foreach Guild in Guilds do")
-    stock_generator = deal_gpl.index(
-        'Guild\'s "SpecialScript" = $Hero_Generator;',
-        stock_loop,
-    )
-    stock_thread = deal_gpl.index(
-        '$NewThread( Guild\'s "SpecialScript", 60000 + $randomnumber(60000), Guild );',
-        stock_generator,
-    )
-    phantom_spawn = deal_gpl.index(
-        'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
-        stock_thread,
-    )
-    dauros_spawn = deal_gpl.index(
-        'dauros_temple = $SpawnUnit(palace, "Temple_Dauros1"',
-        phantom_spawn,
-    )
-    embassy_spawn = deal_gpl.index(
-        'embassy = $SpawnUnit(palace, "Embassy"',
-        dauros_spawn,
-    )
-    if not (
-        stock_loop
-        < stock_generator
-        < stock_thread
-        < phantom_spawn
-        < dauros_spawn
-        < embassy_spawn
+    if (
+        "(birthScript\tPhantom_Hero_Birth)" not in hero_data
+        or "(IGdeathscript\tPhantom_Hero_Death)" not in hero_data
+        or "function Phantom_Hero_Birth (agent thisagent)" not in gpl
+        or "function Phantom_Hero_Death(agent thisagent)" not in gpl
+        or "function Phantom_birth" in gpl
+        or "function Phantom_death" in gpl
     ):
         fail(
-            f"{gpl_path}: stock enemy guild generation and player test "
-            "building spawn order are malformed"
+            f"{gpl_path}: Phantom hero birth/death functions must use "
+            "quest-safe names that do not collide with Balance of Twilight"
         )
-    forbidden_old_test_spawns = (
-        '$SpawnUnit(palace, "Temple_Agrela1"',
-        '$SpawnUnit(palace, "Elven_Bungalow"',
+
+    disabled_quests = (
+        "BARREN_WASTE",
+        "BELL_BOOK_CANDLE",
+        "DARK_FOREST",
+        "DAY_OF_RECKONING",
+        "SLAY_DRAGON",
+        "FORSAKEN_LANDS",
+        "LICHE_QUEEN",
+        "SAVE_PRINCE",
+        "WIZARDS_CURSE",
+        "VIGIL",
     )
-    present_old_spawns = [
-        value for value in forbidden_old_test_spawns if value in deal_gpl
-    ]
-    if present_old_spawns:
+    for function_name in disabled_quests:
+        marker = f"function {function_name}"
+        start = gpl.find(marker)
+        if start < 0:
+            fail(f"{gpl_path}: missing quest override {function_name}")
+        next_lower = gpl.find("\nfunction ", start + len(marker))
+        next_upper = gpl.find("\nFunction ", start + len(marker))
+        candidates = [value for value in (next_lower, next_upper) if value >= 0]
+        end = min(candidates) if candidates else len(gpl)
+        quest_override = gpl[start:end]
+        if (
+            '$DisableUnitType("Phantoms_Haunt");' not in quest_override
+            or "$Phantom_Lock_Haunt_For_Quest();" not in quest_override
+        ):
+            fail(
+                f"{gpl_path}: {function_name} must disable and persistently "
+                "lock Haunt construction"
+            )
+
+    slay_start = gpl.find("function SLAY_DRAGON")
+    slay_end = gpl.find("\nfunction ", slay_start + 1)
+    slay = gpl[slay_start:slay_end]
+    if (
+        '$SpawnUnit(Palace, "Phantoms_Haunt"' not in slay
+        or "#Monster_Player" not in slay
+        or slay.index('$SpawnUnit(Palace, "Phantoms_Haunt"')
+        > slay.index("$SetUp_Rescue_Buildings (Palace);")
+    ):
         fail(
-            f"{gpl_path}: Deal with the Demon retains obsolete test buildings "
-            f"{present_old_spawns}"
+            f"{gpl_path}: Slay the Mighty Dragon must seed a foreign Haunt "
+            "before stock rescue-building setup runs"
         )
 
+    dark_victory_start = gpl.find("function dark_forest_victory")
+    dark_victory_end = gpl.find("\nfunction ", dark_victory_start + 1)
+    if (
+        dark_victory_start < 0
+        or "$Phantom_Unlock_Haunt_For_Quest();"
+        not in gpl[dark_victory_start:dark_victory_end]
+    ):
+        fail(
+            f"{gpl_path}: Dark Forest must restore Haunt construction with "
+            "the stock guild and temple unlock"
+        )
 
-def validate_rise_ratmen_test_setup(output_root: Path) -> None:
+    siege_start = gpl.find("function SIEGE")
+    if siege_start >= 0:
+        siege_end = gpl.find("\nfunction ", siege_start + 1)
+        if '$DisableUnitType("Phantoms_Haunt");' in gpl[siege_start:siege_end]:
+            fail(f"{gpl_path}: The Siege must leave Haunts available")
+
+
+def validate_release_playtest_contract(output_root: Path) -> None:
     gpl_path = output_root / "GPL" / "Phantom.gpl"
     gpl = gpl_path.read_text(encoding="utf-8")
-    rise_start = gpl.index("function RISE_RATMEN()")
-    rise_end = gpl.index("Function Potion_Check", rise_start)
-    rise = gpl[rise_start:rise_end]
-    contract = (
-        'AIRootAgent\'s "Quest_Number" = #QNumber_rise_ratmen;',
-        "$Setup_Quest_Music(AiRootAgent);",
+    forbidden_test_scaffolding = (
+        "function DEAL_DEMON()",
+        "function RISE_RATMEN()",
         'phantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt"',
         'dauros_temple = $SpawnUnit(palace, "Temple_Dauros1"',
         'fervus_temple = $SpawnUnit(palace, "Temple_Fervus1"',
         'krypta_temple = $SpawnUnit(palace, "Temple_Krypta1"',
         'warriors_guild = $SpawnUnit(palace, "Warriors_Guild"',
         'embassy = $SpawnUnit(palace, "Embassy"',
-        'AIRootAgent\'s "VictoryCondition" = $ratmen_victory;',
-        'AIRootAgent\'s "VictoryCondition2" = $ratmen_Events;',
-        '$NewThread(AIRootAgent\'s "VictoryCondition2", $random_time(210000));',
     )
-    missing = [value for value in contract if value not in rise]
-    if missing:
+    present_test_scaffolding = [
+        value for value in forbidden_test_scaffolding if value in gpl
+    ]
+    if present_test_scaffolding:
         fail(
-            f"{gpl_path}: Rise of the Ratmen expansion test setup is missing "
-            f"{missing}"
+            f"{gpl_path}: release playtest package retains forced quest "
+            f"test structures {present_test_scaffolding}"
         )
 
-    ordered = [rise.index(value) for value in contract]
-    if ordered != sorted(ordered):
-        fail(
-            f"{gpl_path}: Rise of the Ratmen stock setup and test-building "
-            "spawn order are malformed"
-        )
-    forbidden_generators = (
-        'phantoms_haunt\'s "SpecialScript"',
-        'dauros_temple\'s "SpecialScript"',
-        'fervus_temple\'s "SpecialScript"',
-        'krypta_temple\'s "SpecialScript"',
-        'warriors_guild\'s "SpecialScript"',
-        'embassy\'s "SpecialScript"',
+    palace_contract = (
+        "Function Palace_Birth(agent ThisAgent)",
+        '$NewThread(ThisAgent\'s "activeScript", #palace_revenue_cycle, ThisAgent);',
+        '$NewThread(ThisAgent\'s "Guard_Function", #Normal_Cycle, ThisAgent);',
+        "Phantom_Palace_Haunt_Availability_Watch",
+        'Palace\'s "Level" < 2',
+        '$DisableUnitType("Phantoms_Haunt");',
+        '$EnableUnitType("Phantoms_Haunt");',
+        "PhantomHauntQuestDisabled",
     )
-    present_forbidden = [
-        value for value in forbidden_generators if value in rise
-    ]
-    if present_forbidden:
+    missing_palace = [value for value in palace_contract if value not in gpl]
+    if missing_palace:
         fail(
-            f"{gpl_path}: Rise of the Ratmen player test buildings must not "
-            f"run Hero_Generator {present_forbidden}"
+            f"{gpl_path}: Palace-level-2 Haunt availability contract is "
+            f"missing {missing_palace}"
         )
 
 
@@ -4591,8 +4668,8 @@ def validate(output_root: Path) -> None:
     validate_phantom_equipment_upgrade_contract(output_root)
     validate_phantom_healing_contract(output_root)
     validate_paladin_recruitment_restriction(output_root)
-    validate_deal_demon_test_setup(output_root)
-    validate_rise_ratmen_test_setup(output_root)
+    validate_quest_compatibility(output_root)
+    validate_release_playtest_contract(output_root)
 
     archive_results: dict[str, tuple[dict[bytes, list[Entry]], dict[tuple[bytes, bytes], bytes]]] = {}
     for filename in EXPECTED_CAM_ENTRIES:
@@ -4684,16 +4761,37 @@ def validate(output_root: Path) -> None:
             "temple-spell controls"
         )
     help_text = archive_results["phantom_gpltext.cam"][1].get((b"STRT", b"HPTX"))
-    if help_text is None or b"The Phantoms Haunt gathers" not in help_text:
-        fail(f"{gpltext_path}: building help text was not renamed to Phantoms Haunt")
-    if (
-        b"Starting construction prevents Paladin recruitment" not in help_text
-        or b"all existing Paladins to leave Ardania" not in help_text
-    ):
-        fail(
-            f"{gpltext_path}: Phantoms Haunt help text does not warn about "
-            "the Paladin incompatibility"
-        )
+    expected_help = {
+        "hPH0": (
+            b"Durable ranged spellcaster specializing in combat against melee foes",
+            b"can pair with a Priestess to drain the life of others",
+            b"boundary between life and death as more of a suggestion than a law",
+        ),
+        "hP34": (
+            b"Recruits Phantoms",
+            b"Paladins refuse to remain",
+            b"Upgrading the Haunt adds",
+        ),
+        "hP35": (
+            b"Icy Touch, a punishing close-range strike",
+            b"Gravekeeper doubles the restorative power",
+            b"galleries fill with memorials",
+        ),
+        "hP36": (
+            b"Allows veteran Phantoms to master Endless Winter",
+            b"may draw them to support Phantoms in combat",
+            b"crown of deathless ice",
+        ),
+    }
+    if help_text is None:
+        fail(f"{gpltext_path}: STRT/HPTX help table is missing")
+    for help_id, phrases in expected_help.items():
+        page = strt_text_by_fourcc(help_text, help_id)
+        if page is None or any(phrase not in page for phrase in phrases):
+            fail(
+                f"{gpltext_path}: help page {help_id} is missing approved "
+                "Phantom/Haunt copy"
+            )
 
     maindata_path = output_root / "Data" / "phantom_maindata.cam"
     sections, captured = archive_results["phantom_maindata.cam"]

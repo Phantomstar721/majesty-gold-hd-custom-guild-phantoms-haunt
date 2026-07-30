@@ -5,8 +5,11 @@ Majesty Gold HD through a local mod package.
 
 This currently builds:
 
-- `Phantoms Haunt`, building ID `MBPhantomGuild`, castle build-menu cost `1`.
-- `Phantom`, hero ID `PHM1`, recruit cost `1`.
+- `Phantoms Haunt`, building ID `MBPhantomGuild`, available at Palace level 2
+  with stock Temple-to-Krypta costs: `1400` to construct, `1800` for level 2,
+  and `2200` for level 3.
+- `Phantom`, hero ID `PHM1`, recruit cost `700` and `16`-second recruitment
+  time.
 - Custom generated Phantom profile art, small hero icon, and small guild icon.
 - A custom blue Phantoms Haunt dialog look built by borrowing the stock Elf
   recruit dialog.
@@ -26,11 +29,13 @@ This currently builds:
   - `Frost Armor`, item ID `82`, is granted at level 3 as a visible,
     non-droppable class-effect marker and grants the spell's persistent `+10`
     physical armor.
-  - Phantom class items are removed by `Phantom_death` before normal gravestone
+  - Phantom class items are removed by `Phantom_Hero_Death` before normal gravestone
     handling and by a class guard in the stock-compatible realm-exit inventory
     disposal path.
 - Phantom baseline balance: `1600` LevelXP, `8` Vitality, `8` Strength, `25`
   Magic Resistance, `25` Dodge, and `180` conceptual base casting range.
+  Its release-playtest decision profile retreats at `30%` HP with `1.0` enemy
+  estimation and `1.2` self estimation.
   Artifice remains `8`;
   Majesty uses it for equipment-shopping choices, stealing checks, and
   Gambling Hall fallback rolls, not spell damage, casting speed, range, or
@@ -216,27 +221,21 @@ Confirmed Paladin/Haunt interaction:
 - Completing a Haunt irreversibly dismisses that player's living Paladins
   through stock `Unit_Dismissed`/`flee_map`. Destroying the completed Haunt
   restores future recruitment but does not recall Paladins already leaving.
-  The Embassy and Outpost random selectors also omit Paladins while any Haunt
-  foundation exists; the stock quest-special-event fallback remains intact.
+  The Embassy and Outpost random selectors include Phantoms. They omit
+  Paladins while any Haunt foundation exists, while retaining Paladins and
+  adding Phantoms to the stock-compatible quest-special-event fallback.
 - Known timing edge: a Paladin already queued but not yet spawned when the first
   Haunt foundation is placed does not cause the warning to appear. Recruitment
   is still disabled immediately, and the Paladin leaves after spawning.
-- `A Deal with the Demon` is patched for testing so it starts with a Phantoms
-  Haunt, a Temple to Dauros, and an Embassy. These player-owned test buildings
-  do not run `Hero_Generator`; the stock generator remains attached only to the
-  quest's `#NotMyPlayer` guild list.
-- Expansion quest `Rise of the Ratmen` is the full compatibility test bed. It
-  starts with a Phantoms Haunt, Temple to Dauros, Temple to Fervus, Temple to
-  Krypta, Warriors Guild, and Embassy while preserving the quest's stock
-  victory and event threads. This allows direct Paladin, Priestess, Phantom,
-  upgrade, stock-Fervus-panel, and Priestess-support testing in one run.
+- The earlier forced test structures have been removed from `A Deal with the
+  Demon` and `Rise of the Ratmen`; both quests now retain their stock setup for
+  normal campaign playtesting.
 
 Next planned work:
 
 - Give the completed spell suite its dedicated custom audio pass.
-- Restore or reattach proper Phantom hero sprite shadows.
-- Revisit the Phantom death dissolve and gravestone art.
-- Continue balance testing without changing the now-stable spell plumbing.
+- Continue full-campaign balance testing without changing the now-stable spell
+  plumbing unless playtest evidence calls for it.
 
 ## Custom Special Items
 
@@ -435,7 +434,7 @@ Creating string-named custom inventory items through a delayed hero thread was
 unstable and caused crashes after Phantom spawn.
 
 Phantom class gear should also be removed before normal hero death item-drop
-logic runs. The current build does that with `Phantom_death`, which deletes
+logic runs. The current build does that with `Phantom_Hero_Death`, which deletes
 every Cowl and Icerod tier plus `#Phantom_Item_FrostArmorBonus`, then calls the
 stock `gravestone` flow so other legitimate inventory items still behave
 normally. Add any future Phantom-only starter or class gear to
@@ -460,7 +459,7 @@ of the function preserves Majesty's stock loop exactly: all other inventory
 items are deleted, exempt Marketplace items stay non-droppable, and legitimate
 droppable quest items are spawned normally. Other hero classes enter the
 unchanged stock portion immediately. This realm-exit path is verified and
-needs no special downstream handling. Keep the explicit `Phantom_death`
+needs no special downstream handling. Keep the explicit `Phantom_Hero_Death`
 cleanup, which is a separate verified requirement.
 
 ## Implementation Notes
@@ -1390,19 +1389,13 @@ comes from the AP07 `INTI` to `PHTI` raw-texture remap described above.
 
 ## Current Limitations
 
-- The Phantom death sequence is not final. Its shared middle dissolve frames
-  still look spatially inconsistent in game even after their gross scale and
-  vertical-anchor corrections. Review the actual engine sequence again before
-  changing more offsets.
-- The current Phantom gravestone is a temporary first pass and is next in line
-  for a complete visual redesign.
 - Spell mechanics and visual effects are complete, but spell audio still uses
   stock or placeholder sounds pending the final dedicated audio pass.
 - The Phantoms Haunt borrows the stock Elf recruit dialog. This keeps the mod
   Workshop-only, but the Elven Bungalow shares the overridden AP07 dialog art
   while the mod is active.
-- The Phantoms Haunt is still a proof of concept rather than a balanced finished
-  content mod.
+- The Phantoms Haunt remains POC-branded while its release-like economy and
+  decision profile undergo full-campaign playtesting.
 
 ## Spell Completion Checkpoint
 
@@ -1423,9 +1416,9 @@ Final spell checkpoint recorded July 27, 2026:
   match each direction's approved Stand height within one pixel, using
   hotspot-preserving upward canvas expansion where stock Priestess action
   records were too short.
-- Phantom retreat and combat estimates are temporarily set to a fearless
-  testing profile so spell behavior can be exercised without frequent retreat.
-  Threat selection now uses stock `eval_enemies_nearby`, so Phantoms no longer
+- Phantom retreat and combat estimates now use the release-playtest profile:
+  retreat at `30%` HP, `1.0` enemy estimation, and `1.2` self estimation.
+  Threat selection uses stock `eval_enemies_nearby`, so Phantoms do not
   inherit the Wizard's unconditional fear of targets above `60` Magic
   Resistance or targets protected by Magic Mirror. Stock
   `spell_extra_value` retains all eight stock weights and adds Phantom-only

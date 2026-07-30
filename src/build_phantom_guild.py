@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from collections import deque
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 import struct
@@ -283,7 +284,10 @@ def main() -> int:
     (gpl_dir / "Phantom_Building_Data.dat").write_text(phantom_building_data(), encoding="utf-8")
     (gpl_dir / "Phantom_Hero_Data.dat").write_text(phantom_hero_data(), encoding="utf-8")
     (gpl_dir / "Phantom_Items_Data.dat").write_text(phantom_items_data(), encoding="utf-8")
-    (gpl_dir / "Phantom.gpl").write_text(phantom_gpl(), encoding="utf-8")
+    (gpl_dir / "Phantom.gpl").write_text(
+        phantom_gpl(args.game_path),
+        encoding="utf-8",
+    )
     (gpl_dir / "Phantom.gplproj").write_text(phantom_gplproj(), encoding="utf-8")
     (args.output_root / "PhantomGuildPoc.mmxml").write_text(mod_xml(), encoding="utf-8")
     return 0
@@ -380,7 +384,7 @@ def phantom_units_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="AP20"/>
-\t\t\t<Cost value="1"/>
+\t\t\t<Cost value="700"/>
 \t\t\t<Experience value="1600"/>
 \t\t\t<MaxHP value="18"/>
 \t\t\t<SightRange value="240"/>
@@ -397,13 +401,13 @@ def phantom_units_xml() -> str:
 \t\t\t<Dodge value="25"/>
 \t\t\t<WeaponBasicDamage value="0"/>
 \t\t\t<ArmorBasicDamage value="0"/>
-\t\t\t<RecruitDelay value="1000"/>
+\t\t\t<RecruitDelay value="16000"/>
 \t\t\t<PrimaryStat value="2"/>
 \t\t\t<NameGenType value="NM11"/>
 \t\t\t<Flags value="Heals"/>
 \t\t\t<Flags value="HasHPBar"/>
 \t\t\t<Flags value="CanHighlight"/>
-\t\t\t<HelpID value="h020"/>
+\t\t\t<HelpID value="hPH0"/>
 \t\t\t<AllowedWeapon value="Staff"/>
 \t\t\t<AllowedArmor value="Leather"/>
 \t\t\t<AllowedSpells>
@@ -468,11 +472,11 @@ def phantom_units_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
-\t\t\t<Cost value="1"/>
+\t\t\t<Cost value="1400"/>
 \t\t\t<UpgradeTo value="Phantoms_Haunt2"/>
 \t\t\t<Multiplier value="1.0"/>
 \t\t\t<IncomeType value="2"/>
-\t\t\t<IncomeAmount value="5"/>
+\t\t\t<IncomeAmount value="40"/>
 \t\t\t<MaxHP value="250"/>
 \t\t\t<MaxGuildMembers value="4"/>
 \t\t\t<SightRange value="150"/>
@@ -497,12 +501,12 @@ def phantom_units_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
-\t\t\t<Cost value="1"/>
+\t\t\t<Cost value="1800"/>
 \t\t\t<UpgradeTo value="Phantoms_Haunt3"/>
 \t\t\t<UpgradeFrom value="Phantoms_Haunt"/>
 \t\t\t<Multiplier value="1.0"/>
 \t\t\t<IncomeType value="2"/>
-\t\t\t<IncomeAmount value="5"/>
+\t\t\t<IncomeAmount value="40"/>
 \t\t\t<MaxHP value="350"/>
 \t\t\t<MaxGuildMembers value="4"/>
 \t\t\t<SightRange value="175"/>
@@ -510,7 +514,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Flags value="IsGuild"/>
 \t\t\t<Flags value="HasHPBar"/>
 \t\t\t<Flags value="HasGoldToolTip"/>
-\t\t\t<HelpID value="hP34"/>
+\t\t\t<HelpID value="hP35"/>
 \t\t\t<Produces>
 \t\t\t\t<Unit ID="Phantom"/>
 \t\t\t</Produces>
@@ -528,11 +532,11 @@ def phantom_units_xml() -> str:
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
-\t\t\t<Cost value="1"/>
+\t\t\t<Cost value="2200"/>
 \t\t\t<UpgradeFrom value="Phantoms_Haunt2"/>
 \t\t\t<Multiplier value="1.0"/>
 \t\t\t<IncomeType value="2"/>
-\t\t\t<IncomeAmount value="5"/>
+\t\t\t<IncomeAmount value="40"/>
 \t\t\t<MaxHP value="475"/>
 \t\t\t<MaxGuildMembers value="4"/>
 \t\t\t<SightRange value="200"/>
@@ -540,7 +544,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Flags value="IsGuild"/>
 \t\t\t<Flags value="HasHPBar"/>
 \t\t\t<Flags value="HasGoldToolTip"/>
-\t\t\t<HelpID value="hP34"/>
+\t\t\t<HelpID value="hP36"/>
 \t\t\t<Produces>
 \t\t\t\t<Unit ID="Phantom"/>
 \t\t\t</Produces>
@@ -552,6 +556,24 @@ def phantom_units_xml() -> str:
 
 def phantom_actions_xml() -> str:
     return """<Majesty>
+\t<Description type="Action" subType="Standard" ID="WRg1" Name="meteor_storm" Description="Meteor Storm">
+\t\t<Engine version="1">
+\t\t\t<ImageSet value="Cast"/>
+\t\t\t<CompletionImageSet value="Stand"/>
+\t\t\t<Sound value="Meteor_Storm"/>
+\t\t\t<SoundPhase begin="Begin"/>
+\t\t\t<Script type="0" cProc="0" GPLFunction="meteor_storm_hit"/>
+\t\t</Engine>
+\t\t<Game version="1">
+\t\t\t<Flags value="IsSpell"/>
+\t\t\t<EffectorDuration value="21000"/>
+\t\t\t<TimeoutDuration value="55000"/>
+\t\t\t<SpellType value="Attack"/>
+\t\t\t<CharacterLevel value="7"/>
+\t\t\t<SpellRank value="7"/>
+\t\t\t<ValidationScript value="meteor_storm_check"/>
+\t\t</Game>
+\t</Description>
 \t<Description type="Action" subType="Standard" ID="WRa2" Name="ice_lance" Description="Ice Lance">
 \t\t<Engine version="1">
 \t\t\t<ImageSet value="Cast"/>
@@ -608,6 +630,8 @@ def phantom_actions_xml() -> str:
 \t\t<Engine version="1">
 \t\t\t<ImageSet value="Cast"/>
 \t\t\t<CompletionImageSet value="Stand"/>
+\t\t\t<Sound value="Meteor_Storm"/>
+\t\t\t<SoundPhase begin="Begin"/>
 \t\t\t<Script type="0" cProc="0" GPLFunction="Endless_Winter_Hit"/>
 \t\t</Engine>
 \t\t<Game version="1">
@@ -1120,9 +1144,9 @@ def phantom_hero_data() -> str:
 \t\t(Friend\txx)
 \t\t(attacktype 1)
 \t\t(castingrange 190)
-\t\t(PercentageHPRetreat 0)
-\t\t(enemy_estimation 0.1)
-\t\t(self_estimation 10.0)
+\t\t(PercentageHPRetreat 30)
+\t\t(enemy_estimation 1.0)
+\t\t(self_estimation 1.2)
 \t\t(Loyalty 55)
 \t\t(Greed 12)
 \t\t(Luck 12)
@@ -1133,8 +1157,8 @@ def phantom_hero_data() -> str:
 \t\t(activeScript\tPhantom_tree)
 \t\t(basicscript\tPhantom_tree)
 \t\t(StartingScript\tPhantom_tree)
-\t\t(birthScript\tPhantom_birth)
-\t\t(IGdeathscript\tPhantom_death)
+\t\t(birthScript\tPhantom_Hero_Birth)
+\t\t(IGdeathscript\tPhantom_Hero_Death)
 \t}
 [end]
 
@@ -1237,7 +1261,93 @@ def phantom_building_data() -> str:
 """
 
 
-def phantom_gpl() -> str:
+def extract_gpl_function(source: str, function_name: str) -> str:
+    function_pattern = re.compile(
+        rf"(?im)^function\s+{re.escape(function_name)}\s*\("
+    )
+    match = function_pattern.search(source)
+    if match is None:
+        raise ValueError(f"stock GPL function not found: {function_name}")
+
+    next_function = re.compile(r"(?im)^function\s+").search(source, match.end())
+    end = len(source) if next_function is None else next_function.start()
+    return source[match.start():end].rstrip()
+
+
+def phantom_quest_rule_overrides(game_path: Path) -> str:
+    sdk_rules = game_path / "SDK" / "OriginalQuests" / "GPLMx" / "Rules"
+    epic_source = (sdk_rules / "mx_Epic_Quest_Scripts.gpl").read_text(
+        encoding="cp1252"
+    )
+    expansion_source = (sdk_rules / "Quests_2.gpl").read_text(encoding="cp1252")
+
+    disabled_quests = (
+        "BARREN_WASTE",
+        "BELL_BOOK_CANDLE",
+        "DARK_FOREST",
+        "DAY_OF_RECKONING",
+        "SLAY_DRAGON",
+        "FORSAKEN_LANDS",
+        "LICHE_QUEEN",
+        "SAVE_PRINCE",
+        "WIZARDS_CURSE",
+    )
+    overrides: list[str] = []
+    for function_name in disabled_quests:
+        function = extract_gpl_function(epic_source, function_name)
+        function = re.sub(
+            r"(?im)^begin\s*$",
+            (
+                'begin\n'
+                '\t$DisableUnitType("Phantoms_Haunt");\n'
+                "\t$Phantom_Lock_Haunt_For_Quest();"
+            ),
+            function,
+            count=1,
+        )
+        if function_name == "SLAY_DRAGON":
+            function = function.replace(
+                "\t$SetUp_Rescue_Buildings (Palace);",
+                (
+                    '\t$SpawnUnit(Palace, "Phantoms_Haunt", '
+                    "$RandomCoord(Palace, 1200, 2500), #Monster_Player);\n\n"
+                    "\t$SetUp_Rescue_Buildings (Palace);"
+                ),
+                1,
+            )
+        overrides.append(function)
+
+    dark_forest_victory = extract_gpl_function(
+        epic_source,
+        "dark_forest_victory",
+    )
+    dark_forest_victory = dark_forest_victory.replace(
+        '\t\t\t\t\t$enableunittype("Gnome_hovel");',
+        (
+            '\t\t\t\t\t$enableunittype("Gnome_hovel");\n'
+            '\t\t\t\t\t$Phantom_Unlock_Haunt_For_Quest();'
+        ),
+        1,
+    )
+    overrides.append(dark_forest_victory)
+
+    vigil = extract_gpl_function(expansion_source, "VIGIL")
+    vigil = re.sub(
+        r"(?im)^begin\s*$",
+        (
+            'begin\n'
+            '\t$DisableUnitType("Phantoms_Haunt");\n'
+            "\t$Phantom_Lock_Haunt_For_Quest();"
+        ),
+        vigil,
+        count=1,
+    )
+    overrides.append(vigil)
+
+    return "\n\n".join(overrides) + "\n"
+
+
+def phantom_gpl(game_path: Path) -> str:
     item_expressions = "\n".join(
         f"expression #{attribute_name} {item_id}"
         for item_id, _, attribute_name, _, _ in phantom_equipment_item_specs()
@@ -1258,6 +1368,137 @@ def phantom_gpl() -> str:
     item_expressions += "expression #Phantom_Rush_Movement_Bonus -22\n"
     item_expressions += "expression #Phantom_Rush_Action_Bonus -10\n"
     return item_expressions + """
+
+Function Phantom_Lock_Haunt_For_Quest()
+
+Declare
+\tlist Palaces;
+\tagent Palace;
+
+Begin
+\tPalaces = $ListPalaces();
+\tForeach Palace in Palaces do
+\t\tbegin
+\t\t\tIf ($HasAttribute("PhantomHauntQuestDisabled", Palace) == False)
+\t\t\t\t$AddAttribute(
+\t\t\t\t\tPalace,
+\t\t\t\t\t"PhantomHauntQuestDisabled",
+\t\t\t\t\t"boolean",
+\t\t\t\t\tTrue
+\t\t\t\t);
+\t\t\tElse
+\t\t\t\tPalace's "PhantomHauntQuestDisabled" = True;
+\t\tend
+End
+
+Function Phantom_Unlock_Haunt_For_Quest()
+
+Declare
+\tlist Palaces;
+\tagent Palace;
+
+Begin
+\tPalaces = $ListPalaces();
+\tForeach Palace in Palaces do
+\t\tbegin
+\t\t\tIf ($HasAttribute("PhantomHauntQuestDisabled", Palace) == False)
+\t\t\t\t$AddAttribute(
+\t\t\t\t\tPalace,
+\t\t\t\t\t"PhantomHauntQuestDisabled",
+\t\t\t\t\t"boolean",
+\t\t\t\t\tFalse
+\t\t\t\t);
+\t\t\tElse
+\t\t\t\tPalace's "PhantomHauntQuestDisabled" = False;
+
+\t\t\tIf (Palace's "Level" >= 2)
+\t\t\t\t$EnableUnitType("Phantoms_Haunt");
+\t\tend
+End
+
+Function Phantom_Palace_Haunt_Availability_Watch(agent Palace)
+
+Declare
+\tinteger Availability_State;
+
+Begin
+\tIf ($IsValidGamePiece(Palace) == False)
+\t\treturn;
+
+\tIf ($HasAttribute("PhantomHauntAvailabilityState", Palace) == False)
+\t\t$AddAttribute(
+\t\t\tPalace,
+\t\t\t"PhantomHauntAvailabilityState",
+\t\t\t"integer",
+\t\t\t0
+\t\t);
+
+\tAvailability_State = Palace's "PhantomHauntAvailabilityState";
+\tIf (Palace's "Level" < 2)
+\t\tbegin
+\t\t\tIf (Availability_State != 1)
+\t\t\t\tbegin
+\t\t\t\t\t$DisableUnitType("Phantoms_Haunt");
+\t\t\t\t\tPalace's "PhantomHauntAvailabilityState" = 1;
+\t\t\t\tend
+\t\tend
+\tElse If (Availability_State != 2)
+\t\tbegin
+\t\t\tIf (
+\t\t\t\t$HasAttribute("PhantomHauntQuestDisabled", Palace) == False ||
+\t\t\t\tPalace's "PhantomHauntQuestDisabled" == False
+\t\t\t)
+\t\t\t\t$EnableUnitType("Phantoms_Haunt");
+\t\t\tPalace's "PhantomHauntAvailabilityState" = 2;
+\t\tend
+
+\t$NewThread(Palace's "PhantomHauntAvailabilityWatch", 1000, Palace);
+End
+
+// Exact stock Palace birth behavior plus one isolated availability watcher.
+// The watcher changes only the custom Haunt unit type and leaves every stock
+// Palace spawner, revenue thread, guard, and upgrade path untouched.
+Function Palace_Birth(agent ThisAgent)
+
+Declare
+
+Begin
+\tThisAgent's "in_danger" = False;
+\t$ClearList(ThisAgent's "tax_route");
+\t$ClearList(ThisAgent's "tax_targets");
+\t$NewThread(ThisAgent's "activeScript", #palace_revenue_cycle, ThisAgent);
+\t$NewThread(ThisAgent's "Guard_Function", #Normal_Cycle, ThisAgent);
+\t$RunThread(
+\t\tThisAgent's "Guard_Spawn_Function",
+\t\t#initial_Palace_guard_delay,
+\t\tThisAgent
+\t);
+\t$RunThread(
+\t\tThisAgent's "Tax_spawn",
+\t\t#initial_tax_collector_delay,
+\t\tThisAgent
+\t);
+\t$RunThread(
+\t\tThisAgent's "peasant_spawn",
+\t\t#initial_peasant_delay,
+\t\tThisAgent
+\t);
+
+\tIf ($HasAttribute("PhantomHauntAvailabilityWatch", ThisAgent) == False)
+\t\t$AddAttribute(
+\t\t\tThisAgent,
+\t\t\t"PhantomHauntAvailabilityWatch",
+\t\t\t"function",
+\t\t\t$Phantom_Palace_Haunt_Availability_Watch
+\t\t);
+
+\tIf ($IsRunning(ThisAgent's "PhantomHauntAvailabilityWatch") == False)
+\t\t$NewThread(
+\t\t\tThisAgent's "PhantomHauntAvailabilityWatch",
+\t\t\t250,
+\t\t\tThisAgent
+\t\t);
+End
 
 Function Phantom_Player_Has_Placed_Haunt(agent ThisAgent) is boolean
 
@@ -1626,7 +1867,7 @@ Begin
 \tIf (ThisAgent's "Title" == "Embassy" || ThisAgent's "Subtype" == "Outpost")
 \t\tIf ($Phantom_Player_Has_Placed_Haunt(ThisAgent))
 \t\t\tbegin
-\t\t\t\tRandom = $RandomNumber(15) + 1;
+\t\t\t\tRandom = $RandomNumber(16) + 1;
 
 \t\t\t\tIf (Random == 1)
 \t\t\t\t\treturn "Adept";
@@ -1656,11 +1897,13 @@ Begin
 \t\t\t\t\treturn "Dwarf";
 \t\t\t\tElse if (Random == 14)
 \t\t\t\t\treturn "Elf";
-\t\t\t\tElse
+\t\t\t\tElse if (Random == 15)
 \t\t\t\t\treturn "Gnome";
+\t\t\t\tElse
+\t\t\t\t\treturn "Phantom";
 \t\t\tend
 
-\tRandom = $RandomNumber(16) + 1;
+\tRandom = $RandomNumber(17) + 1;
 
 \tIf (Random == 1)
 \t\treturn "Adept";
@@ -1692,8 +1935,10 @@ Begin
 \t\treturn "Dwarf";
 \tElse if (Random == 15)
 \t\treturn "Elf";
-\tElse
+\tElse if (Random == 16)
 \t\treturn "Gnome";
+\tElse
+\t\treturn "Phantom";
 End
 
 // Preserve the stock Ranger/Wizard support selector for every normal hero,
@@ -2310,79 +2555,6 @@ begin
 \t\tend
 
 \treturn value;
-end
-
-function DEAL_DEMON()
-
-declare
-\tagent AIRootAgent,palace,guild,lair,phantoms_haunt,dauros_temple,embassy;
-\tlist guilds,palaces,lairs;
-
-begin
-\tAIRootAgent = $RetrieveAgent ("GplAIRoot");
-\tAIRootAgent's "Quest_Number" = #QNumber_Deal_Demon;
-
-\tpalaces = $ListPalaces();
-\tpalace = $listmember(palaces,1);
-
-\t$Setup_Quest_Music (AiRootAgent);
-
-\t$ListObjects (Palace, "Building", -1, Guilds, #NotMyPlayer, #NoHiddenMap);
-\tGuilds = $ListSubtypes (Guilds, "Guild");
-
-\t$setup_random_treasure(30, #default_spawn_treasure_dist);
-
-\tForeach Guild in Guilds do
-\t\tbegin
-\t\t\tGuild's "SpecialScript" = $Hero_Generator;
-\t\t\t$NewThread( Guild's "SpecialScript", 60000 + $randomnumber(60000), Guild );
-\t\tend
-
-\tphantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt", $RandomCoord(palace, 275, 475), "MaxHP");
-
-\tdauros_temple = $SpawnUnit(palace, "Temple_Dauros1", $RandomCoord(palace, 275, 475), "MaxHP");
-
-\tembassy = $SpawnUnit(palace, "Embassy", $RandomCoord(palace, 275, 475), "MaxHP");
-
-\t$listobjects(palace,"lair",-1,lairs,#NoHiddenMap);
-\tforeach lair in lairs do
-\t\tbegin
-\t\t\tif (lair's "special_spawn_type" == "vampire")
-\t\t\t\tlair's "special_spawn_type" = "werewolf";
-\t\tend
-
-\tAIRootAgent's "VictoryCondition" = $Demon_victory;
-\t$NewThread( AIRootAgent's "VictoryCondition", #VictoryCondition_callback_frequency );
-\tAIRootAgent's "VictoryCondition2" = $Demon_victory2;
-\t$newThread( AIRootAgent's "VictoryCondition2", 1200000);
-end
-
-function RISE_RATMEN()
-
-declare
-\tagent AIRootAgent,palace,phantoms_haunt,dauros_temple,fervus_temple,krypta_temple,warriors_guild,embassy;
-\tlist palaces;
-
-begin
-\tAIRootAgent = $RetrieveAgent("GplAIRoot");
-\tAIRootAgent's "Quest_Number" = #QNumber_rise_ratmen;
-
-\tpalaces = $ListPalaces();
-\tpalace = $listmember(palaces,1);
-
-\t$Setup_Quest_Music(AiRootAgent);
-
-\tphantoms_haunt = $SpawnUnit(palace, "Phantoms_Haunt", $RandomCoord(palace, 275, 475), "MaxHP");
-\tdauros_temple = $SpawnUnit(palace, "Temple_Dauros1", $RandomCoord(palace, 275, 475), "MaxHP");
-\tfervus_temple = $SpawnUnit(palace, "Temple_Fervus1", $RandomCoord(palace, 275, 475), "MaxHP");
-\tkrypta_temple = $SpawnUnit(palace, "Temple_Krypta1", $RandomCoord(palace, 275, 475), "MaxHP");
-\twarriors_guild = $SpawnUnit(palace, "Warriors_Guild", $RandomCoord(palace, 275, 475), "MaxHP");
-\tembassy = $SpawnUnit(palace, "Embassy", $RandomCoord(palace, 275, 475), "MaxHP");
-
-\tAIRootAgent's "VictoryCondition" = $ratmen_victory;
-\t$NewThread(AIRootAgent's "VictoryCondition", #VictoryCondition_callback_frequency);
-\tAIRootAgent's "VictoryCondition2" = $ratmen_Events;
-\t$NewThread(AIRootAgent's "VictoryCondition2", $random_time(210000));
 end
 
 Function Potion_Check(agent thisagent, list potentials) is boolean
@@ -3107,7 +3279,7 @@ begin
 \t\t$Wizard_tree(thisagent);
 end
 
-function Phantom_birth (agent thisagent)
+function Phantom_Hero_Birth (agent thisagent)
 
 declare
 
@@ -3589,7 +3761,7 @@ begin
 \t\t$DeleteEffector(thisagent, "ice_lance_empowered_chill_icon");
 end
 
-function Phantom_death(agent thisagent)
+function Phantom_Hero_Death(agent thisagent)
 
 declare
 
@@ -4240,7 +4412,7 @@ begin
 \t\tend
 end
 
-"""
+""" + "\n" + phantom_quest_rule_overrides(game_path)
 
 
 def phantom_gplproj() -> str:
@@ -4437,18 +4609,47 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
     patched_help_text = patch_strt_strings(
         help_text.data,
         {
+            fourcc_id("hPH0"): (
+                "- Durable ranged spellcaster specializing in combat against melee foes\n\n"
+                "- Wields numbing frost magic to hinder attackers and reinforce their own defenses\n\n"
+                "- Carries ice-forged equipment that can be improved by Blacksmiths and enchanted at Wizards Guilds\n\n"
+                "- Cannot benefit from natural healing, but can pair with a Priestess to drain the life of others\n\n\n"
+                "\x01BCBCFFPhantoms are souls caught between Ardania and the cold reaches beyond the Veil. "
+                "The grave has not made them frail; deathless ice turns aside blades while numbing sorcery "
+                "punishes those who press too close. Though shunned by the extremely righteous, they often "
+                "find common cause with Krypta's Priestesses, who regard the boundary between life and death "
+                "as more of a suggestion than a law."
+            ),
             fourcc_id("hP34"): (
                 "- Recruits Phantoms\n\n"
-                "- Phantoms are ghostly ice casters with custom class gear\n\n"
-                "\x01AADDFFLevel 2: unlocks Icy Touch and Gravekeeper. "
-                "Gravekeeper doubles all healing delivered by allied Priestesses' Drain Life.\n\n"
-                "\x01AADDFFLevel 3: unlocks Endless Winter and Rush unto Death. "
-                "Rush unto Death makes allied Priestesses faster and lets each Phantom attract "
-                "one Priestess as a following combat support.\n\n"
-                "\x01FF8888Warning: Starting construction prevents Paladin recruitment. "
-                "Completing the Haunt causes all existing Paladins to leave Ardania.\n\n"
-                "\x01BCBCFFThe Phantoms Haunt gathers cold, restless spirits into service as arcane heroes. "
-                "Its members fight like fragile spellcasters, striking from range with Ice Lance and other frost magic."
+                "- Houses up to four guild members\n\n"
+                "- Paladins refuse to remain in any realm that harbors a completed Haunt\n\n"
+                "\x01DDBB44Upgrading the Haunt adds\n"
+                "+ Icy Touch\n"
+                "+ Gravekeeper\n"
+                "+ Increased building hit points\n\n\n"
+                "\x01BCBCFFA Haunt forms where the boundary between Ardania and the lands beyond death has worn thin. "
+                "Its pale beacon calls wayward spirits from the Veil and offers them purpose among the living. "
+                "Paladins regard such communion as an intolerable affront to the order of Dauros."
+            ),
+            fourcc_id("hP35"): (
+                "- Allows experienced Phantoms to master Icy Touch, a punishing close-range strike that chills "
+                "and weakens its victim\n\n"
+                "- Gravekeeper doubles the restorative power of allied Priestesses' Drain Life\n\n"
+                "\x01DDBB44Upgrading the Haunt adds\n"
+                "+ Endless Winter\n"
+                "+ Rush unto Death\n"
+                "+ Increased building hit points\n\n\n"
+                "\x01BCBCFFAs the Haunt grows, its galleries fill with memorials to lives long forgotten. "
+                "Priestesses of Krypta tend these silent records and learn to draw more deeply upon the life "
+                "claimed from their enemies."
+            ),
+            fourcc_id("hP36"): (
+                "- Allows veteran Phantoms to master Endless Winter\n\n"
+                "- Rush unto Death hastens allied Priestesses and may draw them to support Phantoms in combat\n\n\n"
+                "\x01BCBCFFAt its greatest extent, the Haunt pierces the Veil with a crown of deathless ice. "
+                "Its cold beacon can be felt throughout the realm, drawing Phantoms and Priestesses together "
+                "beneath the promise that even death may be made to serve."
             ),
         },
     )
