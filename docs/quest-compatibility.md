@@ -4,6 +4,11 @@ The Phantoms Haunt is treated as a temple-tier arcane guild when matching stock
 quest restrictions. A restriction against non-human settlements alone does not
 exclude it.
 
+The Palace starts the Haunt availability watcher directly during `Palace_Birth`.
+Do not gate its first invocation behind `IsRunning`: the engine can report a
+newly attached function attribute as active before any watcher thread has run,
+leaving the Haunt disabled after the Palace reaches level 2.
+
 ## Embassy and Outpost
 
 The stock `Random_Hero_Type` route is retained. Embassy, Outpost, and the

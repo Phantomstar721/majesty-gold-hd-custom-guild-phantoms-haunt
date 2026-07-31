@@ -43,8 +43,10 @@ This currently builds:
 - Phantoms and Priestesses share a custom `NM11` name pool with `32`
   gender-neutral given names and `32` death-, darkness-, grave-, and
   cold-themed endings (`1,024` possible combinations).
-- Generated placeholder voice/soundbite WAVs. A dedicated Phantom spell-audio
-  pass is intentionally deferred until the rest of the content is complete.
+- A processed Phantom hero voice set using the pinned revenant recipe,
+  event-named source/clean/game assets, a WAVE CAM, and stock-shaped runtime
+  DSND routing. Recruitment is in-game validated at its dedicated 20-percent
+  cadence; the remaining recorded events await full in-game validation.
 - Wizard-style hero stats and Wizard decision-tree behavior through
   `Phantom_tree`.
 - A Phantom-only `Ice Lance` spell entry, generated-source directional
@@ -487,6 +489,32 @@ The normal fast test cycle is:
 Keep the SDK/RGSeditor path available for updating the private Workshop item
 metadata, but day-to-day local testing should use the registered Workshop deploy
 script once the item exists.
+
+During the voice-production pass, do not regenerate completed sprite and
+interface archives. After at least one full validated build exists, process the
+clean recruitment master, rebuild only `phantom_voices.cam`, validate the whole
+existing package, and deploy it to the registered Workshop folder with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Release-PhantomGuildPocAudio.ps1
+```
+
+To update only `dist\PhantomGuildPoc` without deploying:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-PhantomGuildPoc.ps1 -AudioOnly
+```
+
+For GPL/gameplay-only changes that do not alter descriptions or art archives:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-PhantomGuildPoc.ps1 -GplOnly
+```
+
+The incremental paths deliberately fail when no prior full package exists. Use
+the ordinary `Build-PhantomGuildPoc.ps1` command for the first build, after art
+or description/archive-generation changes, and for the final clean release
+confidence check.
 
 ### Guild Dialog Path
 

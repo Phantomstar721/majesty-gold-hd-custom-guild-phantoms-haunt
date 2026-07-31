@@ -162,7 +162,26 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
         b"TILE": set(),
     },
     "phantom_voices.cam": {
-        b"WAVE": {b"PHD1", b"PHS1", b"PHDH", b"PHA1", b"PHGS"},
+        b"WAVE": {
+            b"PHS1",
+            b"PHD1",
+            b"PHI1",
+            b"PHH1",
+            b"PHC1",
+            b"PHF1",
+            b"PHR1",
+            b"PHN1",
+            b"PHC2",
+            b"PHL1",
+            b"PH10",
+            b"PHE1",
+            b"PHDH",
+            b"PHA1",
+            b"PHGS",
+        },
+    },
+    "phantom_sounddesc.cam": {
+        b"DSND": {b"PV01Phantom_Voice", b"PH01Phantom_Hired"},
     },
 }
 
@@ -212,6 +231,7 @@ EXPECTED_DESCRIPTION_IDS = {
         ("Unit", "PHW6"),
     },
     "phantom_sounds.xml": {
+        ("Sound", "PV01"),
         ("Sound", "PH01"),
         ("Sound", "PH02"),
     },
@@ -534,6 +554,96 @@ def validate_archive(path: Path) -> tuple[dict[bytes, list[Entry]], dict[tuple[b
                     data[entry.offset : entry.offset + entry.size]
                 )
 
+        for entry in sections.get(b"WAVE", []):
+            payload = bytes(data[entry.offset : entry.offset + entry.size])
+            validate_wave(path, entry, payload)
+            if path.name == "phantom_voices.cam":
+                captured[(entry.section, entry.name)] = payload
+
+        for entry in sections.get(b"DSND", []):
+            if entry.name == b"PH01Phantom_Hired":
+                payload = bytes(data[entry.offset : entry.offset + entry.size])
+                required = (
+                    b"DSND",
+                    b"PH01",
+                    b"Phantom_Hired",
+                    b"EBE0",
+                    b"PHS1",
+                    b"SG14",
+                )
+                missing = [value for value in required if value not in payload]
+                if missing or b"RM01" in payload or b"Rage_of_Krolm" in payload:
+                    fail(
+                        f"{path}: custom Phantom DSND is malformed; "
+                        f"missing {missing}"
+                    )
+                captured[(entry.section, entry.name)] = payload
+            elif entry.name == b"PV01Phantom_Voice":
+                payload = bytes(data[entry.offset : entry.offset + entry.size])
+                required = (
+                    b"DSND",
+                    b"PV01",
+                    b"Phantom",
+                    b"GVC0",
+                    b"PHC1",
+                    b"SG04",
+                    b"GVF0",
+                    b"PHF1",
+                    b"SG05",
+                    b"GVD0",
+                    b"PHD1",
+                    b"SG06",
+                    b"GVR0",
+                    b"PHR1",
+                    b"SG11",
+                    b"GVO0",
+                    b"PHN1",
+                    b"SG09",
+                    b"GVS0",
+                    b"PHI1",
+                    b"SG14",
+                    b"GVP0",
+                    b"PHC2",
+                    b"SG21",
+                    b"EDH0",
+                    b"PHDH",
+                    b"SG02",
+                    b"GVL0",
+                    b"PHL1",
+                    b"SG08",
+                    b"GVH0",
+                    b"PHH1",
+                    b"SG07",
+                    b"GVS4",
+                    b"PH10",
+                    b"EG01",
+                    b"PHE1",
+                )
+                missing = [value for value in required if value not in payload]
+                forbidden = (
+                    b"WZ01",
+                    b"Wizard",
+                    b"WZGT",
+                    b"WZFT",
+                    b"WZDO",
+                    b"WZDG",
+                    b"WZFL",
+                    b"WZSS",
+                    b"WZCL",
+                    b"WZDH",
+                    b"WZGL",
+                    b"WZSE",
+                    b"WZTL",
+                    b"WZE1",
+                )
+                retained = [value for value in forbidden if value in payload]
+                if missing or retained:
+                    fail(
+                        f"{path}: Phantom voice DSND is malformed; "
+                        f"missing {missing}, retained stock identity/targets {retained}"
+                    )
+                captured[(entry.section, entry.name)] = payload
+
         imag_names = {
             owner[0] for owner in CUSTOM_TILE_OWNERS.values()
         } | {b"PHTIraw textures"}
@@ -572,6 +682,22 @@ def validate_strt(path: Path, entry: Entry, data: bytes) -> None:
         if data.find(b"\x00", offset + 4, record_end) == -1:
             fail(f"{path}: {entry.label} string {index} is not null terminated")
         previous = offset
+
+
+def validate_wave(path: Path, entry: Entry, data: bytes) -> None:
+    if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        fail(f"{path}: {entry.label} is not a RIFF/WAVE payload")
+    if data[12:16] != b"fmt " or struct.unpack_from("<I", data, 16)[0] != 16:
+        fail(f"{path}: {entry.label} does not use the expected PCM fmt chunk")
+    audio_format, channels = struct.unpack_from("<HH", data, 20)
+    sample_rate = struct.unpack_from("<I", data, 24)[0]
+    bits_per_sample = struct.unpack_from("<H", data, 34)[0]
+    if (audio_format, channels, sample_rate, bits_per_sample) != (1, 1, 22050, 16):
+        fail(
+            f"{path}: {entry.label} must be mono 22050 Hz 16-bit PCM; got "
+            f"format={audio_format} channels={channels} rate={sample_rate} "
+            f"bits={bits_per_sample}"
+        )
 
 
 def strt_text_by_fourcc(data: bytes, fourcc: str) -> bytes | None:
@@ -1694,6 +1820,78 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
     sounds = sounds_path.read_text(encoding="utf-8")
     if 'ID="PH02" Name="Phantoms_Haunt"' not in sounds:
         fail(f"{sounds_path}: building sound description retains the old name")
+    sounds_tree = parse_xml(sounds_path)
+    phantom_sound = sounds_tree.find('.//Description[@ID="PV01"]')
+    hired_sound = sounds_tree.find('.//Description[@ID="PH01"]')
+    recruitment_phase = (
+        hired_sound.find('./Engine/Phase[@ID="Begin"]')
+        if hired_sound is not None
+        else None
+    )
+    recruitment_wave = (
+        recruitment_phase.find("./Wave") if recruitment_phase is not None else None
+    )
+    recruitment_group = (
+        recruitment_phase.find("./Group") if recruitment_phase is not None else None
+    )
+    if (
+        recruitment_wave is None
+        or recruitment_wave.get("value") != "PHS1"
+        or recruitment_group is None
+        or recruitment_group.get("value") != "Voice_Special_1_Group"
+        or recruitment_phase.find("./DistanceModifier") is not None
+    ):
+        fail(
+            f"{sounds_path}: Phantom_Hired/Begin must use PHS1 with the stock "
+            "hero voice group and spatial-distance policy"
+        )
+    if phantom_sound is None or phantom_sound.get("Name") != "Phantom_Voice":
+        fail(f"{sounds_path}: Phantom hero sound name must be globally unique")
+    if hired_sound is None or hired_sound.get("Name") != "Phantom_Hired":
+        fail(f"{sounds_path}: recruitment sound must use unique Phantom_Hired name")
+    expected_voice_phases = {
+        "VFX_GO_COMBAT": ("PHC1", "Enter_Combat_Group"),
+        "VFX_FLEE_COMBAT": ("PHF1", "Flee_Combat_Group"),
+        "VFX_DECIDING": ("PHD1", "Deciding_Group"),
+        "VFX_GO_REWARD": ("PHR1", "GoReward_Group"),
+        "VFX_FIND_COOL": ("PHN1", "Find_Cool_Group"),
+        "VFX_SPECIAL1": ("PHI1", "Voice_Special_1_Group"),
+        "VFX_CAST_SPELL1": ("PHC2", "Hero_Cast_Voice_Group"),
+        "Death": ("PHDH", "Death_Group"),
+        "VFX_GAIN_LEVEL": ("PHL1", "Up-Level_Group"),
+        "VFX_SEE_HOSTILE": ("PHH1", "See_hostile_Group"),
+        "GetHit": ("PHA1", "GetHit_Group"),
+        "Attack": ("PHA1", "Attack_Group"),
+        "VFX_LEVEL_10": ("PH10", None),
+        "Easter_Egg": ("PHE1", None),
+    }
+    actual_phase_ids = {
+        phase.get("ID") for phase in phantom_sound.findall("./Engine/Phase")
+    }
+    if actual_phase_ids != set(expected_voice_phases):
+        fail(
+            f"{sounds_path}: Phantom voice phase set differs from the approved "
+            f"stock-compatible set; got {sorted(actual_phase_ids)}"
+        )
+    for phase in phantom_sound.findall("./Engine/Phase"):
+        phase_id = phase.get("ID")
+        wave_node = phase.find("./Wave")
+        group_node = phase.find("./Group")
+        expected_wave, expected_group = expected_voice_phases[phase_id]
+        if wave_node is None or wave_node.get("value") != expected_wave:
+            fail(
+                f"{sounds_path}: {phase_id} must use Phantom WAVE {expected_wave}"
+            )
+        actual_group = group_node.get("value") if group_node is not None else None
+        if actual_group != expected_group:
+            fail(
+                f"{sounds_path}: {phase_id} must use group {expected_group!r}, "
+                f"got {actual_group!r}"
+            )
+        if wave_node is not None and wave_node.get("value") == "PHS1":
+            fail(f"{sounds_path}: PHS1 must be recruitment-only")
+    if '<DefaultSound value="Phantom_Voice"/>' not in units:
+        fail(f"{units_path}: Phantom must retain its unique default voice identity")
 
     building_data_path = output_root / "GPL" / "Phantom_Building_Data.dat"
     building_data = building_data_path.read_text(encoding="utf-8")
@@ -3279,6 +3477,29 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
             f"{gpl_path}: Phantom birth still grants the temporary level-1 "
             "Endless Winter test spell"
         )
+    recruitment_voice_contract = (
+        'Home = thisagent\'s "home";',
+        "$isvalidgamepiece(Home)",
+        'Home\'s "title" == "Phantoms_Haunt"',
+        '$HasAttribute("PhantomRecruitmentVoice", thisagent) == False',
+        '"PhantomRecruitmentVoice",',
+        "$Phantom_Recruitment_Voice",
+        "$RandomNumber(100) + 1 <= 20",
+        'thisagent\'s "PhantomRecruitmentVoice",',
+        "250,",
+        "function Phantom_Recruitment_Voice(agent thisagent)",
+        '$PlaySound(thisagent, "Phantom_Hired", "Begin");',
+    )
+    missing_recruitment_voice = [
+        value for value in recruitment_voice_contract if value not in birth
+    ]
+    if missing_recruitment_voice:
+        fail(
+            f"{gpl_path}: 20-percent one-shot Haunt recruitment voice contract "
+            f"is missing {missing_recruitment_voice}"
+        )
+    if '$PlaySound(thisagent, "Phantom_Voice", "VFX_SPECIAL1");' in gpl:
+        fail(f"{gpl_path}: recruitment audio must not use the stock idle phase")
     runtime_contract = (
         "function Endless_Winter_Hit(agent thisagent, agent target)",
         "function Endless_Winter_Check(agent thisagent) is integer",
@@ -4645,6 +4866,27 @@ def validate_release_playtest_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: Palace-level-2 Haunt availability contract is "
             f"missing {missing_palace}"
+        )
+
+    palace_start = gpl.index("Function Palace_Birth(agent ThisAgent)")
+    palace_end = gpl.index("\nFunction ", palace_start + 1)
+    palace_birth = gpl[palace_start:palace_end]
+    direct_start = (
+        '$RunThread(\n'
+        '\t\tThisAgent\'s "PhantomHauntAvailabilityWatch",\n'
+        '\t\t250,\n'
+        '\t\tThisAgent\n'
+        '\t);'
+    )
+    if direct_start not in palace_birth:
+        fail(
+            f"{gpl_path}: Palace_Birth must directly start the Haunt "
+            "availability watcher"
+        )
+    if '$IsRunning(ThisAgent\'s "PhantomHauntAvailabilityWatch")' in palace_birth:
+        fail(
+            f"{gpl_path}: Palace_Birth must not gate the availability watcher's "
+            "first run behind IsRunning"
         )
 
 

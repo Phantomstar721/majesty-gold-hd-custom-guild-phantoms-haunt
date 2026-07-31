@@ -141,6 +141,21 @@ PHANTOM_ICEROD_TIER_NAMES = (
     "Deep Icerod",
     "Eternal Icerod",
 )
+PHANTOM_VOICE_WAVES = (
+    (b"PHS1", "recruitment"),
+    (b"PHD1", "deciding"),
+    (b"PHI1", "idle"),
+    (b"PHH1", "see-hostile"),
+    (b"PHC1", "combat"),
+    (b"PHF1", "flee"),
+    (b"PHR1", "reward"),
+    (b"PHN1", "find-item"),
+    (b"PHC2", "cast"),
+    (b"PHL1", "level-up"),
+    (b"PH10", "level-10"),
+    (b"PHE1", "easter-egg"),
+    (b"PHDH", "death"),
+)
 SHARED_PRIESTESS_PHANTOM_GIVENS = (
     "Aster", "Ash", "Aven", "Briar", "Corin", "Cinder", "Eiren", "Elian",
     "Ember", "Fen", "Hollis", "Isen", "Jorin", "Kael", "Lark", "Hallow",
@@ -175,6 +190,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--game-path", required=True, type=Path)
     parser.add_argument("--output-root", required=True, type=Path)
+    parser.add_argument("--voices-only", action="store_true")
+    parser.add_argument("--gpl-only", action="store_true")
     parser.add_argument("--portrait-rgb", type=Path)
     parser.add_argument("--hero-icon-rgb", type=Path)
     parser.add_argument("--building-profile-rgb", type=Path)
@@ -203,12 +220,43 @@ def main() -> int:
     parser.add_argument("--dark-staff-small-icon-rgb", type=Path)
     parser.add_argument("--dark-staff-mx-icon-rgb", type=Path)
     parser.add_argument("--dark-staff-icon-rgb", type=Path)
+    parser.add_argument("--voice-dir", type=Path)
+    parser.add_argument("--recruitment-voice-wav", type=Path)
     args = parser.parse_args()
 
     data_dir = args.output_root / "Data"
     gpl_dir = args.output_root / "GPL"
     data_dir.mkdir(parents=True, exist_ok=True)
     gpl_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.voices_only:
+        if args.voice_dir is None:
+            raise ValueError("--voices-only requires --voice-dir")
+        write_voices_cam(
+            data_dir / "phantom_voices.cam",
+            args.voice_dir,
+        )
+        write_sounddesc_cam(
+            args.game_path / "Data" / "sounddesc.cam",
+            data_dir / "phantom_sounddesc.cam",
+        )
+        (data_dir / "phantom_sounds.xml").write_text(
+            phantom_sounds_xml(),
+            encoding="utf-8",
+        )
+        (data_dir / "phantom_units.xml").write_text(
+            phantom_units_xml(),
+            encoding="utf-8",
+        )
+        (args.output_root / "PhantomGuildPoc.mmxml").write_text(
+            mod_xml(),
+            encoding="utf-8",
+        )
+        return 0
+
+    if args.gpl_only:
+        write_gpl_sources(args.game_path, gpl_dir)
+        return 0
 
     source_textdata = args.game_path / "Data" / "textdata.cam"
     source_gpltext = args.game_path / "Data" / "gpltext.cam"
@@ -273,7 +321,16 @@ def main() -> int:
             data_dir / "phantom_mx_interfacedata.cam",
             args.dark_staff_mx_icon_rgb,
         )
-    write_voices_cam(data_dir / "phantom_voices.cam")
+    if args.voice_dir is None:
+        raise ValueError("full build requires --voice-dir")
+    write_voices_cam(
+        data_dir / "phantom_voices.cam",
+        args.voice_dir,
+    )
+    write_sounddesc_cam(
+        args.game_path / "Data" / "sounddesc.cam",
+        data_dir / "phantom_sounddesc.cam",
+    )
 
     (data_dir / "phantom_units.xml").write_text(phantom_units_xml(), encoding="utf-8")
     (data_dir / "phantom_actions.xml").write_text(phantom_actions_xml(), encoding="utf-8")
@@ -281,16 +338,32 @@ def main() -> int:
     (data_dir / "phantom_overlays.xml").write_text(phantom_overlays_xml(), encoding="utf-8")
     (data_dir / "phantom_particles.xml").write_text(phantom_particles_xml(), encoding="utf-8")
     (data_dir / "phantom_sounds.xml").write_text(phantom_sounds_xml(), encoding="utf-8")
-    (gpl_dir / "Phantom_Building_Data.dat").write_text(phantom_building_data(), encoding="utf-8")
-    (gpl_dir / "Phantom_Hero_Data.dat").write_text(phantom_hero_data(), encoding="utf-8")
-    (gpl_dir / "Phantom_Items_Data.dat").write_text(phantom_items_data(), encoding="utf-8")
-    (gpl_dir / "Phantom.gpl").write_text(
-        phantom_gpl(args.game_path),
-        encoding="utf-8",
-    )
-    (gpl_dir / "Phantom.gplproj").write_text(phantom_gplproj(), encoding="utf-8")
+    write_gpl_sources(args.game_path, gpl_dir)
     (args.output_root / "PhantomGuildPoc.mmxml").write_text(mod_xml(), encoding="utf-8")
     return 0
+
+
+def write_gpl_sources(game_path: Path, gpl_dir: Path) -> None:
+    (gpl_dir / "Phantom_Building_Data.dat").write_text(
+        phantom_building_data(),
+        encoding="utf-8",
+    )
+    (gpl_dir / "Phantom_Hero_Data.dat").write_text(
+        phantom_hero_data(),
+        encoding="utf-8",
+    )
+    (gpl_dir / "Phantom_Items_Data.dat").write_text(
+        phantom_items_data(),
+        encoding="utf-8",
+    )
+    (gpl_dir / "Phantom.gpl").write_text(
+        phantom_gpl(game_path),
+        encoding="utf-8",
+    )
+    (gpl_dir / "Phantom.gplproj").write_text(
+        phantom_gplproj(),
+        encoding="utf-8",
+    )
 
 
 def phantom_equipment_item_specs() -> list[tuple[int, str, str, str, str]]:
@@ -380,7 +453,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Menu value="6"/>
 \t\t\t<ImageIDBase value="PHM1"/>
 \t\t\t<Attachment kind="Movement" type="Walk" ID="Class 1"/>
-\t\t\t<DefaultSound value="Phantom"/>
+\t\t\t<DefaultSound value="Phantom_Voice"/>
 \t\t</Engine>
 \t\t<Game version="1">
 \t\t\t<DialogID value="AP20"/>
@@ -1085,33 +1158,72 @@ def phantom_particles_xml() -> str:
 
 def phantom_sounds_xml() -> str:
     return """<Majesty>
-\t<Description type="Sound" subType="Standard" ID="PH01" Name="Phantom">
+\t<Description type="Sound" subType="Standard" ID="PV01" Name="Phantom_Voice">
 \t\t<Engine version="1">
 \t\t\t<Category value="0"/>
+\t\t\t<Phase ID="VFX_GO_COMBAT">
+\t\t\t\t<Wave value="PHC1"/>
+\t\t\t\t<Group value="Enter_Combat_Group"/>
+\t\t\t</Phase>
+\t\t\t<Phase ID="VFX_FLEE_COMBAT">
+\t\t\t\t<Wave value="PHF1"/>
+\t\t\t\t<Group value="Flee_Combat_Group"/>
+\t\t\t</Phase>
 \t\t\t<Phase ID="VFX_DECIDING">
 \t\t\t\t<Wave value="PHD1"/>
 \t\t\t\t<Group value="Deciding_Group"/>
 \t\t\t</Phase>
+\t\t\t<Phase ID="VFX_GO_REWARD">
+\t\t\t\t<Wave value="PHR1"/>
+\t\t\t\t<Group value="GoReward_Group"/>
+\t\t\t</Phase>
+\t\t\t<Phase ID="VFX_FIND_COOL">
+\t\t\t\t<Wave value="PHN1"/>
+\t\t\t\t<Group value="Find_Cool_Group"/>
+\t\t\t</Phase>
 \t\t\t<Phase ID="VFX_SPECIAL1">
-\t\t\t\t<Wave value="PHS1"/>
+\t\t\t\t<Wave value="PHI1"/>
 \t\t\t\t<Group value="Voice_Special_1_Group"/>
 \t\t\t</Phase>
-\t\t\t<Phase ID="VFX_GAIN_LEVEL">
-\t\t\t\t<Wave value="PHS1"/>
-\t\t\t\t<Group value="Up-Level_Group"/>
-\t\t\t</Phase>
-\t\t\t<Phase ID="VFX_LEVEL_10">
-\t\t\t\t<Wave value="PHS1"/>
-\t\t\t\t<DistanceModifier value="10001.0"/>
+\t\t\t<Phase ID="VFX_CAST_SPELL1">
+\t\t\t\t<Wave value="PHC2"/>
+\t\t\t\t<Group value="Hero_Cast_Voice_Group"/>
 \t\t\t</Phase>
 \t\t\t<Phase ID="Death">
 \t\t\t\t<Wave value="PHDH"/>
 \t\t\t\t<Group value="Death_Group"/>
 \t\t\t\t<DistanceModifier value="10001.0"/>
 \t\t\t</Phase>
+\t\t\t<Phase ID="VFX_GAIN_LEVEL">
+\t\t\t\t<Wave value="PHL1"/>
+\t\t\t\t<Group value="Up-Level_Group"/>
+\t\t\t</Phase>
+\t\t\t<Phase ID="VFX_SEE_HOSTILE">
+\t\t\t\t<Wave value="PHH1"/>
+\t\t\t\t<Group value="See_hostile_Group"/>
+\t\t\t</Phase>
+\t\t\t<Phase ID="GetHit">
+\t\t\t\t<Wave value="PHA1"/>
+\t\t\t\t<Group value="GetHit_Group"/>
+\t\t\t</Phase>
 \t\t\t<Phase ID="Attack">
 \t\t\t\t<Wave value="PHA1"/>
 \t\t\t\t<Group value="Attack_Group"/>
+\t\t\t</Phase>
+\t\t\t<Phase ID="VFX_LEVEL_10">
+\t\t\t\t<Wave value="PH10"/>
+\t\t\t</Phase>
+\t\t\t<Phase ID="Easter_Egg">
+\t\t\t\t<Wave value="PHE1"/>
+\t\t\t</Phase>
+\t\t</Engine>
+\t</Description>
+\t<Description type="Sound" subType="Standard" ID="PH01" Name="Phantom_Hired">
+\t\t<Engine version="1">
+\t\t\t<Category value="0"/>
+\t\t\t<Phase ID="Begin">
+\t\t\t\t<Wave value="PHS1"/>
+\t\t\t\t<Group value="Voice_Special_1_Group"/>
 \t\t\t</Phase>
 \t\t</Engine>
 \t</Description>
@@ -1492,12 +1604,14 @@ Begin
 \t\t\t$Phantom_Palace_Haunt_Availability_Watch
 \t\t);
 
-\tIf ($IsRunning(ThisAgent's "PhantomHauntAvailabilityWatch") == False)
-\t\t$NewThread(
-\t\t\tThisAgent's "PhantomHauntAvailabilityWatch",
-\t\t\t250,
-\t\t\tThisAgent
-\t\t);
+\t// Palace_Birth runs once for a newly created Palace. Start this watcher
+\t// directly: testing showed that IsRunning can report the newly attached
+\t// function attribute as active before its first thread has actually run.
+\t$RunThread(
+\t\tThisAgent's "PhantomHauntAvailabilityWatch",
+\t\t250,
+\t\tThisAgent
+\t);
 End
 
 Function Phantom_Player_Has_Placed_Haunt(agent ThisAgent) is boolean
@@ -3282,10 +3396,28 @@ end
 function Phantom_Hero_Birth (agent thisagent)
 
 declare
+\tagent Home;
 
 begin
-\t$PlaySound(thisagent, "Phantom", "VFX_SPECIAL1");
 \t$hero_birth(thisagent);
+\tHome = thisagent's "home";
+\tIf ($isvalidgamepiece(Home))
+\t\tIf (Home's "title" == "Phantoms_Haunt")
+\t\t\tIf ($HasAttribute("PhantomRecruitmentVoice", thisagent) == False)
+\t\t\t\tbegin
+\t\t\t\t\t$AddAttribute(
+\t\t\t\t\t\tthisagent,
+\t\t\t\t\t\t"PhantomRecruitmentVoice",
+\t\t\t\t\t\t"function",
+\t\t\t\t\t\t$Phantom_Recruitment_Voice
+\t\t\t\t\t);
+\t\t\t\t\tIf ($RandomNumber(100) + 1 <= 20)
+\t\t\t\t\t\t$RunThread(
+\t\t\t\t\t\t\tthisagent's "PhantomRecruitmentVoice",
+\t\t\t\t\t\t\t250,
+\t\t\t\t\t\t\tthisagent
+\t\t\t\t\t\t);
+\t\t\t\tend
 \t$Phantom_grant_starter_items(thisagent);
 \t$LearnSpell(thisagent, "ice_lance");
 \t$ForgetSpell(thisagent, "icy_touch");
@@ -3294,6 +3426,14 @@ begin
 \tthisagent's "Reborn_Counter" = 0;
 \tthisagent's "QuestScript" = $Phantom_Frost_Armor_Watch;
 \t$NewThread(thisagent's "QuestScript", 100, thisagent);
+end
+
+function Phantom_Recruitment_Voice(agent thisagent)
+
+declare
+
+begin
+\t$PlaySound(thisagent, "Phantom_Hired", "Begin");
 end
 
 function Phantom_has_cowl_item(agent thisagent) is boolean
@@ -4432,6 +4572,7 @@ def mod_xml() -> str:
 \t\t\t\t\t<CAM>Data\\phantom_interfacedata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_mx_interfacedata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_voices.cam</CAM>
+\t\t\t\t\t<CAM>Data\\phantom_sounddesc.cam</CAM>
 \t\t\t\t\t<Descriptions>Data\\phantom_units.xml</Descriptions>
 \t\t\t\t\t<Descriptions>Data\\phantom_actions.xml</Descriptions>
 \t\t\t\t\t<Descriptions>Data\\phantom_projectiles.xml</Descriptions>
@@ -9169,15 +9310,127 @@ def apply_phantom_float_walk_adjustment(
                 remapped_pixels[y][visible[-1]] = 0
 
 
-def write_voices_cam(output_path: Path) -> None:
-    entries = (
-        CamEntry(name=pad_name(b"PHD1"), data=generated_wave(220.0, 0.20, 0.25)),
-        CamEntry(name=pad_name(b"PHS1"), data=generated_wave(330.0, 0.22, 0.35)),
-        CamEntry(name=pad_name(b"PHDH"), data=generated_wave(120.0, 0.28, 0.40)),
+def write_voices_cam(output_path: Path, voice_dir: Path) -> None:
+    entries = tuple(
+        CamEntry(
+            name=pad_name(wave_id),
+            data=read_voice_wave(voice_dir / f"phantom-{event}-game.wav"),
+        )
+        for wave_id, event in PHANTOM_VOICE_WAVES
+    ) + (
         CamEntry(name=pad_name(b"PHA1"), data=generated_wave(520.0, 0.10, 0.30)),
         CamEntry(name=pad_name(b"PHGS"), data=generated_wave(180.0, 0.25, 0.30)),
     )
     write_cam((CamSection(extension=b"WAVE", padding=b"\x00\x00\x00\x00", entries=entries),), output_path)
+
+
+def write_sounddesc_cam(source_path: Path, output_path: Path) -> None:
+    # The CAM-tool audio probes proved new GPL-callable sounds by transforming
+    # the stock RM01/Rage_of_Krolm DSND. Keep every field and size unchanged:
+    # both sound names are 13 bytes.
+    template = read_cam_entry(source_path, b"DSND", b"RM01Rage_of_Krolm").data
+    if (
+        template.count(b"RM01") != 2
+        or template.count(b"Rage_of_Krolm") != 1
+        or template.count(b"EBE0") != 1
+    ):
+        raise ValueError(f"{source_path}: unexpected Rage_of_Krolm DSND template")
+    payload = template.replace(b"RM01", b"PH01").replace(
+        b"Rage_of_Krolm",
+        b"Phantom_Hired",
+    )
+    # The first PH01 is the description ID; the phase's wave target must be PHS1.
+    phase_sound_id = payload.rfind(b"PH01")
+    if phase_sound_id < 0:
+        raise ValueError(f"{source_path}: transformed Phantom DSND has no phase target")
+    payload = payload[:phase_sound_id] + b"PHS1" + payload[phase_sound_id + 4 :]
+    # Use the stock hero voice cooldown group while keeping the proven Begin
+    # phase and ordinary spatial-distance policy.
+    phase_offset = payload.find(b"EBE0")
+    if phase_offset < 0 or len(payload) - phase_offset != 56:
+        raise ValueError(f"{source_path}: transformed Phantom DSND has an invalid phase slot")
+    payload = (
+        payload[: phase_offset + 8]
+        + b"SG14"
+        + bytes(44)
+        + payload[phase_offset + 56 :]
+    )
+    recruitment_entry = CamEntry(
+        name=pad_name(b"PH01Phantom_Hired"),
+        data=payload,
+    )
+
+    # Clone the stock Wizard's complete hero voice descriptor. It already uses
+    # every stock phase and cooldown group needed by the Phantom. Replace only
+    # the identity and WAVE targets, then repair the three nested size fields.
+    hero_template = read_cam_entry(source_path, b"DSND", b"WZ01Wizard").data
+    hero_payload = hero_template.replace(b"WZ01", b"PV01").replace(
+        b"Wizard\x00\x00",
+        b"Phantom\x00\x00",
+    )
+    hero_wave_replacements = {
+        b"WZGT": b"PHC1",
+        b"WZFT": b"PHF1",
+        b"WZDO": b"PHD1",
+        b"WZDG": b"PHR1",
+        b"WZFL": b"PHN1",
+        b"WZSS": b"PHI1",
+        b"WZCL": b"PHC2",
+        b"WZDH": b"PHDH",
+        b"WZGL": b"PHL1",
+        b"WZSE": b"PHH1",
+        b"HG15": b"PHA1",
+        b"WU04": b"PHA1",
+        b"WZTL": b"PH10",
+        b"WZE1": b"PHE1",
+    }
+    for old_wave, new_wave in hero_wave_replacements.items():
+        if hero_payload.count(old_wave) != 1:
+            raise ValueError(
+                f"{source_path}: Wizard DSND does not contain exactly one "
+                f"{old_wave!r} WAVE target"
+            )
+        hero_payload = hero_payload.replace(old_wave, new_wave)
+    if b"WZ01" in hero_payload or b"Wizard" in hero_payload:
+        raise ValueError(f"{source_path}: transformed Phantom voice retains Wizard identity")
+    hero_payload = bytearray(hero_payload)
+    head_offset = hero_payload.find(b"HEAD")
+    if head_offset < 0:
+        raise ValueError(f"{source_path}: Wizard DSND template has no HEAD block")
+    struct.pack_into("<I", hero_payload, 4, len(hero_payload) - 16)
+    struct.pack_into("<I", hero_payload, 20, len(hero_payload) - 32)
+    struct.pack_into("<I", hero_payload, head_offset + 4, 17)
+    hero_entry = CamEntry(
+        name=pad_name(b"PV01Phantom_Voice"),
+        data=bytes(hero_payload),
+    )
+    write_cam(
+        (
+            CamSection(
+                extension=b"DSND",
+                padding=b"\x00\x00\x00\x00",
+                entries=(hero_entry, recruitment_entry),
+            ),
+        ),
+        output_path,
+    )
+
+
+def read_voice_wave(path: Path) -> bytes:
+    if not path.exists():
+        raise FileNotFoundError(path)
+    with wave.open(str(path), "rb") as wav:
+        if wav.getnchannels() != 1:
+            raise ValueError(f"{path}: Phantom voices must be mono")
+        if wav.getsampwidth() != 2:
+            raise ValueError(f"{path}: Phantom voices must use 16-bit PCM")
+        if wav.getframerate() != 22050:
+            raise ValueError(f"{path}: Phantom voices must use a 22050 Hz sample rate")
+        if wav.getcomptype() != "NONE":
+            raise ValueError(f"{path}: Phantom voices must use uncompressed PCM")
+        if wav.getnframes() == 0:
+            raise ValueError(f"{path}: Phantom voice has no audio frames")
+    return path.read_bytes()
 
 
 def generated_wave(freq: float, seconds: float, volume: float) -> bytes:

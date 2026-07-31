@@ -38,6 +38,11 @@ param(
     [string]$EndlessWinterHitSource = ".\assets\source\endless-winter-hit-tornado-source-v1-transparent.png",
     [string]$EndlessWinterMissileSource = ".\assets\source\endless-winter-snowflake-missile-sheet-v1-transparent.png",
     [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
+    [string]$AudioRoot = ".\assets\audio",
+    [string]$RecruitmentVoiceClean = ".\assets\audio\phantom-recruitment-clean.wav",
+    [string]$RecruitmentVoice = ".\assets\audio\phantom-recruitment-game.wav",
+    [switch]$AudioOnly,
+    [switch]$GplOnly,
     [string]$GplCompiler = ""
 )
 
@@ -135,10 +140,125 @@ $workspaceRoot = Split-Path -Parent $repoRoot
 $toolsPython = Join-Path $workspaceRoot ".tools\python.cmd"
 $builder = Join-Path $repoRoot "src\build_phantom_guild.py"
 $validator = Join-Path $repoRoot "src\validate_phantom_build.py"
+$voiceProcessor = Join-Path $repoRoot "scripts\process_phantom_voice.py"
 $iconGenerator = Join-Path $repoRoot "scripts\generate_phantom_icons.py"
 $buildingSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_building_sprites.py"
 $heroSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_hero_sprites.py"
 $outputRootPath = Join-Path $repoRoot $OutputRoot
+
+if ($AudioOnly -and $GplOnly) {
+    throw "-AudioOnly and -GplOnly are mutually exclusive."
+}
+
+if ($GplOnly) {
+    if (-not (Test-Path $outputRootPath)) {
+        throw "GPL-only build requires an existing validated package: $outputRootPath. Run a full build first."
+    }
+    if (-not (Test-Path $toolsPython)) {
+        throw "Shared tools Python does not exist: $toolsPython"
+    }
+
+    & $toolsPython $builder `
+        --game-path $GamePath `
+        --output-root $outputRootPath `
+        --gpl-only
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phantom GPL source generation failed with exit code $LASTEXITCODE"
+    }
+
+    if ($GplCompiler -eq "") {
+        $GplCompiler = Join-Path $GamePath "SDK\Gplbcc.exe"
+    }
+    if (-not (Test-Path $GplCompiler)) {
+        throw "GPL compiler does not exist: $GplCompiler"
+    }
+
+    $gplDir = Join-Path $outputRootPath "GPL"
+    $dataDir = Join-Path $outputRootPath "Data"
+    $compiledPath = Join-Path $gplDir "Phantom.bcd"
+    Push-Location $gplDir
+    try {
+        & $GplCompiler -in Phantom.gplproj -out Phantom.bcd -stdout
+        if ($LASTEXITCODE -ne 0) {
+            throw "GPL compiler failed with exit code $LASTEXITCODE"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    if (-not (Test-Path $compiledPath)) {
+        throw "GPL compiler did not produce: $compiledPath"
+    }
+    Copy-Item -Path $compiledPath -Destination (Join-Path $dataDir "Phantom.bcd") -Force
+
+    & $toolsPython $validator --output-root $outputRootPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phantom package verification failed with exit code $LASTEXITCODE"
+    }
+
+    Write-Host "Updated GPL in existing validated mod package:"
+    Write-Host $outputRootPath
+    return
+}
+
+if ($AudioOnly) {
+    if (-not (Test-Path $outputRootPath)) {
+        throw "Audio-only build requires an existing validated package: $outputRootPath. Run a full build first."
+    }
+    if (-not (Test-Path $toolsPython)) {
+        throw "Shared tools Python does not exist: $toolsPython"
+    }
+
+    $audioRootPath = Resolve-RepoPath $AudioRoot
+    $voiceEvents = @(
+        "recruitment",
+        "deciding",
+        "idle",
+        "see-hostile",
+        "combat",
+        "flee",
+        "reward",
+        "find-item",
+        "cast",
+        "level-up",
+        "level-10",
+        "easter-egg",
+        "death"
+    )
+    foreach ($voiceEvent in $voiceEvents) {
+        if ($voiceEvent -eq "recruitment") {
+            $cleanVoicePath = Resolve-RepoPath $RecruitmentVoiceClean
+            $gameVoicePath = Resolve-RepoPath $RecruitmentVoice
+        }
+        else {
+            $cleanVoicePath = Join-Path $audioRootPath "phantom-$voiceEvent-clean.wav"
+            $gameVoicePath = Join-Path $audioRootPath "phantom-$voiceEvent-game.wav"
+        }
+        & $toolsPython $voiceProcessor $cleanVoicePath $gameVoicePath
+        if ($LASTEXITCODE -ne 0) {
+            throw "Phantom $voiceEvent voice processing failed with exit code $LASTEXITCODE"
+        }
+    }
+
+    & $toolsPython $builder `
+        --game-path $GamePath `
+        --output-root $outputRootPath `
+        --voices-only `
+        --voice-dir $audioRootPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phantom voice CAM builder failed with exit code $LASTEXITCODE"
+    }
+
+    & $toolsPython $validator --output-root $outputRootPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phantom package verification failed with exit code $LASTEXITCODE"
+    }
+
+    Write-Host "Updated audio in existing validated mod package:"
+    Write-Host $outputRootPath
+    return
+}
 
 if (Test-Path $outputRootPath) {
     Remove-Item -LiteralPath $outputRootPath -Recurse -Force
@@ -259,7 +379,8 @@ if ($LASTEXITCODE -ne 0) {
     --phantom-cowl-icon-rgb $phantomCowlIconRgb `
     --dark-staff-small-icon-rgb $darkStaffSmallIconRgb `
     --dark-staff-mx-icon-rgb $darkStaffMxIconRgb `
-    --dark-staff-icon-rgb $darkStaffIconRgb
+    --dark-staff-icon-rgb $darkStaffIconRgb `
+    --voice-dir (Resolve-RepoPath $AudioRoot)
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom CAM builder failed with exit code $LASTEXITCODE"
 }
