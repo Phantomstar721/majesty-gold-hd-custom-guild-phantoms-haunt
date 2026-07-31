@@ -6,8 +6,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "assets/source/phantom-hero-major-actions-preview-v3.png"
-OUTPUT = ROOT / "artifacts/reviews/phantom-hero-major-actions-preview-v3-card.png"
+SOURCE = ROOT / "assets/source/hero/sprite-actions.png"
+OUTPUT = ROOT / "artifacts/reviews/phantom-hero-actions-review.png"
 
 LABELS = (
     ("1 — IDLE / STAND", "spectral hover"),

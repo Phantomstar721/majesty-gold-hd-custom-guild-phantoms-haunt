@@ -14,7 +14,7 @@ from create_phantom_hero_death_review import font, render_tile, tile_hotspot  # 
 
 
 def main() -> int:
-    cam = ROOT / "dist/PhantomGuildPoc/Data/phantom_maindata.cam"
+    cam = ROOT / "dist/CustomGuildPhantomsHaunt/Data/phantom_maindata.cam"
     output_path = ROOT / "artifacts/reviews/phantom-directional-death-engine-review.png"
     tiles = builder.read_cam_entries(cam, b"TILE")
     palettes = builder.read_cam_entries(cam, b"SPLT")

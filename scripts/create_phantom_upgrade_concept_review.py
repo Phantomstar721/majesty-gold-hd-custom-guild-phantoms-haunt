@@ -18,31 +18,31 @@ from build_phantom_guild import (  # noqa: E402
 
 
 GAME_DATA = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Majesty HD\Data")
-LEVEL_ONE_SOURCE = ROOT / "assets/source/phantom-guild-sprite-sheet-smooth.png"
-LEVEL_TWO_CONCEPT = ROOT / "assets/source/phantom-haunt-level-2-concept-v1.png"
-LEVEL_THREE_CONCEPT = ROOT / "assets/source/phantom-haunt-level-3-concept-v1.png"
+LEVEL_ONE_SOURCE = ROOT / "assets/source/buildings/haunt/level-1/sprite-sheet.png"
+LEVEL_TWO_CONCEPT = ROOT / "assets/source/buildings/haunt/level-2/active.png"
+LEVEL_THREE_CONCEPT = ROOT / "assets/source/buildings/haunt/level-3/active.png"
 REFERENCE_OUTPUT = ROOT / "artifacts/references/stock-guild-upgrade-progression.png"
-REVIEW_OUTPUT = ROOT / "artifacts/reviews/phantom-haunt-level-progression-concepts-v1.png"
-STATE_REVIEW_OUTPUT = ROOT / "artifacts/reviews/phantom-haunt-upgrade-state-approval-v6.png"
+REVIEW_OUTPUT = ROOT / "artifacts/reviews/phantom-haunt-level-progression.png"
+STATE_REVIEW_OUTPUT = ROOT / "artifacts/reviews/phantom-haunt-upgrade-state-approval.png"
 
 UPGRADE_STATE_SOURCES = {
     2: {
         "ACTIVE": LEVEL_TWO_CONCEPT,
-        "UPGRADE EARLY": ROOT / "assets/source/phantom-haunt-level-2-upgrade-early-source-v1.png",
-        "UPGRADE LATE": ROOT / "assets/source/phantom-haunt-level-2-upgrade-late-source-v1.png",
-        "DAMAGED": ROOT / "assets/source/phantom-haunt-level-2-damaged-source-v3.png",
-        "DAMAGED B": ROOT / "assets/source/phantom-haunt-level-2-damaged-b-source-v1.png",
-        "COLLAPSE": ROOT / "assets/source/phantom-haunt-level-2-collapsed-source-v5.png",
-        "DESTROYED": ROOT / "assets/source/phantom-haunt-level-2-destroyed-source-v1.png",
+        "UPGRADE EARLY": ROOT / "assets/source/buildings/haunt/level-2/upgrade-early.png",
+        "UPGRADE LATE": ROOT / "assets/source/buildings/haunt/level-2/upgrade-late.png",
+        "DAMAGED": ROOT / "assets/source/buildings/haunt/level-2/damaged.png",
+        "DAMAGED B": ROOT / "assets/source/buildings/haunt/level-2/damaged-b.png",
+        "COLLAPSE": ROOT / "assets/source/buildings/haunt/level-2/collapsed.png",
+        "DESTROYED": ROOT / "assets/source/buildings/haunt/level-2/destroyed.png",
     },
     3: {
         "ACTIVE": LEVEL_THREE_CONCEPT,
-        "UPGRADE EARLY": ROOT / "assets/source/phantom-haunt-level-3-upgrade-early-source-v3.png",
-        "UPGRADE LATE": ROOT / "assets/source/phantom-haunt-level-3-upgrade-late-source-v3.png",
-        "DAMAGED": ROOT / "assets/source/phantom-haunt-level-3-damaged-source-v2.png",
-        "DAMAGED B": ROOT / "assets/source/phantom-haunt-level-3-damaged-b-source-v1.png",
-        "COLLAPSE": ROOT / "assets/source/phantom-haunt-level-3-collapsed-source-v5.png",
-        "DESTROYED": ROOT / "assets/source/phantom-haunt-level-3-destroyed-source-v1.png",
+        "UPGRADE EARLY": ROOT / "assets/source/buildings/haunt/level-3/upgrade-early.png",
+        "UPGRADE LATE": ROOT / "assets/source/buildings/haunt/level-3/upgrade-late.png",
+        "DAMAGED": ROOT / "assets/source/buildings/haunt/level-3/damaged.png",
+        "DAMAGED B": ROOT / "assets/source/buildings/haunt/level-3/damaged-b.png",
+        "COLLAPSE": ROOT / "assets/source/buildings/haunt/level-3/collapsed.png",
+        "DESTROYED": ROOT / "assets/source/buildings/haunt/level-3/destroyed.png",
     },
 }
 

@@ -1,5 +1,5 @@
 param(
-    [string]$SourceRoot = ".\dist\PhantomGuildPoc",
+    [string]$SourceRoot = ".\dist\CustomGuildPhantomsHaunt",
     [string]$ModsRoot = "$env:USERPROFILE\Documents\My Games\MajestyHD\Mods"
 )
 
@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $repoRoot $SourceRoot
-$target = Join-Path $ModsRoot "PhantomGuildPoc"
+$target = Join-Path $ModsRoot "CustomGuildPhantomsHaunt"
 
 if (-not (Test-Path $source)) {
     throw "Build output does not exist: $source"

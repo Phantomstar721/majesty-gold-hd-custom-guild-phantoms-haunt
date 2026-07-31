@@ -1,53 +1,66 @@
 # Quest Compatibility
 
-The Phantoms Haunt is treated as a temple-tier arcane guild when matching stock
-quest restrictions. A restriction against non-human settlements alone does not
-exclude it.
+Custom Guild: Phantoms Haunt loads through `Dataset base="Any"` and is designed
+for both Original Majesty and the Northern Expansion.
 
-The Palace starts the Haunt availability watcher directly during `Palace_Birth`.
-Do not gate its first invocation behind `IsRunning`: the engine can report a
-newly attached function attribute as active before any watcher thread has run,
-leaving the Haunt disabled after the Palace reaches level 2.
+## Availability
+
+The Palace owns a lightweight availability watcher. It exposes the Haunt when
+the current quest permits its building category and the player's Palace has
+reached level 2.
+
+The Haunt is treated as a temple-tier arcane guild when matching stock quest
+restrictions. Restrictions aimed only at non-human settlements do not exclude
+it.
+
+## Unique identities
+
+The mod uses namespaced description, image, tile, action, unit, sound, WAVE,
+text, item, and GPL identities. It does not replace the Wizard Guild, Wizard,
+Priestess, or their spell art.
+
+The few intentionally shared stock entry points retain their complete stock
+behavior and add narrowly scoped Phantom handling.
 
 ## Embassy and Outpost
 
-The stock `Random_Hero_Type` route is retained. Embassy, Outpost, and the
-Friendly Heroes special event can select Phantoms. When a player has placed a
-Haunt, Paladins are removed from the random pool and Phantoms remain available.
-The Mausoleum uses a separate stock pool and is unchanged.
+The stock random-hero route remains in place. Phantom is added as an eligible
+result for Embassies and Outposts.
 
-## Restricted Original Quests
+Paladin eligibility follows the same Haunt exclusivity rule used by ordinary
+recruitment:
 
-- The Barren Waste
-- The Bell, the Book, and the Candle
-- The Dark Forest, until the stock Temple to Fervus restoration event
-- The Day of Reckoning
-- Slay the Mighty Dragon
-- The Forsaken Land
-- Vengeance of the Liche Queen
-- Rescue the Prince
-- The Wizard's Curse
+- without a placed Haunt, Paladins remain eligible;
+- while a Haunt foundation or completed Haunt exists, Paladins are omitted;
+- Phantom remains eligible through the ordinary and quest-special fallback
+  routes.
 
-Slay the Mighty Dragon seeds one foreign Phantoms Haunt before the stock
-rescue-building setup runs. It cannot be constructed, but can be found and
-recovered like the quest's Warriors, Rogues, Wizards, Agrela, Lunord, and Dwarf
-buildings.
+## Palace and quest startup
 
-## Restricted Expansion Quests
+The Palace begins the Haunt availability watcher during its birth callback.
+The watcher then reevaluates the current Palace level and quest restrictions
+without requiring changes to individual quest files.
 
-- Vigil for a Fallen Hero
+## Priestess and Paladin interactions
 
-The Siege intentionally allows the Haunt: Phantoms do not fill the Wizard's
-building-demolition role that the quest removes.
+Priestess behavior keeps the complete Northern Expansion decision order and
+adds the Phantom-specific support opportunity at the stock support point.
+Phantoms are treated as undead for the Haunt-enhanced Drain Life interaction.
 
-## Balance of Twilight
+Placing a Haunt disables future Paladin recruitment. Completing a Haunt
+dismisses living player-owned Paladins through the game's ordinary dismissal
+route. Destroying the final Haunt restores future recruitment.
 
-Balance of Twilight is a separately packaged downloadable quest. Its editable
-GPL source is not included in the SDK; it loads the closed
-`XQD1_Bytecode.bcd`. The quest does not expose ordinary guild restrictions in
-that bytecode, so the Haunt remains available.
+## Validation
 
-The quest's enemy Black Phantoms define generic `Phantom_Birth` and
-`Phantom_Death` functions. Our hero uses the unique
-`Phantom_Hero_Birth` and `Phantom_Hero_Death` names to avoid overriding those
-quest functions.
+The release validator checks:
+
+- `Dataset base="Any"` packaging;
+- unique custom identities;
+- Palace-level availability behavior;
+- Embassy and Outpost selection;
+- Paladin exclusion and restoration;
+- Priestess support routing;
+- Original and Northern Expansion quest aliases used by the mod.
+
+No quest-specific files are shipped in the package.

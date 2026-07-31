@@ -62,13 +62,13 @@ def main() -> int:
     parser.add_argument(
         "--cam",
         type=Path,
-        default=ROOT / "dist/PhantomGuildPoc/Data/phantom_maindata.cam",
+        default=ROOT / "dist/CustomGuildPhantomsHaunt/Data/phantom_maindata.cam",
     )
     parser.add_argument(
         "--out",
         type=Path,
         default=ROOT
-        / "artifacts/reviews/phantom-haunt-upgrade-packaged-v1.png",
+        / "artifacts/reviews/phantom-haunt-upgrade-packaged.png",
     )
     args = parser.parse_args()
 

@@ -374,7 +374,7 @@ def parse_xml(path: Path) -> ET.ElementTree:
 
 
 def validate_manifest(output_root: Path) -> None:
-    manifest_path = output_root / "PhantomGuildPoc.mmxml"
+    manifest_path = output_root / "CustomGuildPhantomsHaunt.mmxml"
     tree = parse_xml(manifest_path)
     root = tree.getroot()
     mods = root.findall("./Mod")
@@ -1782,10 +1782,13 @@ def validate_bcd_copy(output_root: Path) -> None:
 
 
 def validate_phantoms_haunt_identity(output_root: Path) -> None:
-    manifest_path = output_root / "PhantomGuildPoc.mmxml"
+    manifest_path = output_root / "CustomGuildPhantomsHaunt.mmxml"
     manifest = manifest_path.read_text(encoding="utf-8")
-    if "<DisplayName lang=\"en_US\">Phantoms Haunt POC</DisplayName>" not in manifest:
-        fail(f"{manifest_path}: missing Phantoms Haunt display name")
+    if (
+        '<DisplayName lang="en_US">Custom Guild: Phantoms Haunt</DisplayName>'
+        not in manifest
+    ):
+        fail(f"{manifest_path}: missing public Phantoms Haunt display name")
 
     units_path = output_root / "Data" / "phantom_units.xml"
     units = units_path.read_text(encoding="utf-8")

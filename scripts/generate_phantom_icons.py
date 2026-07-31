@@ -15,10 +15,12 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
     write_image_icon(
         args.out_dir / "phantom_hero_icon_25",
-        render_hero_icon(repo_root / "assets" / "source" / "phantom-portrait.png"),
+        render_hero_icon(repo_root / "assets" / "source" / "hero" / "portrait.png"),
     )
     write_image_icon(args.out_dir / "phantom_guild_icon_25", render_guild_icon())
-    ice_lance_source = repo_root / "assets" / "source" / "ice-lance-projectile-source-v2.png"
+    ice_lance_source = (
+        repo_root / "assets" / "source" / "spells" / "ice-lance" / "projectile.png"
+    )
     write_image_icon(
         args.out_dir / "ice_lance_icon_29",
         render_ice_lance_icon(ice_lance_source, (29, 29)),
@@ -35,7 +37,9 @@ def main() -> int:
             repo_root
             / "assets"
             / "source"
-            / "call-to-grave-portal-source-v1-transparent.png"
+            / "spells"
+            / "call-to-grave"
+            / "portal.png"
         ),
     )
     write_icon(args.out_dir / "phantom_cowl_icon_23", (23, 23), draw_cowl)

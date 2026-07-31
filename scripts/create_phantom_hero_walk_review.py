@@ -15,7 +15,7 @@ import sprite_extractor as extractor  # noqa: E402
 from create_phantom_hero_engine_review import font, render_tile  # noqa: E402
 
 
-CAM = ROOT / "dist/PhantomGuildPoc/Data/phantom_maindata.cam"
+CAM = ROOT / "dist/CustomGuildPhantomsHaunt/Data/phantom_maindata.cam"
 OUTPUT = ROOT / "artifacts/reviews/phantom-hero-walk-engine-review.png"
 
 

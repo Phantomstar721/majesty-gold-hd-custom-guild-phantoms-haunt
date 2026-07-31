@@ -5,7 +5,7 @@ from PIL import Image, ImageDraw
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = ROOT / "assets/source/phantom-cast-ice-thread-concepts-v1.png"
+DEFAULT_SOURCE = ROOT / "assets/source/references/cast-ice-thread-concepts.png"
 DEFAULT_OUTPUT = ROOT / "artifacts/reviews/phantom-cast-ice-thread-game-size-review.png"
 
 

@@ -57,7 +57,7 @@ def main() -> int:
     archives = {
         "base": args.game_path / "Data/maindata.cam",
         "mx": args.game_path / "DataMx/mx_maindata.cam",
-        "custom": REPO_ROOT / "dist/PhantomGuildPoc/Data/phantom_maindata.cam",
+        "custom": REPO_ROOT / "dist/CustomGuildPhantomsHaunt/Data/phantom_maindata.cam",
     }
     loaded = {}
     for key, path in archives.items():

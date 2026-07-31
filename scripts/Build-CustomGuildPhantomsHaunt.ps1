@@ -1,46 +1,44 @@
 param(
     [string]$GamePath = "C:\Program Files (x86)\Steam\steamapps\common\Majesty HD",
-    [string]$OutputRoot = ".\dist\PhantomGuildPoc",
-    [string]$PortraitImage = ".\assets\source\phantom-portrait.png",
-    [string]$BuildingProfileImage = ".\assets\source\phantom-guild-profile.png",
-    [string]$BuildingSpriteSheet = ".\assets\source\phantom-guild-sprite-sheet-smooth.png",
-    [string]$ConstructionSpriteSheet = ".\assets\source\phantom-guild-construction-proof-v1.png",
-    [string]$DamagedBSample = ".\assets\source\phantom-guild-damaged-b-sample-v1.png",
-    [string]$CollapsedIntermediateSample = ".\assets\source\phantom-guild-collapsed-intermediate-sample-v1.png",
-    [string]$Level2ActiveSource = ".\assets\source\phantom-haunt-level-2-concept-v1.png",
-    [string]$Level2DamagedSource = ".\assets\source\phantom-haunt-level-2-damaged-source-v3.png",
-    [string]$Level2DamagedBSource = ".\assets\source\phantom-haunt-level-2-damaged-b-source-v1.png",
-    [string]$Level2CollapsedSource = ".\assets\source\phantom-haunt-level-2-collapsed-source-v5.png",
-    [string]$Level2DestroyedSource = ".\assets\source\phantom-haunt-level-2-destroyed-source-v1.png",
-    [string]$Level2ConstructionEarlySource = ".\assets\source\phantom-haunt-level-2-upgrade-early-source-v1.png",
-    [string]$Level2ConstructionLateSource = ".\assets\source\phantom-haunt-level-2-upgrade-late-source-v1.png",
-    [string]$Level3ActiveSource = ".\assets\source\phantom-haunt-level-3-concept-v1.png",
-    [string]$Level3DamagedSource = ".\assets\source\phantom-haunt-level-3-damaged-source-v2.png",
-    [string]$Level3DamagedBSource = ".\assets\source\phantom-haunt-level-3-damaged-b-source-v1.png",
-    [string]$Level3CollapsedSource = ".\assets\source\phantom-haunt-level-3-collapsed-source-v5.png",
-    [string]$Level3DestroyedSource = ".\assets\source\phantom-haunt-level-3-destroyed-source-v1.png",
-    [string]$Level3ConstructionEarlySource = ".\assets\source\phantom-haunt-level-3-upgrade-early-source-v3.png",
-    [string]$Level3ConstructionLateSource = ".\assets\source\phantom-haunt-level-3-upgrade-late-source-v3.png",
-    [string]$HeroSpriteSheet = ".\assets\source\phantom-hero-major-actions-preview-v3.png",
-    [string]$HeroDirection03 = ".\assets\source\phantom-hero-direction-03.png",
-    [string]$HeroDirection04 = ".\assets\source\phantom-hero-direction-04.png",
-    [string]$HeroDirection05 = ".\assets\source\phantom-hero-direction-05.png",
-    [string]$HeroDeathConcept = ".\assets\source\phantom-hero-death-concept-v2.png",
-    [string]$HeroDeathDirectionals = ".\assets\source\phantom-hero-death-directionals-v1.png",
-    [string]$HeroCastGlow = ".\assets\source\phantom-cast-staff-glow-v2.png",
-    [string]$IceLanceProjectileSource = ".\assets\source\ice-lance-projectile-source-v2.png",
-    [string]$IcyTouchImpactSource = ".\assets\source\icy-touch-impact-skull-source-v1-transparent.png",
-    [string]$FrostArmorCrystalSource = ".\assets\source\frost-armor-crystal-source-v1.png",
-    [string]$FrostArmorFrozenCasingSource = ".\assets\source\frost-armor-frozen-casing-source-v3.png",
-    [string]$CallToGravePortalSource = ".\assets\source\call-to-grave-portal-source-v1-transparent.png",
-    [string]$EternalSoulFlameSource = ".\assets\source\eternal-soul-icy-flame-source-v1-transparent.png",
-    [string]$EndlessWinterVortexSource = ".\assets\source\endless-winter-vortex-animation-sheet-v3-transparent.png",
-    [string]$EndlessWinterHitSource = ".\assets\source\endless-winter-hit-tornado-source-v1-transparent.png",
-    [string]$EndlessWinterMissileSource = ".\assets\source\endless-winter-snowflake-missile-sheet-v1-transparent.png",
-    [string]$InterfacePanelImage = ".\assets\source\phantom-interface-panel-source.png",
+    [string]$OutputRoot = ".\dist\CustomGuildPhantomsHaunt",
+    [string]$PortraitImage = ".\assets\source\hero\portrait.png",
+    [string]$BuildingProfileImage = ".\assets\source\buildings\haunt\level-1\profile.png",
+    [string]$BuildingSpriteSheet = ".\assets\source\buildings\haunt\level-1\sprite-sheet.png",
+    [string]$ConstructionSpriteSheet = ".\assets\source\buildings\haunt\level-1\construction-sheet.png",
+    [string]$DamagedBSample = ".\assets\source\buildings\haunt\level-1\damaged-b.png",
+    [string]$CollapsedIntermediateSample = ".\assets\source\buildings\haunt\level-1\collapsed.png",
+    [string]$Level2ActiveSource = ".\assets\source\buildings\haunt\level-2\active.png",
+    [string]$Level2DamagedSource = ".\assets\source\buildings\haunt\level-2\damaged.png",
+    [string]$Level2DamagedBSource = ".\assets\source\buildings\haunt\level-2\damaged-b.png",
+    [string]$Level2CollapsedSource = ".\assets\source\buildings\haunt\level-2\collapsed.png",
+    [string]$Level2DestroyedSource = ".\assets\source\buildings\haunt\level-2\destroyed.png",
+    [string]$Level2ConstructionEarlySource = ".\assets\source\buildings\haunt\level-2\upgrade-early.png",
+    [string]$Level2ConstructionLateSource = ".\assets\source\buildings\haunt\level-2\upgrade-late.png",
+    [string]$Level3ActiveSource = ".\assets\source\buildings\haunt\level-3\active.png",
+    [string]$Level3DamagedSource = ".\assets\source\buildings\haunt\level-3\damaged.png",
+    [string]$Level3DamagedBSource = ".\assets\source\buildings\haunt\level-3\damaged-b.png",
+    [string]$Level3CollapsedSource = ".\assets\source\buildings\haunt\level-3\collapsed.png",
+    [string]$Level3DestroyedSource = ".\assets\source\buildings\haunt\level-3\destroyed.png",
+    [string]$Level3ConstructionEarlySource = ".\assets\source\buildings\haunt\level-3\upgrade-early.png",
+    [string]$Level3ConstructionLateSource = ".\assets\source\buildings\haunt\level-3\upgrade-late.png",
+    [string]$HeroSpriteSheet = ".\assets\source\hero\sprite-actions.png",
+    [string]$HeroDirection03 = ".\assets\source\hero\direction-03.png",
+    [string]$HeroDirection04 = ".\assets\source\hero\direction-04.png",
+    [string]$HeroDirection05 = ".\assets\source\hero\direction-05.png",
+    [string]$HeroDeathConcept = ".\assets\source\hero\death-concept.png",
+    [string]$HeroDeathDirectionals = ".\assets\source\hero\death-directionals.png",
+    [string]$HeroCastGlow = ".\assets\source\hero\cast-staff-glow.png",
+    [string]$IceLanceProjectileSource = ".\assets\source\spells\ice-lance\projectile.png",
+    [string]$IcyTouchImpactSource = ".\assets\source\spells\icy-touch\impact-skull.png",
+    [string]$FrostArmorCrystalSource = ".\assets\source\spells\frost-armor\crystal.png",
+    [string]$FrostArmorFrozenCasingSource = ".\assets\source\spells\frost-armor\frozen-casing.png",
+    [string]$CallToGravePortalSource = ".\assets\source\spells\call-to-grave\portal.png",
+    [string]$EternalSoulFlameSource = ".\assets\source\spells\eternal-soul\flame.png",
+    [string]$EndlessWinterVortexSource = ".\assets\source\spells\endless-winter\vortex-sheet.png",
+    [string]$EndlessWinterHitSource = ".\assets\source\spells\endless-winter\hit-tornado.png",
+    [string]$EndlessWinterMissileSource = ".\assets\source\spells\endless-winter\missile-sheet.png",
+    [string]$InterfacePanelImage = ".\assets\source\interface\panel.png",
     [string]$AudioRoot = ".\assets\audio",
-    [string]$RecruitmentVoiceClean = ".\assets\audio\phantom-recruitment-clean.wav",
-    [string]$RecruitmentVoice = ".\assets\audio\phantom-recruitment-game.wav",
     [switch]$AudioOnly,
     [switch]$GplOnly,
     [string]$GplCompiler = ""
@@ -140,7 +138,6 @@ $workspaceRoot = Split-Path -Parent $repoRoot
 $toolsPython = Join-Path $workspaceRoot ".tools\python.cmd"
 $builder = Join-Path $repoRoot "src\build_phantom_guild.py"
 $validator = Join-Path $repoRoot "src\validate_phantom_build.py"
-$voiceProcessor = Join-Path $repoRoot "scripts\process_phantom_voice.py"
 $iconGenerator = Join-Path $repoRoot "scripts\generate_phantom_icons.py"
 $buildingSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_building_sprites.py"
 $heroSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_hero_sprites.py"
@@ -211,35 +208,6 @@ if ($AudioOnly) {
     }
 
     $audioRootPath = Resolve-RepoPath $AudioRoot
-    $voiceEvents = @(
-        "recruitment",
-        "deciding",
-        "idle",
-        "see-hostile",
-        "combat",
-        "flee",
-        "reward",
-        "find-item",
-        "cast",
-        "level-up",
-        "level-10",
-        "easter-egg",
-        "death"
-    )
-    foreach ($voiceEvent in $voiceEvents) {
-        if ($voiceEvent -eq "recruitment") {
-            $cleanVoicePath = Resolve-RepoPath $RecruitmentVoiceClean
-            $gameVoicePath = Resolve-RepoPath $RecruitmentVoice
-        }
-        else {
-            $cleanVoicePath = Join-Path $audioRootPath "phantom-$voiceEvent-clean.wav"
-            $gameVoicePath = Join-Path $audioRootPath "phantom-$voiceEvent-game.wav"
-        }
-        & $toolsPython $voiceProcessor $cleanVoicePath $gameVoicePath
-        if ($LASTEXITCODE -ne 0) {
-            throw "Phantom $voiceEvent voice processing failed with exit code $LASTEXITCODE"
-        }
-    }
 
     & $toolsPython $builder `
         --game-path $GamePath `

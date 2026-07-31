@@ -1,110 +1,83 @@
-# Phantom Voice Line Plan
+# Phantom Voice Production
 
-The initial recruitment line uses a dedicated custom route. After
-`hero_birth` establishes the Phantom's home, a Phantom born from a
-`Phantoms_Haunt` makes exactly one 20-percent roll. A successful roll schedules
-`Phantom_Hired` / `Begin` after 250 ms. The per-agent function attribute
-prevents repeated birth callbacks from rolling or playing twice.
+The Phantom voice set uses event-specific human performances processed through
+one reproducible revenant treatment. The public `assets/audio` directory
+contains only the final game-ready outputs.
 
-Majesty has no class-specific recruitment voice phase. Its stock
-`Basic_idle` action requests `VFX_SPECIAL1`; the Phantom now uses that phase
-for its separate idle/personality line.
+## Asset convention
 
-The runtime recruitment sound identity is `PH01` / `Phantom_Hired`, registered
-through `phantom_sounddesc.cam`. The builder derives its one-phase `DSND`
-record from the CAM-tool research's proven `RM01Rage_of_Krolm` template and
-maps `Begin` (`EBE0`) to the `PHS1` WAVE through stock voice group `SG14`.
+Production used one Audacity project, one clean export, and one processed
+output per event:
 
-## Initial Audio Validation Baseline
+```text
+phantom-<event>-source.aup3
+phantom-<event>-clean.wav
+phantom-<event>-game.wav
+```
 
-Status: **initial audio valid**, verified in-game on July 30, 2026 in the
-Northern Expansion quest Rise of the Ratmen.
+The clean master contains the selected performance without effects, and
+`scripts/process_phantom_voice.py` creates the game-ready WAV. The raw
+`.aup3` projects and clean intermediate WAVs are retained privately; they are
+not required to build the public repository.
 
-- Human take 4 is preserved as
-  `assets/audio/phantom-recruitment-clean.wav`.
-- Reproducible `v6-game-loud` processing produces
-  `assets/audio/phantom-recruitment-game.wav`.
-- The output is mono, 22050 Hz, signed 16-bit integer PCM.
-- `phantom_voices.cam` stores the WAV as WAVE key `PHS1`.
-- `phantom_sounddesc.cam` registers unique runtime sound
-  `PH01` / `Phantom_Hired`; loose sound XML alone was insufficient for the
-  GPL-callable runtime path.
-- The DSND is a size-preserving transformation of the CAM-tool research's
-  proven `RM01Rage_of_Krolm` template.
-- The mod manifest loads both CAMs for `Dataset base="Any"`, covering Original
-  and Expansion datasets.
-- Audio-only releases regenerate the processed WAV, voice CAM, DSND CAM, sound
-  and unit metadata, and the manifest without rebuilding art archives.
-- The full Phantom voice descriptor is a stock-shaped clone registered as
-  `PV01` / `Phantom_Voice`; its stock event phases and cooldown groups point
-  to the corresponding Phantom WAVE keys.
+## Processing contract
 
-## Voice Direction
-
-The Phantom should sound like a restrained, melancholy revenant who continues
-adventuring largely for their own amusement. The performance should be weary,
-intimate, and quietly entertained rather than growling, theatrical, or
-generically monstrous.
-
-- Use a medium-low human voice with clear diction.
-- Deliver menace calmly rather than by shouting.
-- Treat death as tiresome and familiar, not frightening.
-- Deliver jokes completely deadpan.
-- If post-processing is used, keep any spectral double subtle enough that the
-  words remain as intelligible as stock Majesty hero lines.
-
-The first synthetic-voice sample pass was rejected. Future production should
-use a directed human recording.
-
-## Pinned Processing Recipe
-
-The provisional human-voice treatment is pinned in
-`scripts/process_phantom_voice.py`. The current `v6-game-loud` recipe uses:
+The approved treatment applies:
 
 - a roughly 1.8-semitone main pitch reduction;
-- a close, four-semitone-lower spectral double at 25 percent strength;
-- a 4 ms double offset so it reads as overtones rather than an echo;
-- five dense, quiet reflections from 18 through 96 ms;
-- an intermediate peak normalization of -6 dB;
-- 3.5x makeup gain through a smooth -1 dB ceiling limiter, matching the louder
-  perceived level of Majesty's stock voices; and
-- mono, 22050 Hz, signed 16-bit PCM WAV output.
+- a close four-semitone-lower spectral layer at 25 percent strength;
+- a 4 ms layer offset;
+- five quiet ambience reflections from 18 through 96 ms;
+- intermediate peak normalization;
+- 3.5x makeup gain through a smooth limiter;
+- mono, 22050 Hz, signed 16-bit PCM output.
 
-The approved recruitment take is processed to
-`assets/audio/phantom-recruitment-game.wav` and packed as WAVE
-key `PHS1`. Keep the clean master in
-`assets/audio/phantom-recruitment-clean.wav` so the recipe can
-be revised without returning to the Audacity project.
+The close lower layer adds spectral weight without behaving like a separate
+echo. The final format matches the stock game's voice archive expectations.
 
-## Approved Lines
+## Runtime routing
 
-| Event | Sound phase / route | Approved line |
-|---|---|---|
-| Recruitment (initial validated line) | 20% Haunt birth roll → `Phantom_Hired` / `Begin` | “Oh, back again?” |
-| Deciding | `VFX_DECIDING` | “The dead have time.” |
-| Sees a hostile | `VFX_SEE_HOSTILE` | “Your breath beckons me.” |
-| Commits to combat | `VFX_GO_COMBAT` | “Join us in death.” |
-| Flees combat | `VFX_FLEE_COMBAT` | “Death may only be delayed.” |
-| Pursues a reward flag | `VFX_GO_REWARD` | “Even the dead have debts.” |
-| Finds an item | `VFX_FIND_COOL` | “A garnish for my grave.” |
-| Casts a spell | `VFX_CAST_SPELL1` | “Tempus mori!” |
-| Idle / personality | `VFX_SPECIAL1` | “Do I have time for a snow cone?” |
-| Gains a level | `VFX_GAIN_LEVEL` | “The cold grows harsher still.” |
-| Reaches level 10 | `VFX_LEVEL_10` | “The secrets of the veil are now mine.” |
-| Dies | `Death` | “Not… again…” |
-| Easter egg | `Easter_Egg` | “I wasn’t napping. I’m just dead.” |
+The hero uses a stock-shaped multi-event DSND registered as `PV01` /
+`Phantom_Voice`. Its phases point to dedicated Phantom WAVE keys for:
 
-## Trigger Note
+- entering and fleeing combat;
+- deciding and idle personality;
+- pursuing rewards and finding items;
+- casting;
+- seeing hostiles;
+- gaining levels and reaching level 10;
+- death and the Easter egg.
 
-Stock voice packs describe `VFX_SPECIAL1` as an idle/personality line, and the
-stock `Basic_idle` action triggers it naturally. Do not bind recruitment audio
-to that phase. “Oh, back again?” belongs only to the custom 20-percent
-recruitment route; idle and deciding use their separate stock phases.
+Recruitment is intentionally separate. Majesty has no class-specific recruit
+phase, so a dedicated `PH01` / `Phantom_Hired` descriptor maps `Begin` to the
+recruitment WAVE. The Phantom birth callback makes one 20-percent roll after
+the hero receives its Haunt home.
 
-## Production Status
+Both DSND entries retain stock voice cooldown groups and spatial behavior.
 
-All approved lines have canonical event-named Audacity projects, clean
-masters, processed game WAVs, and packaged WAVE entries. Recruitment is
-already validated in game. The remaining recorded lines are packaged and
-awaiting in-game event validation. The deliberate pause in “Not… again…” is
-preserved as part of the single Death take.
+## Approved lines
+
+| Event | Line |
+| --- | --- |
+| Recruitment | “Oh, back again?” |
+| Deciding | “The dead have time.” |
+| Sees a hostile | “Your breath beckons me.” |
+| Commits to combat | “Join us in death.” |
+| Flees combat | “Death may only be delayed.” |
+| Pursues a reward | “Even the dead have debts.” |
+| Finds an item | “A garnish for my grave.” |
+| Casts a spell | “Tempus mori!” |
+| Idle personality | “Do I have time for a snow cone?” |
+| Gains a level | “The cold grows harsher still.” |
+| Reaches level 10 | “The secrets of the veil are now mine.” |
+| Dies | “Not… again…” |
+| Easter egg | “I wasn’t napping. I’m just dead.” |
+
+## Incremental packaging
+
+After one complete package exists, the checked-in game-ready WAVs can be
+packaged and validated without rebuilding the sprite archives:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly
+```

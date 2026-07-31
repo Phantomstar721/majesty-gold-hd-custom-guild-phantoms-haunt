@@ -19,7 +19,7 @@ from create_phantom_hero_death_review import (  # noqa: E402
 
 
 def main() -> int:
-    cam = ROOT / "dist/PhantomGuildPoc/Data/phantom_maindata.cam"
+    cam = ROOT / "dist/CustomGuildPhantomsHaunt/Data/phantom_maindata.cam"
     output_path = ROOT / "artifacts/reviews/phantom-cast-engine-review.png"
     glow_output_path = ROOT / "artifacts/reviews/phantom-cast-glow-engine-review.png"
     tiles = builder.read_cam_entries(cam, b"TILE")

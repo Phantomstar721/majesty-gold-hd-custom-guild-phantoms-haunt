@@ -23,7 +23,7 @@ def main() -> int:
     parser.add_argument(
         "--cam",
         type=Path,
-        default=REPO_ROOT / "dist/PhantomGuildPoc/Data/phantom_maindata.cam",
+        default=REPO_ROOT / "dist/CustomGuildPhantomsHaunt/Data/phantom_maindata.cam",
     )
     parser.add_argument(
         "--out",

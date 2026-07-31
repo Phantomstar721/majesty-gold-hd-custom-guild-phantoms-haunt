@@ -6,10 +6,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_SHEET = ROOT / "assets/source/phantom-guild-sprite-sheet-smooth.png"
-DAMAGED_B = ROOT / "assets/source/phantom-guild-damaged-b-sample-v1.png"
-COLLAPSED = ROOT / "assets/source/phantom-guild-collapsed-intermediate-sample-v1.png"
-OUTPUT = ROOT / "artifacts/reviews/phantom-guild-destruction-progression-hires-v1.png"
+SOURCE_SHEET = ROOT / "assets/source/buildings/haunt/level-1/sprite-sheet.png"
+DAMAGED_B = ROOT / "assets/source/buildings/haunt/level-1/damaged-b.png"
+COLLAPSED = ROOT / "assets/source/buildings/haunt/level-1/collapsed.png"
+OUTPUT = ROOT / "artifacts/reviews/phantom-guild-destruction-progression.png"
 
 CARD_SIZE = (2800, 2200)
 PANEL_SIZE = (1320, 835)

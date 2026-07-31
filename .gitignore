@@ -1,5 +1,11 @@
 dist/
 artifacts/
+docs/internal/
+private/
 local_tile_*.bmp
 __pycache__/
 *.pyc
+*.aup3-shm
+*.aup3-wal
+.DS_Store
+Thumbs.db

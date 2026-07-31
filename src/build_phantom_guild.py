@@ -248,7 +248,7 @@ def main() -> int:
             phantom_units_xml(),
             encoding="utf-8",
         )
-        (args.output_root / "PhantomGuildPoc.mmxml").write_text(
+        (args.output_root / "CustomGuildPhantomsHaunt.mmxml").write_text(
             mod_xml(),
             encoding="utf-8",
         )
@@ -339,7 +339,7 @@ def main() -> int:
     (data_dir / "phantom_particles.xml").write_text(phantom_particles_xml(), encoding="utf-8")
     (data_dir / "phantom_sounds.xml").write_text(phantom_sounds_xml(), encoding="utf-8")
     write_gpl_sources(args.game_path, gpl_dir)
-    (args.output_root / "PhantomGuildPoc.mmxml").write_text(mod_xml(), encoding="utf-8")
+    (args.output_root / "CustomGuildPhantomsHaunt.mmxml").write_text(mod_xml(), encoding="utf-8")
     return 0
 
 
@@ -4589,8 +4589,8 @@ def mod_xml() -> str:
 \t\t\t\t</Load>"""
     return f"""<Majesty>
 \t<Mod id="{{{MOD_ID}}}">
-\t\t<Name>PhantomGuildPoc</Name>
-\t\t<DisplayName lang="en_US">Phantoms Haunt POC</DisplayName>
+\t\t<Name>CustomGuildPhantomsHaunt</Name>
+\t\t<DisplayName lang="en_US">Custom Guild: Phantoms Haunt</DisplayName>
 \t\t<Description lang="en_US">
 \t\t\t<Short>Adds the Phantoms Haunt and its recruitable Phantom heroes.</Short>
 \t\t\t<Long>Compatible with Original Majesty and the Northern Expansion.</Long>
