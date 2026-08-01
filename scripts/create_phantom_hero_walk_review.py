@@ -8,10 +8,10 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT.parent / "external" / "BrandonWill-Majesty"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_phantom_guild as builder  # noqa: E402
-import sprite_extractor as extractor  # noqa: E402
+import majesty_imag as imag  # noqa: E402
 from create_phantom_hero_engine_review import font, render_tile  # noqa: E402
 
 
@@ -23,9 +23,9 @@ def main() -> int:
     tiles = builder.read_cam_entries(CAM, b"TILE")
     palettes = builder.read_cam_entries(CAM, b"SPLT")
     image = builder.read_cam_entry(CAM, b"IMAG", b"PHM1Phantom").data
-    image_sets = extractor.parse_anim_set(image)[1]
-    walk = next(entry for entry in image_sets if entry["setName"] == "Walk")
-    directions = extractor.parse_directional_frame_descriptor(image, walk["relOff"])["directions"]
+    image_sets = imag.parse_anim_set(image)
+    walk_offset = next(rel_off for _, set_name, rel_off in image_sets if set_name == "Walk")
+    directions = imag.parse_directional_frame_descriptor(image, walk_offset)
 
     scale = 4
     cell_width = 250

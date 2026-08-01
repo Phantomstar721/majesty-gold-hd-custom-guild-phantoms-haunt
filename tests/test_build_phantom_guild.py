@@ -602,5 +602,150 @@ class RecruitmentVoiceTests(unittest.TestCase):
         self.assertIn('$PlaySound(thisagent, "Phantom_Hired", "Begin")', gpl)
 
 
+class StandaloneRepoTests(unittest.TestCase):
+    """This repository must work with nothing else cloned beside it.
+
+    Two review scripts used to import across repository boundaries, reaching
+    into a sibling checkout and an unlicensed third-party folder. Anyone who
+    cloned only this project got a bare ModuleNotFoundError. One of them was
+    broken outright, because importing a 2,000-line module for a single
+    function also pulled in that module's video dependency.
+    """
+
+    SEARCH_DIRS = ("src", "scripts", "tests")
+    FORBIDDEN = (
+        "BrandonWill",
+        "sprite_extractor",
+        "extract_assets",
+        "art-asset-extractor",
+        "majesty-cam-tool",
+    )
+
+    def _source_files(self):
+        # This file names the forbidden tokens on purpose, as the thing it
+        # guards against, so it is not a subject of its own scan.
+        here = Path(__file__).resolve()
+        for name in self.SEARCH_DIRS:
+            directory = REPO_ROOT / name
+            if directory.is_dir():
+                for path in directory.rglob("*.py"):
+                    if path.resolve() != here:
+                        yield path
+
+    def test_no_module_is_imported_from_another_repository(self):
+        offenders = []
+        for path in self._source_files():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [a.name for a in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module]
+                for name in names:
+                    root = name.split(".")[0]
+                    if root in ("sprite_extractor", "extract_assets"):
+                        offenders.append(f"{path.name}:{node.lineno} imports {name}")
+        self.assertEqual(offenders, [], "cross-repository imports: " + ", ".join(offenders))
+
+    # A repo-root name followed by .parent walks above the repository, which is
+    # exactly how the old imports reached a sibling checkout. Plain
+    # Path(__file__).resolve().parent is the script's own folder and is fine.
+    ESCAPING_SYS_PATH = re.compile(
+        r"(ROOT\.parent|REPO_ROOT\.parent|parents\[\s*[1-9]\d*\s*\]\s*\.parent"
+        r"|parents\[\s*[2-9]\s*\]|\.\.[\\/])"
+    )
+
+    def test_no_sys_path_entry_escapes_the_repository(self):
+        offenders = []
+        for path in self._source_files():
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if "sys.path" not in line:
+                    continue
+                if self.ESCAPING_SYS_PATH.search(line):
+                    offenders.append(f"{path.name}:{number}: {line.strip()}")
+        self.assertEqual(
+            offenders,
+            [],
+            "sys.path entries pointing outside the repo: " + "; ".join(offenders),
+        )
+
+    def test_no_source_file_names_a_sibling_repository(self):
+        offenders = []
+        for path in self._source_files():
+            text = path.read_text(encoding="utf-8")
+            tree = ast.parse(text)
+            # Only executable code counts. The provenance note in majesty_imag
+            # is a docstring and is meant to stay.
+            docstrings = set()
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef)):
+                    doc = ast.get_docstring(node, clean=False)
+                    if doc:
+                        docstrings.update(doc.splitlines())
+            for number, line in enumerate(text.splitlines(), 1):
+                if line in docstrings or line.strip().startswith("#"):
+                    continue
+                for token in self.FORBIDDEN:
+                    if token in line:
+                        offenders.append(f"{path.name}:{number} mentions {token}")
+        self.assertEqual(offenders, [], "sibling-repo references: " + ", ".join(offenders))
+
+
+class VendoredImagTests(unittest.TestCase):
+    """The vendored helpers the review scripts depend on."""
+
+    @staticmethod
+    def _module():
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import majesty_imag  # noqa: PLC0415
+
+        return majesty_imag
+
+    def test_parse_anim_set_rejects_a_short_blob(self):
+        self.assertEqual(self._module().parse_anim_set(b"\x00" * 4), [])
+
+    def test_parse_anim_set_reads_the_entry_table(self):
+        imag = self._module()
+        blob = bytearray(b"\x00" * 0x14)
+        blob += struct.pack("<I", 2)
+        blob += struct.pack("<II", 1, 0x40)      # Walk
+        blob += struct.pack("<II", 8, 0x50)      # Stand
+        blob += b"\x00" * 0x40
+        self.assertEqual(
+            imag.parse_anim_set(bytes(blob)),
+            [(1, "Walk", 0x40), (8, "Stand", 0x50)],
+        )
+
+    def test_variant_set_ids_keep_the_base_name(self):
+        """High word is a variant counter: 0x10001 is the second Walk set."""
+        imag = self._module()
+        blob = bytearray(b"\x00" * 0x14)
+        blob += struct.pack("<I", 1)
+        blob += struct.pack("<II", (1 << 16) | 1, 0x30)
+        blob += b"\x00" * 0x40
+        self.assertEqual(imag.parse_anim_set(bytes(blob))[0][1], "Walk-1")
+
+    def test_wholly_unknown_set_ids_fall_back_to_the_raw_id(self):
+        imag = self._module()
+        blob = bytearray(b"\x00" * 0x14)
+        blob += struct.pack("<I", 1)
+        blob += struct.pack("<II", 91735, 0x30)
+        blob += b"\x00" * 0x40
+        self.assertEqual(imag.parse_anim_set(bytes(blob))[0][1], "set-91735")
+
+    def test_directional_descriptor_rejects_a_short_blob(self):
+        self.assertEqual(self._module().parse_directional_frame_descriptor(b"\x00" * 8, 0), [])
+
+    def test_tile_v1_rejects_a_non_v1_tile(self):
+        self.assertIsNone(self._module().tile_v1_to_image(struct.pack("<H", 3) + b"\x00" * 40))
+
+    def test_palette_key_colors_are_rejected(self):
+        imag = self._module()
+        self.assertTrue(imag.is_palette_key_color(248, 10, 10, 10))
+        self.assertTrue(imag.is_palette_key_color(12, 200, 20, 200))
+        self.assertFalse(imag.is_palette_key_color(12, 40, 90, 160))
+
+
 if __name__ == "__main__":
     unittest.main()

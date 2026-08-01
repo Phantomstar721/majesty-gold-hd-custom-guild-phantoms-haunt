@@ -11,10 +11,7 @@ from PIL import Image, ImageDraw
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
-sys.path.insert(
-    0,
-    str(REPO_ROOT.parent / "majesty-gold-hd-art-asset-extractor" / "scripts"),
-)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from build_phantom_guild import (  # noqa: E402
     RAW_TEXTURES_IMAGE,
@@ -22,7 +19,7 @@ from build_phantom_guild import (  # noqa: E402
     read_cam_entry,
     referenced_tile_indices,
 )
-from extract_assets import tile_v1_to_image  # noqa: E402
+from majesty_imag import tile_v1_to_image  # noqa: E402
 
 
 def main() -> int:
@@ -37,7 +34,7 @@ def main() -> int:
 
     previews: list[tuple[int, Image.Image]] = []
     for index in indices:
-        preview = tile_v1_to_image(tiles[index].data, None)
+        preview = tile_v1_to_image(tiles[index].data)
         if preview is not None:
             previews.append((index, preview.convert("RGB")))
 

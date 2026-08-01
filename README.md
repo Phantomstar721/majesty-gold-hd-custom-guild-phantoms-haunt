@@ -226,10 +226,15 @@ assets/source/references/        Current raster-art references
 assets/source/spells/            Spell and effect source art
 docs/                            Public technical documentation
 scripts/                         Build, review, generation, and audio tools
+scripts/majesty_imag.py          IMAG and v1 TILE helpers for the review scripts
 src/                             CAM builder and package validator
 src/gpl/                         Static GPL source used by the builder
 tests/                           Unit tests for the builder's pure functions
 ```
+
+This repository stands alone. Nothing in it imports from another repository or
+expects a sibling checkout on disk, and the test suite fails if that ever
+changes.
 
 Generated packages live under `dist/`, and visual inspection output lives
 under `artifacts/`. Neither directory is source-controlled.
