@@ -1,0 +1,3011 @@
+
+
+Function Phantom_Lock_Haunt_For_Quest()
+
+Declare
+
+Begin
+	$DisableUnitType("Phantoms_Haunt");
+End
+
+Function Phantom_Unlock_Haunt_For_Quest()
+
+Declare
+
+Begin
+	$EnableUnitType("Phantoms_Haunt");
+End
+
+Function Phantom_Player_Has_Placed_Haunt(agent ThisAgent) is boolean
+
+Declare
+	list Haunts;
+
+Begin
+	$ListObjects(
+		ThisAgent,
+		"Building",
+		-1,
+		Haunts,
+		#MyPlayer,
+		#CheckTitles,
+		"Phantoms_Haunt"
+	);
+	return ($ListSize(Haunts) > 0);
+End
+
+Function Phantom_Player_Max_Completed_Haunt_Level(agent ThisAgent) is integer
+
+Declare
+	list Haunts;
+	agent Haunt;
+	integer Best_Level;
+
+Begin
+	Best_Level = 0;
+	$ListObjects(
+		ThisAgent,
+		"Building",
+		-1,
+		Haunts,
+		#MyPlayer,
+		#CheckTitles,
+		"Phantoms_Haunt"
+	);
+
+	Foreach Haunt in Haunts do
+		If ($IsDead(Haunt) == False)
+			If ($GetAttribute(Haunt, #ATTRIB_CurrentStageBuilt) == 1)
+				If (Haunt's "Level" > Best_Level)
+					Best_Level = Haunt's "Level";
+
+	return Best_Level;
+End
+
+// Stock-shaped, persistent Winged Feet clone for Rush unto Death. It retains
+// the proven paired movement/action mechanism at mild custom values while
+// deliberately omitting the stock visible effectors and speed trail.
+Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)
+
+Declare
+
+Begin
+	$AdjustAttribute(
+		ThisAgent,
+		#ATTRIB_MovementRateModifier,
+		#Phantom_Rush_Movement_Bonus
+	);
+	$AdjustAttribute(
+		ThisAgent,
+		#ATTRIB_ActionRateModifier,
+		#Phantom_Rush_Action_Bonus
+	);
+	$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 1);
+End
+
+Function Phantom_Rush_Unto_Death_End(agent ThisAgent)
+
+Declare
+
+Begin
+	$AdjustAttribute(
+		ThisAgent,
+		#ATTRIB_MovementRateModifier,
+		- #Phantom_Rush_Movement_Bonus
+	);
+	$AdjustAttribute(
+		ThisAgent,
+		#ATTRIB_ActionRateModifier,
+		- #Phantom_Rush_Action_Bonus
+	);
+	$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 0);
+End
+
+Function Phantom_Start_Player_Perk_Watch(agent ThisAgent)
+
+Declare
+	agent Palace;
+
+Begin
+	Palace = $GetPalace(ThisAgent);
+	If ($IsValidGamePiece(Palace) == False)
+		return;
+
+	If ($HasAttribute("PhantomHauntPerkWatch", Palace) == False)
+		$AddAttribute(
+			Palace,
+			"PhantomHauntPerkWatch",
+			"function",
+			$Phantom_Haunt_Player_Perk_Watch
+		);
+
+	If ($IsRunning(Palace's "PhantomHauntPerkWatch") == False)
+		$NewThread(Palace's "PhantomHauntPerkWatch", 500, Palace);
+End
+
+Function Phantom_Haunt_Player_Perk_Watch(agent Palace)
+
+Declare
+	integer Haunt_Level,Icy_Level,Winter_Level;
+	list Priestesses,Phantoms;
+	agent Priestess,Phantom;
+
+Begin
+	If ($IsValidGamePiece(Palace) == False)
+		return;
+
+	Haunt_Level = $Phantom_Player_Max_Completed_Haunt_Level(Palace);
+
+	$ListObjects(
+		Palace,
+		"Hero",
+		-1,
+		Priestesses,
+		#MyPlayer,
+		#CheckTitles,
+		"Priestess"
+	);
+
+	Foreach Priestess in Priestesses do
+		If ($IsDead(Priestess) == False)
+			begin
+				If ($HasAttribute("PhantomRushUntoDeathActive", Priestess) == False)
+					$AddAttribute(
+						Priestess,
+						"PhantomRushUntoDeathActive",
+						"boolean",
+						False
+					);
+
+				If (Haunt_Level >= 3)
+					begin
+						If (
+							$GetAttribute(
+								Priestess,
+								#ATTRIB_HasEffectWingedFeet
+							) == 0
+						)
+							begin
+								$Phantom_Rush_Unto_Death_Begin(Priestess);
+								Priestess's "PhantomRushUntoDeathActive" = True;
+							end
+					end
+				Else If (Priestess's "PhantomRushUntoDeathActive" == True)
+					begin
+						$Phantom_Rush_Unto_Death_End(Priestess);
+						Priestess's "PhantomRushUntoDeathActive" = False;
+					end
+			end
+
+	$ListObjects(
+		Palace,
+		"Hero",
+		-1,
+		Phantoms,
+		#MyPlayer,
+		#CheckTitles,
+		"Phantom"
+	);
+
+	Icy_Level = $GetSpellAttribute("icy_touch", "character_level");
+	Winter_Level = $GetSpellAttribute("endless_winter", "character_level");
+
+	Foreach Phantom in Phantoms do
+		If ($IsDead(Phantom) == False)
+			begin
+				If ($HasAttribute("PhantomIcyTouchHauntUnlocked", Phantom) == False)
+					$AddAttribute(
+						Phantom,
+						"PhantomIcyTouchHauntUnlocked",
+						"boolean",
+						False
+					);
+				If ($HasAttribute("PhantomEndlessWinterHauntUnlocked", Phantom) == False)
+					$AddAttribute(
+						Phantom,
+						"PhantomEndlessWinterHauntUnlocked",
+						"boolean",
+						False
+					);
+
+				If (
+					Haunt_Level >= 2 &&
+					$GetAttribute(Phantom, #ATTRIB_ExperienceLevel) >= Icy_Level
+				)
+					begin
+						If (Phantom's "PhantomIcyTouchHauntUnlocked" == False)
+							begin
+								$LearnSpell(Phantom, "icy_touch");
+								Phantom's "PhantomIcyTouchHauntUnlocked" = True;
+							end
+					end
+				Else
+					begin
+						$ForgetSpell(Phantom, "icy_touch");
+						Phantom's "PhantomIcyTouchHauntUnlocked" = False;
+					end
+
+				If (
+					Haunt_Level >= 3 &&
+					$GetAttribute(Phantom, #ATTRIB_ExperienceLevel) >= Winter_Level
+				)
+					begin
+						If (Phantom's "PhantomEndlessWinterHauntUnlocked" == False)
+							begin
+								$LearnSpell(Phantom, "endless_winter");
+								Phantom's "PhantomEndlessWinterHauntUnlocked" = True;
+							end
+					end
+				Else
+					begin
+						$ForgetSpell(Phantom, "endless_winter");
+						Phantom's "PhantomEndlessWinterHauntUnlocked" = False;
+					end
+			end
+
+	// Recheck while a Haunt exists. The old one-shot pass could run while
+	// every Phantom was home, reject all candidates, and never try again.
+	If (Haunt_Level > 0)
+		$NewThread(Palace's "PhantomHauntPerkWatch", 1000, Palace);
+End
+
+Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)
+
+Declare
+	list Haunts, Paladins;
+
+Begin
+	$basic_birth(ThisAgent);
+	$Phantom_Start_Player_Perk_Watch(ThisAgent);
+
+	If ($GetUnitPlayerNumber(ThisAgent) != #Monster_Player)
+		begin
+			$ListObjects(
+				ThisAgent,
+				"Building",
+				-1,
+				Haunts,
+				#MyPlayer,
+				#CheckTitles,
+				"Phantoms_Haunt"
+			);
+
+			$ListObjects(
+				ThisAgent,
+				"Hero",
+				-1,
+				Paladins,
+				#MyPlayer,
+				#CheckTitles,
+				"Paladin"
+			);
+
+			$DisableUnitType("Paladin");
+
+			If ($ListSize(Haunts) == 0)
+				If ($ListSize(Paladins) > 0)
+					begin
+						$MessageFlag(ThisAgent, #Phantom_Paladin_Warning_Message);
+						$PlaySound(ThisAgent, "Advisor_Message_Arrive", "VFX_Advisor");
+						$LocalChatMessage(
+							$GetUnitPlayerNumber(ThisAgent),
+							#Phantom_Paladin_Warning_Message,
+							ThisAgent
+						);
+					end
+		end
+End
+
+Function Phantoms_Haunt_Birth(agent ThisAgent)
+
+Declare
+	list Paladins;
+	agent Paladin;
+
+Begin
+	$Guild_Birth(ThisAgent);
+	$Phantom_Start_Player_Perk_Watch(ThisAgent);
+
+	If ($GetUnitPlayerNumber(ThisAgent) != #Monster_Player)
+		begin
+			$DisableUnitType("Paladin");
+			$ListObjects(
+				ThisAgent,
+				"Hero",
+				-1,
+				Paladins,
+				#MyPlayer,
+				#CheckTitles,
+				"Paladin"
+			);
+
+			Foreach Paladin in Paladins do
+				If ($IsDead(Paladin) == False)
+					$Unit_Dismissed(Paladin);
+		end
+End
+
+Function Phantoms_Haunt_Destroyed(agent ThisAgent)
+
+Declare
+	list Haunts;
+
+Begin
+	If ($GetUnitPlayerNumber(ThisAgent) != #Monster_Player)
+		begin
+			$ListObjects(
+				ThisAgent,
+				"Building",
+				-1,
+				Haunts,
+				#MyPlayer,
+				#CheckTitles,
+				"Phantoms_Haunt"
+			);
+
+			If ($ListSize(Haunts) == 0)
+				$EnableUnitType("Paladin");
+		end
+
+	$guild_destroyed_common(ThisAgent, $Homeless);
+End
+
+Function Random_Warriors_Guild_Hero_Type(agent ThisAgent) is string
+
+Declare
+	integer Random;
+
+Begin
+	If ($Phantom_Player_Has_Placed_Haunt(ThisAgent))
+		begin
+			Random = $RandomNumber(2) + 1;
+			If (Random == 1)
+				return "Warrior";
+			Else
+				return "Warrior_of_Discord";
+		end
+
+	Random = $RandomNumber(3) + 1;
+	If (Random == 1)
+		return "Warrior";
+	Else if (Random == 2)
+		return "Paladin";
+	Else
+		return "Warrior_of_Discord";
+End
+
+Function Random_Hero_Type(agent ThisAgent) is string
+
+Declare
+	integer Random;
+
+Begin
+	If (ThisAgent's "Title" == "Embassy" || ThisAgent's "Subtype" == "Outpost")
+		If ($Phantom_Player_Has_Placed_Haunt(ThisAgent))
+			begin
+				Random = $RandomNumber(16) + 1;
+
+				If (Random == 1)
+					return "Adept";
+				Else if (Random == 2)
+					return "Barbarian";
+				Else if (Random == 3)
+					return "Cultist";
+				Else if (Random == 4)
+					return "Healer";
+				Else if (Random == 5)
+					return "Monk";
+				Else if (Random == 6)
+					return "Priestess";
+				Else if (Random == 7)
+					return "Ranger";
+				Else if (Random == 8)
+					return "Rogue";
+				Else if (Random == 9)
+					return "Solarus";
+				Else if (Random == 10)
+					return "Warrior";
+				Else if (Random == 11)
+					return "Wizard";
+				Else if (Random == 12)
+					return "Warrior_of_Discord";
+				Else if (Random == 13)
+					return "Dwarf";
+				Else if (Random == 14)
+					return "Elf";
+				Else if (Random == 15)
+					return "Gnome";
+				Else
+					return "Phantom";
+			end
+
+	Random = $RandomNumber(17) + 1;
+
+	If (Random == 1)
+		return "Adept";
+	Else if (Random == 2)
+		return "Barbarian";
+	Else if (Random == 3)
+		return "Cultist";
+	Else if (Random == 4)
+		return "Healer";
+	Else if (Random == 5)
+		return "Monk";
+	Else if (Random == 6)
+		return "Priestess";
+	Else if (Random == 7)
+		return "Ranger";
+	Else if (Random == 8)
+		return "Rogue";
+	Else if (Random == 9)
+		return "Solarus";
+	Else if (Random == 10)
+		return "Warrior";
+	Else if (Random == 11)
+		return "Wizard";
+	Else if (Random == 12)
+		return "Paladin";
+	Else if (Random == 13)
+		return "Warrior_of_Discord";
+	Else if (Random == 14)
+		return "Dwarf";
+	Else if (Random == 15)
+		return "Elf";
+	Else if (Random == 16)
+		return "Gnome";
+	Else
+		return "Phantom";
+End
+
+// Preserve the stock Ranger/Wizard support selector for every normal hero,
+// while preventing Phantoms (which intentionally use Wizard_tree) from
+// inheriting the Wizard-only Barbarian/Monk escort behavior.
+function follow_support_check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean
+
+declare
+	list Potentials;
+	agent Best_One;
+	agent Diddly;
+	list New_Potentials,Guards;
+	integer Range;
+
+begin
+	If (ThisAgent's "Title" == "Phantom")
+		return False;
+
+	If ($RandomNumber(100) + 1 > Chance)
+		return False;
+
+	Range = $GetAttribute(ThisAgent, #ATTRIB_SightRange) * #Follow_support_Check_Mod;
+	$ListObjects(ThisAgent, "Hero", Range, Potentials, #MyTeam);
+	Potentials = $ListTitles(Potentials, WhatToSupport);
+
+	If ($ListSize(Potentials) > 0)
+		begin
+			Foreach Diddly in Potentials do
+				begin
+					If (
+						(Diddly's "BackScript" == $Use_Building) &&
+						(Diddly's "Target" == Diddly's "Home")
+					)
+						begin
+							Range - Range;
+						end
+					Else
+						begin
+							Guards = $ListTitlesInRadius(
+								Diddly,
+								"Hero",
+								ThisAgent's "Title",
+								Range
+							);
+							If ($ListSize(Guards) < #support_max)
+								New_Potentials << Diddly;
+						end
+				end
+		end
+	Else
+		return False;
+
+	Potentials = New_Potentials;
+	If ($ListSize(Potentials) == 0)
+		return False;
+
+	Best_One = $ListMember(Potentials, 1);
+	ThisAgent's "BasicScript" = $Follow_Support;
+	ThisAgent's "BackScript" = $Follow_Support;
+	ThisAgent's "ActiveScript" = $Follow_Support;
+	ThisAgent's "BackTarget" = Best_One;
+	$SpecifyIntent(ThisAgent, #intent_following_and_supporting);
+	ThisAgent's "Counter" = 0;
+	return True;
+end
+
+// Priestess-only clone of the proven stock selector. The evaluating Priestess
+// is included in the nearby same-title guard count, so a threshold of 2 allows
+// her to claim an unguarded Phantom but rejects one with an established
+// Priestess already nearby. Rangers and Wizards retain stock #support_max.
+function Phantom_Priestess_Follow_Support_Check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean
+
+declare
+	list Potentials;
+	agent Best_One;
+	agent Diddly;
+	list New_Potentials,Guards;
+	integer Range;
+
+begin
+	If (ThisAgent's "Title" == "Phantom")
+		return False;
+
+	If ($RandomNumber(100) + 1 > Chance)
+		return False;
+
+	Range = $GetAttribute(ThisAgent, #ATTRIB_SightRange) * #Follow_support_Check_Mod;
+	$ListObjects(ThisAgent, "Hero", Range, Potentials, #MyTeam);
+	Potentials = $ListTitles(Potentials, WhatToSupport);
+
+	If ($ListSize(Potentials) > 0)
+		begin
+			Foreach Diddly in Potentials do
+				begin
+					If (
+						(Diddly's "BackScript" == $Use_Building) &&
+						(Diddly's "Target" == Diddly's "Home")
+					)
+						begin
+							Range - Range;
+						end
+					Else
+						begin
+							Guards = $ListTitlesInRadius(
+								Diddly,
+								"Hero",
+								ThisAgent's "Title",
+								Range
+							);
+							If ($ListSize(Guards) < 2)
+								New_Potentials << Diddly;
+						end
+				end
+		end
+	Else
+		return False;
+
+	Potentials = New_Potentials;
+	If ($ListSize(Potentials) == 0)
+		return False;
+
+	Best_One = $Pick_Closest(ThisAgent, Potentials);
+	ThisAgent's "BasicScript" = $Phantom_Priestess_Follow_Support;
+	ThisAgent's "BackScript" = $Phantom_Priestess_Follow_Support;
+	ThisAgent's "ActiveScript" = $Phantom_Priestess_Follow_Support;
+	ThisAgent's "BackTarget" = Best_One;
+	$SpecifyIntent(ThisAgent, #intent_following_and_supporting);
+	ThisAgent's "Counter" = 0;
+	return True;
+end
+
+// Priestess-only clone of stock Follow_Support. The sole movement change is
+// to travel toward a snapshot coordinate of the Phantom instead of passing the
+// moving Phantom agent to Travel_To. Coordinate travel avoids repeatedly
+// terminating when moving-agent pursuit briefly reports IsMoving == False.
+function Phantom_Priestess_Follow_Support(agent ThisAgent)
+
+declare
+	agent Target,New_Target;
+	integer TargetRange;
+
+begin
+	Target = ThisAgent's "BackTarget";
+
+	If ($NotValid(Target))
+		begin
+			ThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+			$Reset_Tasks(ThisAgent);
+		end
+	Else
+		begin
+			If (
+				$GetPlayerTeamNumber(ThisAgent) !=
+				$GetPlayerTeamNumber(Target)
+			)
+				begin
+					ThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+					$Reset_Tasks(ThisAgent);
+					return;
+				end
+
+			If ($HasLowHP(ThisAgent))
+				begin
+					ThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+					$Reset_Tasks(ThisAgent);
+				end
+			Else
+				begin
+					If (
+						(Target's "BackScript" == $Use_Building) &&
+						(Target's "Target" == Target's "Home")
+					)
+						begin
+							ThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+							$Reset_Tasks(ThisAgent);
+							return;
+						end
+
+					TargetRange = $DistanceBetweenAgents(ThisAgent, Target);
+					If (
+						TargetRange >
+						(
+							$GetAttribute(ThisAgent, #ATTRIB_MaxAttackRange) -
+							#follow_support_buffer
+						)
+					)
+						begin
+							ThisAgent's "Destination" = $LocationOf(Target);
+							ThisAgent's "ActiveScript" = $Travel_To;
+							ThisAgent's "BackScript" =
+								$Phantom_Priestess_Follow_Support;
+							ThisAgent's "Target" = ThisAgent;
+							$Move(
+								ThisAgent,
+								ThisAgent's "Destination",
+								"avoid_vehicles"
+							);
+							ThisAgent's "Counter" = 0;
+						end
+					Else
+						begin
+							$Cleanse_Hostiles(ThisAgent);
+							If ($ListSize(ThisAgent's "Hostiles") > 0)
+								begin
+									New_Target =
+										$Pick_Closest(ThisAgent, ThisAgent's "Hostiles");
+									ThisAgent's "ActiveScript" = $Attack_Object;
+									ThisAgent's "BackScript" = $Attack_Object;
+									ThisAgent's "Target" = New_Target;
+									return;
+								end
+
+							$Cleanse_Hostiles(Target);
+							If ($ListSize(Target's "Hostiles") > 0)
+								begin
+									New_Target =
+										$Pick_Closest(ThisAgent, Target's "Hostiles");
+									ThisAgent's "ActiveScript" = $Attack_Object;
+									ThisAgent's "BackScript" = $Attack_Object;
+									ThisAgent's "Target" = New_Target;
+								end
+							Else If (
+								Target's "BackScript" == $Attack_Object ||
+								Target's "ActiveScript" == $Attack_Object
+							)
+								begin
+									If ($IsValidGamePiece(Target's "Target"))
+										begin
+											New_Target = Target's "Target";
+											TargetRange =
+												$DistanceBetweenAgents(New_Target, Target);
+											If (
+												TargetRange <
+												$GetAttribute(
+													ThisAgent,
+													#ATTRIB_MaxAttackRange
+												)
+											)
+												begin
+													ThisAgent's "ActiveScript" =
+														$Attack_Object;
+													ThisAgent's "BackScript" =
+														$Attack_Object;
+													ThisAgent's "Target" = New_Target;
+												end
+										end
+								end
+							Else
+								begin
+									If ($RandomNumber(100) > 85)
+										$PerformAction(
+											ThisAgent,
+											ThisAgent's "Idle_Action",
+											Target
+										);
+
+									ThisAgent's "Counter" += 1;
+									If (ThisAgent's "Counter" >= #followBored)
+										begin
+											$Move(
+												ThisAgent,
+												$RandomCoord(ThisAgent, 150)
+											);
+											ThisAgent's "Counter" = 0;
+										end
+								end
+						end
+				end
+		end
+end
+
+Function Phantom_Priestess_Assigned_To(agent Phantom) is boolean
+
+Declare
+	list Priestesses;
+	agent Priestess;
+
+Begin
+	$ListObjects(
+		Phantom,
+		"Hero",
+		-1,
+		Priestesses,
+		#MyPlayer,
+		#CheckTitles,
+		"Priestess"
+	);
+
+	Foreach Priestess in Priestesses do
+		If ($IsDead(Priestess) == False)
+			If (Priestess's "BasicScript" == $Follow_Support)
+				If (Priestess's "BackTarget" == Phantom)
+					return True;
+
+	return False;
+End
+
+Function Phantom_Priestess_Support_Check(agent ThisAgent, integer Chance) is boolean
+
+Declare
+	integer Distance,Best_Distance;
+	list Phantoms;
+	agent Phantom,Best_Phantom;
+
+Begin
+	If (ThisAgent's "Title" != "Priestess")
+		return False;
+
+	If ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) < 3)
+		return False;
+
+	If ($RandomNumber(100) + 1 > Chance)
+		return False;
+
+	$ListObjects(
+		ThisAgent,
+		"Hero",
+		-1,
+		Phantoms,
+		#MyPlayer,
+		#CheckTitles,
+		"Phantom"
+	);
+
+	Best_Distance = 1000000;
+	Foreach Phantom in Phantoms do
+		If ($IsDead(Phantom) == False)
+			If (
+				(Phantom's "BackScript" != $Use_Building) ||
+				(Phantom's "Target" != Phantom's "Home")
+			)
+				If ($Phantom_Priestess_Assigned_To(Phantom) == False)
+					begin
+						Distance = $DistanceBetweenAgents(ThisAgent, Phantom);
+						If (Distance < Best_Distance)
+							begin
+								Best_Distance = Distance;
+								Best_Phantom = Phantom;
+							end
+					end
+
+	If ($IsValidGamePiece(Best_Phantom) == False)
+		return False;
+
+	ThisAgent's "BasicScript" = $Phantom_Follow_Support;
+	ThisAgent's "BackScript" = $Phantom_Follow_Support;
+	ThisAgent's "ActiveScript" = $Phantom_Follow_Support;
+	ThisAgent's "BackTarget" = Best_Phantom;
+	$SpecifyIntent(ThisAgent, #intent_following_and_supporting);
+	ThisAgent's "Counter" = 0;
+	return True;
+End
+
+Function Phantom_End_Priestess_Support(agent ThisAgent)
+
+Declare
+
+Begin
+	ThisAgent's "BasicScript" = ThisAgent's "StartingScript";
+	$Reset_Tasks(ThisAgent);
+End
+
+Function Phantom_Follow_Support(agent ThisAgent)
+
+Declare
+	agent Target,New_Target;
+	integer Target_Range;
+
+Begin
+	Target = ThisAgent's "BackTarget";
+
+	If ($IsValidGamePiece(Target) == False)
+		begin
+			$Phantom_End_Priestess_Support(ThisAgent);
+			return;
+		end
+
+	If ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) < 3)
+		begin
+			$Phantom_End_Priestess_Support(ThisAgent);
+			return;
+		end
+
+	If ($GetUnitPlayerNumber(ThisAgent) != $GetUnitPlayerNumber(Target))
+		begin
+			$Phantom_End_Priestess_Support(ThisAgent);
+			return;
+		end
+
+	If ($HasLowHP(ThisAgent))
+		begin
+			$Phantom_End_Priestess_Support(ThisAgent);
+			return;
+		end
+
+	If ((Target's "BackScript" == $Use_Building) && (Target's "Target" == Target's "Home"))
+		begin
+			$Phantom_End_Priestess_Support(ThisAgent);
+			return;
+		end
+
+	// Build_Horde is normally the first Priestess decision. Keeping it here
+	// preserves control-undead and skeleton replenishment while she escorts.
+	If ($Build_Horde(ThisAgent, 95))
+		return;
+
+	Target_Range = $DistanceBetweenAgents(ThisAgent, Target);
+	If (
+		Target_Range >
+		($GetAttribute(ThisAgent, #ATTRIB_MaxAttackRange) - #follow_support_buffer)
+	)
+		begin
+			ThisAgent's "Destination" = $LocationOf(Target);
+			ThisAgent's "ActiveScript" = $Travel_To;
+			ThisAgent's "BackScript" = $Phantom_Follow_Support;
+			$Move(ThisAgent, Target, "avoid_vehicles");
+			ThisAgent's "Counter" = 0;
+			return;
+		end
+
+	$Cleanse_Hostiles(ThisAgent);
+	If ($ListSize(ThisAgent's "Hostiles") > 0)
+		begin
+			New_Target = $Pick_Closest(ThisAgent, ThisAgent's "Hostiles");
+			ThisAgent's "ActiveScript" = $Attack_Object;
+			ThisAgent's "BackScript" = $Phantom_Follow_Support;
+			ThisAgent's "Target" = New_Target;
+			return;
+		end
+
+	$Cleanse_Hostiles(Target);
+	If ($ListSize(Target's "Hostiles") > 0)
+		begin
+			New_Target = $Pick_Closest(ThisAgent, Target's "Hostiles");
+			ThisAgent's "ActiveScript" = $Attack_Object;
+			ThisAgent's "BackScript" = $Phantom_Follow_Support;
+			ThisAgent's "Target" = New_Target;
+			return;
+		end
+
+	If (
+		(Target's "BackScript" == $Attack_Object) ||
+		(Target's "ActiveScript" == $Attack_Object)
+	)
+		If ($IsValidGamePiece(Target's "Target"))
+			begin
+				New_Target = Target's "Target";
+				Target_Range = $DistanceBetweenAgents(New_Target, Target);
+				If (Target_Range < $GetAttribute(ThisAgent, #ATTRIB_MaxAttackRange))
+					begin
+						ThisAgent's "ActiveScript" = $Attack_Object;
+						ThisAgent's "BackScript" = $Phantom_Follow_Support;
+						ThisAgent's "Target" = New_Target;
+						return;
+					end
+			end
+
+	If ($RandomNumber(100) > 85)
+		$PerformAction(ThisAgent, ThisAgent's "Idle_Action", Target);
+
+	ThisAgent's "Counter" += 1;
+	If (ThisAgent's "Counter" >= #followBored)
+		begin
+			$Move(ThisAgent, $RandomCoord(ThisAgent, 150));
+			ThisAgent's "Counter" = 0;
+		end
+End
+
+Function Phantom_Priestess_Tree(agent ThisAgent)
+
+Declare
+
+Begin
+	$CreateEffector(ThisAgent, "thought_bubble_think", #think_bubble_time);
+	$SpecifyIntent(ThisAgent, #Intent_Thinking);
+
+	If ($Build_Horde(ThisAgent, 95) == False)
+	If ($Phantom_Priestess_Support_Check(ThisAgent, 100) == False)
+	If ($Check_Nearby(ThisAgent) == False)
+	If ($Check_Rewards(ThisAgent, False) == False)
+	If ($Defend_Home(ThisAgent) == False)
+	If ($Rest(ThisAgent) == False)
+	If ($Purchase_Equipment(ThisAgent) == False)
+	If ($Pursue_Entertainment(ThisAgent) == False)
+	If ($Combat_Wandering(ThisAgent, 75) == False)
+	If ($Combat_Wandering_Heroes(ThisAgent, 70) == False)
+	If ($Raid_Lair(ThisAgent, 40) == False)
+	If ($Raid_Enemy_Building(ThisAgent, 30) == False)
+	If ($Explore_Map(ThisAgent, 50) == False)
+	If ($Visit_Building(ThisAgent, "Royal_gardens", 15) == False)
+	If ($Check_Library(ThisAgent, 45, "Train_magic_resist") == False)
+	If ($Check_Library(ThisAgent, 70, "Learn_generic_spell") == False)
+	If ($Go_Home(ThisAgent, 80) == False)
+		begin
+			$SpecifyIntent(ThisAgent, #intent_wandering);
+			ThisAgent's "Counter" = 0;
+			ThisAgent's "ActiveScript" = $Hero_Wander;
+		end
+End
+
+// Keep the proven stock-shaped Rush unto Death route: retain the expansion
+// Priestess tree and call the Priestess-only clone of the stock selector.
+// Purchase_Bazaar and Hall_Champs_Check exist only in the Northern Expansion
+// (GPLMx/TaskModules/Buildings/Magic_Bazaar.gpl and
+// GPLMx/DecisionTrees/Modules/Hall_Champs_Check.gpl). This package ships one
+// GPL for both datasets under Dataset base="Any", and the Priestess tree below
+// is cloned from the expansion version, so calling them directly breaks
+// Priestesses in Original Majesty quests: the decision chain dies partway and
+// the hero is left in the Thinking state set at the top of the tree. That is
+// exactly what happened on "A Deal with the Demon".
+//
+// Guard each on the expansion-only building it shops at. Those buildings cannot
+// exist in Original Majesty, so the call is skipped there entirely. In the
+// expansion the guard only skips the decision when the player owns no such
+// building, which is a case the stock function would have rejected anyway.
+Function Phantom_Priestess_Bazaar_Check(agent ThisAgent, integer Chance) is boolean
+
+Declare
+	list Bazaars;
+
+Begin
+	$ListObjects(
+		ThisAgent,
+		"Building",
+		-1,
+		Bazaars,
+		#MyPlayer,
+		#CheckTitles,
+		"Magic_Bazaar"
+	);
+	If ($ListSize(Bazaars) == 0)
+		return False;
+
+	return $Purchase_Bazaar(ThisAgent, Chance);
+End
+
+Function Phantom_Priestess_Champs_Check(agent ThisAgent, integer Chance) is boolean
+
+Declare
+	list Halls;
+
+Begin
+	$ListObjects(
+		ThisAgent,
+		"Building",
+		-1,
+		Halls,
+		#MyPlayer,
+		#CheckTitles,
+		"HallOfChampions"
+	);
+	If ($ListSize(Halls) == 0)
+		return False;
+
+	return $Hall_Champs_Check(ThisAgent, Chance);
+End
+
+// Defining Priestess_tree by its stock name lets the normal hero decision cycle
+// invoke it without forcing scripts from the Palace watcher.
+Function Phantom_Priestess_Follow_Check(agent ThisAgent) is boolean
+
+Declare
+
+Begin
+	If ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) < 3)
+		return False;
+
+	If (
+		$Phantom_Priestess_Follow_Support_Check(
+			ThisAgent,
+			"Phantom",
+			100
+		) == True
+	)
+		return True;
+
+	return False;
+End
+
+function Priestess_tree(agent ThisAgent)
+
+Declare
+
+Begin
+	$CreateEffector(ThisAgent, "thought_bubble_think", #think_bubble_time);
+	$SpecifyIntent(ThisAgent, #Intent_Thinking);
+
+	If ($Build_Horde(ThisAgent, 95) == False)
+	If ($Phantom_Priestess_Follow_Check(ThisAgent) == False)
+	If ($Check_Nearby(ThisAgent) == False)
+	If ($Check_Rewards(ThisAgent, False) == False)
+	If ($Defend_Home(ThisAgent) == False)
+	If ($Rest(ThisAgent) == False)
+	If ($Purchase_Equipment(ThisAgent) == False)
+	If ($Phantom_Priestess_Bazaar_Check(ThisAgent, 70) == False)
+	If ($Pursue_Entertainment(ThisAgent) == False)
+	If ($Phantom_Priestess_Champs_Check(ThisAgent, 40) == False)
+	If ($Combat_Wandering(ThisAgent, 75) == False)
+	If ($Combat_Wandering_Heroes(ThisAgent, 70) == False)
+	If ($Raid_Lair(ThisAgent, 40) == False)
+	If ($Raid_Enemy_Building(ThisAgent, 30) == False)
+	If ($Explore_Map(ThisAgent, 50) == False)
+	If ($Visit_Building(ThisAgent, "Royal_gardens", 15) == False)
+	If ($Check_Library(ThisAgent, 45, "Train_magic_resist") == False)
+	If ($Check_Library(ThisAgent, 70, "Learn_generic_spell") == False)
+	If ($Go_Home(ThisAgent, 80) == False)
+		begin
+			$SpecifyIntent(ThisAgent, #intent_wandering);
+			ThisAgent's "Counter" = 0;
+			ThisAgent's "ActiveScript" = $Hero_Wander;
+		end
+End
+
+function spell_extra_value(agent thisagent) is integer
+
+declare
+	integer value;
+
+begin
+	if ($isspellavailable(thisagent,"energy_blast",1))
+		value += 10;
+
+	if ($isspellavailable(thisagent,"fire_blast",1))
+		value += 30;
+
+	if ($isspellavailable(thisagent,"fire_ball",1))
+		value += 30;
+
+	if ($isspellavailable(thisagent,"teleport",1))
+		value += 5;
+
+	if ($isspellavailable(thisagent,"resist_magic",1))
+		value += 5;
+
+	if ($isspellavailable(thisagent,"meteor_storm",1))
+		value += 30;
+
+	if ($isspellavailable(thisagent,"drain_life",1))
+		value += 30;
+
+	if ($isspellavailable(thisagent,"sun_scorch",1))
+		value += 30;
+
+	if (thisagent's "Title" == "Phantom")
+		begin
+			if ($isspellavailable(thisagent,"ice_lance",1))
+				value += #Phantom_Ice_Lance_Confidence;
+
+			if ($isspellavailable(thisagent,"frost_armor",1))
+				value += #Phantom_Frost_Armor_Confidence;
+
+			if (
+				$Phantom_Player_Max_Completed_Haunt_Level(thisagent) >= 2 &&
+				$isspellavailable(thisagent,"icy_touch",1)
+			)
+				value += #Phantom_Icy_Touch_Confidence;
+
+			if ($isspellavailable(thisagent,"call_to_grave",1))
+				value += #Phantom_Call_To_Grave_Confidence;
+
+			if ($isspellavailable(thisagent,"eternal_soul",1))
+				value += #Phantom_Eternal_Soul_Confidence;
+
+			if (
+				$Phantom_Player_Max_Completed_Haunt_Level(thisagent) >= 3 &&
+				$isspellavailable(thisagent,"endless_winter",1)
+			)
+				value += #Phantom_Endless_Winter_Confidence;
+		end
+
+	return value;
+end
+
+Function Potion_Check(agent thisagent, list potentials) is boolean
+
+Declare
+	integer intel_roll;
+
+Begin
+	If (thisagent's "Title" == "Phantom")
+		return False;
+
+	$DebugOut("Should I buy some Healing Potions?");
+
+	If ($GetAttribute(thisagent, #ATTRIB_NumHealingPotions) >= #Max_Heal_Potions)
+		return False;
+
+	If ($Total_Gold(thisagent) < #Heal_Potion_Price)
+		return False;
+
+	potentials = $List_Attribs(potentials, #ATTRIB_ResearchHealingPotions);
+
+	If ($ListSize(potentials) == 0)
+		return False;
+
+	intel_roll = $RandomNumber(30) + 1;
+	If ($GetAttribute(thisagent, #ATTRIB_Intelligence) > intel_roll)
+		begin
+			thisagent's "TaskName" = "visiting";
+			thisagent's "Target" = $Loyalty_Mod_Pick_Closest(thisagent, potentials);
+			$SpecifyIntent(thisagent, #Intent_purchasing_heal_potions);
+			return True;
+		end
+
+	return False;
+End
+
+Function Bazaar_Item_Check ( agent ThisAgent, integer item, list potentials, integer Item_cost ) is boolean
+
+Declare
+	integer Intel_Roll;
+
+Begin
+	$DebugOut ( "Should I buy item#", item, "?" );
+
+	If (ThisAgent's "Title" == "Phantom" && item == #Bazaar_Item_Four)
+		return False;
+
+	If ((thisagent's "title" == "cultist") && (item == #Bazaar_Item_Six))
+		return False;
+
+	If (item == #Bazaar_Item_Two)
+		If ((thisagent's "title" != "ranger") && (thisagent's "title" != "rogue") && (thisagent's "title" != "elf"))
+			return False;
+
+	If ($AgentHasInventoryItem(item, thisagent))
+		begin
+			$DebugOut ( "I already have item #", item, ", so I dont need one." );
+			return False;
+		end
+
+	If ($Total_Gold(ThisAgent) < Item_Cost)
+		begin
+			$DebugOut ("I don't have enough money for item #", item, "!");
+			return False;
+		end
+
+	Intel_Roll = $RandomNumber (30) + 1;
+
+	If ($GetAttribute(ThisAgent, #ATTRIB_Intelligence) > Intel_Roll)
+		begin
+			ThisAgent's "TaskName" = $Get_Bazaar_Task_Name(item);
+			ThisAgent's "Target" = $Loyalty_Mod_Pick_Closest(ThisAgent, Potentials);
+			$DebugOut ("Yes!");
+			$SetBuyerIntent(ThisAgent, item);
+			return True;
+		end
+
+	$DebugOut ("No!");
+	return False;
+End
+
+Function Heal( Agent ThisAgent, Agent Target, integer Healing_Amount )
+
+Declare
+
+Begin
+	If (Target's "Title" == "Phantom")
+		If (ThisAgent's "Title" != "Priestess")
+			return;
+
+	$Healing_Shared(Target, Healing_Amount);
+End
+
+Function Player_Heal( Agent Target, integer Healing_Amount )
+
+Declare
+
+Begin
+	If (Target's "Title" == "Phantom")
+		return;
+
+	$Healing_Shared(Target, Healing_Amount);
+End
+
+function Regeneration_elixer_effect ( agent thisagent, agent target )
+
+declare
+
+begin
+	If ($IsDead(thisagent))
+		return;
+
+	If (thisagent's "Title" == "Phantom")
+		begin
+			$DeleteInventoryItem(#Bazaar_Item_Four, ThisAgent);
+			$ForgetSpell(ThisAgent, "Regeneration_Elixer");
+			return;
+		end
+
+	$CreateEffector(thisagent, "Regeneration_elixer_effector", 0);
+	$CreateEffector(
+		thisagent,
+		"Regeneration_elixer_icon",
+		$GetSpellAttribute("Regeneration_Elixer", "effector_duration")
+	);
+	$AdjustAttribute(thisagent, #ATTRIB_HealingRateModifier, -5);
+	$SetAttribute(thisagent, #ATTRIB_HasEffectRegeneration, 1);
+
+	$DeleteInventoryItem(#Bazaar_Item_Four, ThisAgent);
+	$ForgetSpell(ThisAgent, "Regeneration_Elixer");
+end
+
+function Healing_Wind ()
+
+declare
+	agent palace,hero;
+	list heroes;
+
+begin
+	palace = $GetPlayerOnePalace();
+
+	$ListObjects(
+		palace,
+		"hero",
+		-1,
+		heroes,
+		#CheckSubTypes,
+		"hero",
+		#MyPlayer,
+		#NoHiddenMap,
+		#InsideOtherUnits
+	);
+
+	Foreach hero in heroes do
+		begin
+			If (hero's "Title" != "Phantom")
+				If ($IsDead(hero) == False)
+					If ($GetAttribute(hero, #ATTRIB_HasEffectRegeneration) != 1)
+						begin
+							$CreateEffector(hero, "Regeneration_elixer_effector", 0);
+							$CreateEffector(hero, "Regeneration_elixer_icon", 120000);
+							$AdjustAttribute(hero, #ATTRIB_HealingRateModifier, -3);
+							$SetAttribute(hero, #ATTRIB_HasEffectRegeneration, 1);
+						end
+		end
+end
+
+Function Eval_For_Healing(agent ThisAgent, integer Distance) is Agent
+
+Declare
+	list Heroes,Injured_Heroes;
+	agent Hero,BestAgent;
+	integer Percent_HP,Temp_Distance,Temp_Score,Best_Score;
+
+Begin
+	$ListObjects(ThisAgent, "Hero", Distance, Heroes);
+
+	If ($ListSize(Heroes) > 0)
+		begin
+			Foreach Hero in Heroes do
+				begin
+					If (Hero's "Title" != "Phantom")
+						If ($GetAttribute(Hero, #ATTRIB_HP) < $GetAttribute(Hero, #ATTRIB_MaxHP))
+							If ($GetPlayerTeamNumber(Hero) == $GetPlayerTeamNumber(ThisAgent))
+								Injured_Heroes << Hero;
+							Else If ($RandomNumber(100) > ThisAgent's "Loyalty")
+								Injured_Heroes << Hero;
+				end
+
+			If ($ListSize(Injured_Heroes) > 0)
+				begin
+					Best_Score = 5000000;
+					Foreach Hero in Injured_Heroes do
+						begin
+							Temp_Distance = $DistanceBetweenAgents(ThisAgent, Hero);
+							Percent_HP = ($GetAttribute(Hero, #ATTRIB_HP) * 100) /
+								$GetAttribute(Hero, #ATTRIB_MaxHP);
+							Temp_Score = (Temp_Distance / 10) * Percent_HP;
+							If (Temp_Score < Best_Score)
+								begin
+									Best_Score = Temp_Score;
+									BestAgent = Hero;
+								end
+						end
+
+					If (Best_Score < ($GetAttribute(ThisAgent, #ATTRIB_Intelligence) * 150))
+						return BestAgent;
+				end
+		end
+
+	return $NullAgent();
+End
+
+function Healer_Heal_Effect(agent thisagent, agent target)
+
+declare
+	agent AIRootAgent;
+	integer Healing;
+
+begin
+	If ($isdead(target))
+		return;
+
+	If (target's "Title" == "Phantom")
+		begin
+			$Reset_Tasks(thisagent);
+			return;
+		end
+
+	If ($isdead(thisagent) == False)
+		begin
+			$CreateEffector(target, "healer_healing_effector", 0);
+			AIRootAgent = $RetrieveAgent("GplAIRoot");
+
+			If ($HasAttribute("Deathmatch_Rules", AIRootAgent))
+				begin
+					If (AIRootAgent's "Deathmatch_Rules" == True)
+						begin
+							Healing = #Deathmatch_Agrella_Healing_Multiplier *
+								$GetAttribute(ThisAgent, #ATTRIB_ExperienceLevel);
+							If (Healing > #Deathmatch_Agrella_Healing_Cap)
+								Healing = #Deathmatch_Agrella_Healing_Cap;
+						end
+					Else
+						Healing = #Agrella_Healing_Multiplier *
+							$GetAttribute(ThisAgent, #ATTRIB_ExperienceLevel);
+				end
+			Else
+				Healing = #Agrella_Healing_Multiplier *
+					$GetAttribute(ThisAgent, #ATTRIB_ExperienceLevel);
+
+			$Heal(ThisAgent, Target, Healing);
+			If (Target's "BackScript" == $Use_Building_Safe)
+				If ($haslowHP(Target) == False)
+					$Reset_Tasks(Target);
+		end
+end
+
+function Drain_Life_Hit(agent thisagent, agent target)
+
+declare
+	integer Effector_Duration,Healing,Healing_Needed,Temp_Healing_Needed,HP,MaxHP;
+	list Phantoms,My_Skeletons;
+	agent Phantom,Best_Phantom,Skeleton,Best_Skeleton;
+
+begin
+	If ($isdead(target))
+		return;
+	If ($isdead(thisagent))
+		return;
+
+	Effector_Duration = $GetSpellAttribute("Drain_Life", "effector_duration");
+	Healing = 5;
+	If ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) >= 2)
+		Healing = 10;
+
+	If (Target's "Type" != "Building" && Target's "Type" != "Lair")
+		begin
+			If ($GetAttribute(ThisAgent, #ATTRIB_HP) < $GetAttribute(ThisAgent, #ATTRIB_MaxHP))
+				begin
+					$CreateEffector(ThisAgent, "life_drain_effector2", Effector_Duration);
+					$Heal(ThisAgent, ThisAgent, Healing);
+				end
+			Else
+				begin
+					Healing_Needed = 0;
+					$ListObjects(
+						ThisAgent,
+						"Hero",
+						$GetAttribute(ThisAgent, #ATTRIB_SightRange),
+						Phantoms
+					);
+					Phantoms = $ListTitles(Phantoms, "Phantom");
+
+					Foreach Phantom in Phantoms do
+						begin
+							If ($GetPlayerTeamNumber(Phantom) == $GetPlayerTeamNumber(ThisAgent))
+								begin
+									HP = $GetAttribute(Phantom, #ATTRIB_HP);
+									MaxHP = $GetAttribute(Phantom, #ATTRIB_MaxHP);
+									If (HP < MaxHP)
+										begin
+											Temp_Healing_Needed = MaxHP - HP;
+											If (Temp_Healing_Needed > Healing_Needed)
+												begin
+													Healing_Needed = Temp_Healing_Needed;
+													Best_Phantom = Phantom;
+												end
+										end
+								end
+						end
+
+					If ($IsValidGamePiece(Best_Phantom))
+						begin
+							$CreateEffector(Best_Phantom, "life_drain_effector2", Effector_Duration);
+							$Heal(ThisAgent, Best_Phantom, Healing);
+						end
+					Else
+						begin
+							Healing_Needed = 0;
+							$ListObjects(
+								ThisAgent,
+								"Hero",
+								$GetAttribute(ThisAgent, #ATTRIB_SightRange),
+								My_Skeletons,
+								#CheckSubtypes,
+								"Controlled"
+							);
+							My_Skeletons = $ListTitles(My_Skeletons, "Skeleton");
+
+							Foreach Skeleton in My_Skeletons do
+								begin
+									HP = $GetAttribute(Skeleton, #ATTRIB_HP);
+									MaxHP = $GetAttribute(Skeleton, #ATTRIB_MaxHP);
+									If (HP < MaxHP)
+										begin
+											Temp_Healing_Needed = MaxHP - HP;
+											If (Temp_Healing_Needed > Healing_Needed)
+												begin
+													Healing_Needed = Temp_Healing_Needed;
+													Best_Skeleton = Skeleton;
+												end
+										end
+								end
+
+							If ($IsValidGamePiece(Best_Skeleton))
+								begin
+									$CreateEffector(Best_Skeleton, "life_drain_effector2", Effector_Duration);
+									$Heal(ThisAgent, Best_Skeleton, Healing);
+								end
+						end
+				end
+		end
+
+	$CreateEffector(Target, "life_drain_effector", Effector_Duration);
+	$Spell_Attack(ThisAgent, Target, 15);
+end
+
+Function WizGuild_Check(agent ThisAgent, string Equipment, integer Bonus, list WizGuilds) is boolean
+
+Declare
+	agent WizGuild;
+	list Potentials;
+	integer Intel_Roll,Gold_Needed;
+
+Begin
+	If (ThisAgent's "Title" == "Phantom" && Equipment == "Armor")
+		Bonus = $Phantom_cowl_magic_level(ThisAgent);
+
+	If (Bonus >= 3)
+		return False;
+
+	If (Bonus == 0)
+		Gold_Needed = #Cost_Per_Magic_Enchantment1;
+	If (Bonus == 1)
+		Gold_Needed = #Cost_Per_Magic_Enchantment2;
+	If (Bonus == 2)
+		Gold_Needed = #Cost_Per_Magic_Enchantment3;
+
+	If ($Total_Gold(ThisAgent) < Gold_Needed)
+		return False;
+
+	If ($ListSize(WizGuilds) == 0)
+		return False;
+
+	Foreach WizGuild in WizGuilds do
+		begin
+			If (WizGuild's "Level" > Bonus)
+				Potentials << WizGuild;
+		end
+
+	If ($ListSize(Potentials) == 0)
+		return False;
+
+	Intel_Roll = $RandomNumber(30) + 1;
+	If ($GetAttribute(ThisAgent, #ATTRIB_Intelligence) > Intel_Roll)
+		begin
+			If (Equipment == "Weapon")
+				ThisAgent's "Task_Number" = #ATTRIB_Weapon_Magic_Bonus;
+			Else
+				ThisAgent's "Task_Number" = #ATTRIB_Armor_Magic_Bonus;
+
+			ThisAgent's "Target" = $Loyalty_Mod_Pick_Closest(ThisAgent, Potentials);
+			ThisAgent's "TaskName" = "visiting";
+			return True;
+		end
+
+	return False;
+End
+
+Function Obtain_Upgrade(agent ThisAgent)
+
+Declare
+	agent ThisBuilding;
+	integer What_To_Upgrade,Total_Gold,Gold,Upgrade,Mult,Old_Upgrade,Parry_Increase;
+
+Begin
+	ThisBuilding = ThisAgent's "Target";
+	Total_Gold = $Total_Gold(ThisAgent);
+	What_To_Upgrade = ThisAgent's "Task_Number";
+	Old_Upgrade = $GetAttribute(ThisAgent, What_To_Upgrade);
+	$SetThreadInterval(ThisAgent's "ActiveScript", #Normal_Cycle);
+	Mult = #armor_multiplier;
+
+	If (What_To_Upgrade == #ATTRIB_Armor_Struct_Bonus)
+		begin
+			If (Old_Upgrade == 0 && Total_Gold >= #Cost_Per_Struct_Upgrade1 * Mult &&
+				$GetAttribute(ThisBuilding, #ATTRIB_ResearchArmorLevel_2) != 0)
+				begin
+					Total_Gold -= #Cost_Per_Struct_Upgrade1 * Mult;
+					Gold += #Cost_Per_Struct_Upgrade1 * Mult;
+					Upgrade = 1;
+				end
+
+			If (Old_Upgrade <= 1 && Total_Gold >= #Cost_Per_Struct_Upgrade2 * Mult &&
+				$GetAttribute(ThisBuilding, #ATTRIB_ResearchArmorLevel_3) != 0)
+				begin
+					Total_Gold -= #Cost_Per_Struct_Upgrade2 * Mult;
+					Gold += #Cost_Per_Struct_Upgrade2 * Mult;
+					Upgrade = 2;
+				end
+
+			If (Old_Upgrade <= 2 && Total_Gold >= #Cost_Per_Struct_Upgrade3 * Mult &&
+				$GetAttribute(ThisBuilding, #ATTRIB_ResearchArmorLevel_4) != 0)
+				begin
+					Gold += #Cost_Per_Struct_Upgrade3 * Mult;
+					Upgrade = 3;
+				end
+		end
+	Else
+		begin
+			If (Old_Upgrade == 0 && Total_Gold >= #Cost_Per_Struct_Upgrade1 &&
+				$GetAttribute(ThisBuilding, #ATTRIB_ResearchWeaponLevel_2) != 0)
+				begin
+					Total_Gold -= #Cost_Per_Struct_Upgrade1;
+					Gold += #Cost_Per_Struct_Upgrade1;
+					Upgrade = 1;
+				end
+
+			If (Old_Upgrade <= 1 && Total_Gold >= #Cost_Per_Struct_Upgrade2 &&
+				$GetAttribute(ThisBuilding, #ATTRIB_ResearchWeaponLevel_3) != 0)
+				begin
+					Total_Gold -= #Cost_Per_Struct_Upgrade2;
+					Gold += #Cost_Per_Struct_Upgrade2;
+					Upgrade = 2;
+				end
+
+			If (Old_Upgrade <= 2 && Total_Gold >= #Cost_Per_Struct_Upgrade3 &&
+				$GetAttribute(ThisBuilding, #ATTRIB_ResearchWeaponLevel_4) != 0)
+				begin
+					Gold += #Cost_Per_Struct_Upgrade3;
+					Upgrade = 3;
+				end
+		end
+
+	If (Upgrade > 0)
+		begin
+			$Spend_Gold(ThisAgent, ThisBuilding, Gold);
+			$SetAttribute(ThisAgent, What_To_Upgrade, Upgrade);
+
+			If (ThisAgent's "Title" == "Phantom")
+				begin
+					If (What_To_Upgrade == #ATTRIB_Weapon_Struct_Bonus)
+						begin
+							Parry_Increase = (Upgrade - Old_Upgrade) * 5;
+							$MagicalAdjustAttribute(ThisAgent, #ATTRIB_Parry, Parry_Increase);
+							$Phantom_sync_icerod_item(ThisAgent);
+						end
+					Else
+						$Phantom_sync_cowl_item(ThisAgent);
+				end
+		end
+
+	ThisAgent's "ActiveScript" = $Done_Enhancing_Equipment;
+End
+
+Function Obtain_Enchantment(agent ThisAgent)
+
+Declare
+	agent ThisBuilding;
+	integer What_To_Upgrade,Total_Gold,Gold,Upgrade,Bldg_Level,Current_Upgrade,Stored_Upgrade;
+
+Begin
+	ThisBuilding = ThisAgent's "Target";
+	Total_Gold = $Total_Gold(ThisAgent);
+	What_To_Upgrade = ThisAgent's "Task_Number";
+	Current_Upgrade = $GetAttribute(ThisAgent, What_To_Upgrade);
+	If (ThisAgent's "Title" == "Phantom" &&
+		What_To_Upgrade == #ATTRIB_Armor_Magic_Bonus)
+		Current_Upgrade = $Phantom_cowl_magic_level(ThisAgent);
+
+	ThisAgent's "Task_Number" = 0;
+	$SetThreadInterval(ThisAgent's "ActiveScript", #Normal_Cycle);
+	Bldg_Level = ThisBuilding's "Level";
+
+	If (Current_Upgrade == 0 && Total_Gold >= #Cost_Per_Magic_Enchantment1)
+		begin
+			Total_Gold -= #Cost_Per_Magic_Enchantment1;
+			Gold += #Cost_Per_Magic_Enchantment1;
+			Upgrade = 1;
+		end
+
+	If (Current_Upgrade <= 1 && Total_Gold >= #Cost_Per_Magic_Enchantment2 && Bldg_Level > 1)
+		begin
+			Total_Gold -= #Cost_Per_Magic_Enchantment2;
+			Gold += #Cost_Per_Magic_Enchantment2;
+			Upgrade = 2;
+		end
+
+	If (Current_Upgrade <= 2 && Total_Gold >= #Cost_Per_Magic_Enchantment3 && Bldg_Level > 2)
+		begin
+			Gold += #Cost_Per_Magic_Enchantment3;
+			Upgrade = 3;
+		end
+
+	If (Upgrade > 0)
+		begin
+			$Spend_Gold(ThisAgent, ThisBuilding, Gold);
+			Stored_Upgrade = Upgrade;
+			If (ThisAgent's "Title" == "Phantom" &&
+				What_To_Upgrade == #ATTRIB_Armor_Magic_Bonus &&
+				ThisAgent's "Reborn_Counter" == 1)
+				Stored_Upgrade += 10000;
+			$SetAttribute(ThisAgent, What_To_Upgrade, Stored_Upgrade);
+
+			If (ThisAgent's "Title" == "Phantom")
+				begin
+					If (What_To_Upgrade == #ATTRIB_Weapon_Magic_Bonus)
+						$Phantom_sync_icerod_item(ThisAgent);
+					Else
+						$Phantom_sync_cowl_item(ThisAgent);
+				end
+		end
+
+	ThisAgent's "ActiveScript" = $Done_Enhancing_Equipment;
+End
+
+function attack_object(agent thisagent)
+
+declare
+	integer targetrange,attackrange;
+	agent target;
+	string spell_name;
+	boolean casting;
+
+begin
+	target = thisagent's "target";
+
+	If ($notvalid(target))
+		$reset_tasks(thisagent);
+	Else If ($haslowHP(thisagent))
+		$heal_self(thisagent);
+	Else
+		begin
+			spell_name = $getbestspell(thisagent, #list_attack);
+			If (spell_name == "nothing")
+				begin
+					attackrange = $getattribute(thisagent, #ATTRIB_maxattackrange);
+					casting = False;
+				end
+			Else
+				begin
+					If (thisagent's "Title" == "Phantom")
+						attackrange = $Phantom_effective_casting_range(thisagent);
+					Else
+						attackrange = thisagent's "castingrange";
+					casting = True;
+				end
+
+			targetrange = $distanceBetweenAgents(thisagent, target);
+			If (targetrange > attackrange)
+				begin
+					thisagent's "destination" = $locationof(target);
+					thisagent's "activeScript" = $travel_to;
+					thisagent's "backScript" = $attack_object;
+					$move(thisagent, target);
+				end
+			Else If (($listsize(thisagent's "hostiles") > 0) &&
+				((target's "type" == "building") || (target's "type" == "lair")))
+				(thisagent's "evaluationscript")(thisagent);
+			Else If ($Hero_Peasant_check(thisagent) == False)
+				begin
+					If (casting)
+						begin
+							$PlaySound(ThisAgent, "VFX_CAST_SPELL1");
+							$castspell(thisagent, spell_name, target, "");
+						end
+					Else
+						$performAction(thisagent, thisagent's "attack_action", target);
+				end
+		end
+end
+
+function getattackrange(agent thisagent) is integer
+
+declare
+	integer arrivedist;
+
+begin
+	If ($getbestspell(thisagent, #List_attack) == "nothing")
+		arrivedist = $getattribute(thisagent, #ATTRIB_MaxAttackRange);
+	Else If (thisagent's "Title" == "Phantom")
+		arrivedist = $Phantom_effective_casting_range(thisagent);
+	Else
+		arrivedist = thisagent's "castingrange";
+
+	return arrivedist;
+end
+
+function Call_To_Grave_Check(agent thisagent) is integer
+
+declare
+	coordinate destination;
+
+begin
+	if (thisagent's "taskname" != "go_home")
+		return 0;
+
+	if (thisagent's "target" != thisagent's "home")
+		return 0;
+
+	if (thisagent's "Target" == thisagent)
+		destination = thisagent's "destination";
+	else
+		if ($isvalidgamepiece(thisagent's "target"))
+			destination = $locationof(thisagent's "target");
+		else
+			return 0;
+
+	if ($distancebetweencoords(destination,$locationof(thisagent)) > #Phantom_Call_To_Grave_Min_Distance)
+		return 1;
+
+	return 0;
+end
+
+function Call_To_Grave_Effect(agent thisagent, agent target)
+
+declare
+	integer theTimePeriod;
+
+begin
+	theTimePeriod = $GetSpellAttribute("call_to_grave","effector_duration");
+	$createeffector(thisagent,"call_to_grave_effector",theTimePeriod);
+	thisagent's "teleportScript" = $Call_To_Grave_DoMove;
+	$RunThread(thisagent's "teleportScript",theTimePeriod/2,thisagent,#Phantom_Call_To_Grave_Range);
+end
+
+function Call_To_Grave_DoMove(agent thisagent, integer theRange)
+
+declare
+
+begin
+	If ($IsDead(ThisAgent))
+		return;
+
+	if (thisagent's "Target" == thisagent)
+		$TeleportToPoint(thisagent,theRange,thisagent's "destination");
+	else
+		if ($isvalidgamepiece(thisagent's "target"))
+			$TeleportToUnit(thisagent,theRange,thisagent's "Target",thisagent's "castingrange");
+end
+
+function flee_part_II(agent thisagent, list places, integer intent)
+
+declare
+	agent go_here;
+
+begin
+	if (thisagent's "Title" == "Phantom" && $isvalidgamepiece(thisagent's "home"))
+		go_here = thisagent's "home";
+	else if ($listsize(places) > 0)
+		go_here = $pick_closest(thisagent,places);
+	else
+		begin
+			$go_berserk(thisagent);
+			return;
+		end
+
+	if (go_here == thisagent's "home")
+		thisagent's "taskname" = "go_home";
+	else
+		thisagent's "taskname" = "visiting";
+
+	$SpecifyIntent(ThisAgent,intent);
+	thisagent's "Activescript" = $use_building_safe;
+	thisagent's "backscript" = $use_building_safe;
+	thisagent's "target" = go_here;
+	thisagent's "destination" = $locationof(thisagent's "target");
+
+	$createeffector(thisagent,"thought_bubble_danger",#danger_bubble_time);
+	$say(thisagent,"VFX_FLEE_COMBAT");
+end
+
+function Phantom_tree (agent thisagent)
+
+declare
+
+begin
+	$DebugOut("Phantom deciding");
+
+	If ($Phantom_Try_Frost_Armor(thisagent) == False)
+		$Wizard_tree(thisagent);
+end
+
+function Phantom_Hero_Birth (agent thisagent)
+
+declare
+	agent Home;
+
+begin
+	$hero_birth(thisagent);
+	Home = thisagent's "home";
+	If ($isvalidgamepiece(Home))
+		If (Home's "title" == "Phantoms_Haunt")
+			If ($HasAttribute("PhantomRecruitmentVoice", thisagent) == False)
+				begin
+					$AddAttribute(
+						thisagent,
+						"PhantomRecruitmentVoice",
+						"function",
+						$Phantom_Recruitment_Voice
+					);
+					If ($RandomNumber(100) + 1 <= 20)
+						$RunThread(
+							thisagent's "PhantomRecruitmentVoice",
+							250,
+							thisagent
+						);
+				end
+	$Phantom_grant_starter_items(thisagent);
+	$LearnSpell(thisagent, "ice_lance");
+	$ForgetSpell(thisagent, "icy_touch");
+	$ForgetSpell(thisagent, "endless_winter");
+	$Phantom_Start_Player_Perk_Watch(thisagent);
+	thisagent's "Reborn_Counter" = 0;
+	thisagent's "QuestScript" = $Phantom_Frost_Armor_Watch;
+	$NewThread(thisagent's "QuestScript", 100, thisagent);
+end
+
+function Phantom_Recruitment_Voice(agent thisagent)
+
+declare
+
+begin
+	$PlaySound(thisagent, "Phantom_Hired", "Begin");
+end
+
+function Phantom_has_cowl_item(agent thisagent) is boolean
+
+declare
+	integer item_id;
+
+begin
+	If ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent))
+		return True;
+
+	item_id = 83;
+	While (item_id <= 97) do
+		begin
+			If ($AgentHasInventoryItem(item_id, thisagent))
+				return True;
+			item_id += 1;
+		end
+
+	return False;
+end
+
+function Phantom_has_icerod_item(agent thisagent) is boolean
+
+declare
+	integer item_id;
+
+begin
+	If ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent))
+		return True;
+
+	item_id = 98;
+	While (item_id <= 112) do
+		begin
+			If ($AgentHasInventoryItem(item_id, thisagent))
+				return True;
+			item_id += 1;
+		end
+
+	return False;
+end
+
+function Phantom_remove_cowl_items(agent thisagent)
+
+declare
+	integer item_id;
+
+begin
+	While ($AgentHasInventoryItem(#Phantom_Item_FrozenCowl, thisagent)) do
+		$DeleteInventoryItem(#Phantom_Item_FrozenCowl, thisagent);
+
+	item_id = 83;
+	While (item_id <= 97) do
+		begin
+			While ($AgentHasInventoryItem(item_id, thisagent)) do
+				$DeleteInventoryItem(item_id, thisagent);
+			item_id += 1;
+		end
+end
+
+function Phantom_remove_icerod_items(agent thisagent)
+
+declare
+	integer item_id;
+
+begin
+	While ($AgentHasInventoryItem(#Phantom_Item_BlackIcerod, thisagent)) do
+		$DeleteInventoryItem(#Phantom_Item_BlackIcerod, thisagent);
+
+	item_id = 98;
+	While (item_id <= 112) do
+		begin
+			While ($AgentHasInventoryItem(item_id, thisagent)) do
+				$DeleteInventoryItem(item_id, thisagent);
+			item_id += 1;
+		end
+end
+
+function Phantom_cowl_magic_level(agent thisagent) is integer
+
+declare
+	integer magic_level;
+
+begin
+	magic_level = $GetAttribute(thisagent, #ATTRIB_Armor_Magic_Bonus);
+	If (thisagent's "Reborn_Counter" == 1)
+		magic_level -= 10000;
+
+	If (magic_level < 0)
+		magic_level = 0;
+	If (magic_level > 3)
+		magic_level = 3;
+
+	return magic_level;
+end
+
+function Phantom_effective_casting_range(agent thisagent) is integer
+
+declare
+	integer magic_level;
+
+begin
+	magic_level = $GetAttribute(thisagent, #ATTRIB_Weapon_Magic_Bonus);
+	If (magic_level < 0)
+		magic_level = 0;
+	If (magic_level > 3)
+		magic_level = 3;
+
+	return 190 + (magic_level * 10);
+end
+
+function Phantom_sync_cowl_item(agent thisagent)
+
+declare
+	integer struct_level,magic_level,combination,item_id;
+
+begin
+	struct_level = $GetAttribute(thisagent, #ATTRIB_Armor_Struct_Bonus);
+	If (struct_level < 0)
+		struct_level = 0;
+	If (struct_level > 3)
+		struct_level = 3;
+	magic_level = $Phantom_cowl_magic_level(thisagent);
+	combination = (struct_level * 4) + magic_level;
+
+	If (combination == 0)
+		item_id = 80;
+	Else
+		item_id = 82 + combination;
+
+	$Phantom_remove_cowl_items(thisagent);
+	$CreateNewInventoryItem(item_id, thisagent, #Allow_Cloned_Quest_Item);
+end
+
+function Phantom_sync_icerod_item(agent thisagent)
+
+declare
+	integer struct_level,magic_level,combination,item_id;
+
+begin
+	struct_level = $GetAttribute(thisagent, #ATTRIB_Weapon_Struct_Bonus);
+	If (struct_level < 0)
+		struct_level = 0;
+	If (struct_level > 3)
+		struct_level = 3;
+	magic_level = $GetAttribute(thisagent, #ATTRIB_Weapon_Magic_Bonus);
+	If (magic_level < 0)
+		magic_level = 0;
+	If (magic_level > 3)
+		magic_level = 3;
+	combination = (struct_level * 4) + magic_level;
+
+	If (combination == 0)
+		item_id = 81;
+	Else
+		item_id = 97 + combination;
+
+	$Phantom_remove_icerod_items(thisagent);
+	$CreateNewInventoryItem(item_id, thisagent, #Allow_Cloned_Quest_Item);
+end
+
+function Phantom_sync_equipment_items(agent thisagent)
+
+declare
+
+begin
+	$Phantom_sync_cowl_item(thisagent);
+	$Phantom_sync_icerod_item(thisagent);
+end
+
+function Phantom_grant_starter_items (agent thisagent)
+
+declare
+
+begin
+	If ($isdead(thisagent))
+		return;
+
+	If ($Phantom_has_cowl_item(thisagent) == False)
+		begin
+			$CreateNewInventoryItem(#Phantom_Item_FrozenCowl, thisagent, #Allow_Cloned_Quest_Item);
+			$AdjustAttribute (thisagent, #ATTRIB_Armor_Basic_Damage, 2);
+		end
+
+	If ($Phantom_has_icerod_item(thisagent) == False)
+		begin
+			$CreateNewInventoryItem(#Phantom_Item_BlackIcerod, thisagent, #Allow_Cloned_Quest_Item);
+			$AdjustAttribute(thisagent, #ATTRIB_Weapon_Basic_Damage, 8);
+			$MagicalAdjustAttribute (thisagent, #ATTRIB_Parry, 5);
+		end
+end
+
+function Ice_Lance_Cast(agent thisagent, agent target)
+
+declare
+
+begin
+	If ($isdead(thisagent))
+		return;
+
+	If ($isdead(target))
+		return;
+
+	$createmissile("ice_lance_missile", thisagent, target);
+end
+
+function Phantom_Eternal_Soul_Active(agent thisagent) is boolean
+
+declare
+
+begin
+	If ($NotValid(thisagent))
+		return False;
+
+	If ($IsValidGamePiece(thisagent) == False)
+		return False;
+
+	If ($HasAttribute("PhantomEternalSoulActive", thisagent) == False)
+		return False;
+
+	If (thisagent's "PhantomEternalSoulActive" == False)
+		return False;
+
+	return True;
+end
+
+function Eternal_Soul_Begin(agent thisagent, agent target)
+
+declare
+	integer base_max_hp, current_hp, bonus_max_hp, boosted_max_hp, boosted_hp;
+
+begin
+	If ($isdead(thisagent))
+		return;
+
+	If ($HasAttribute("PhantomEternalSoulActive", thisagent) == False)
+		begin
+			$AddAttribute(thisagent, "PhantomEternalSoulActive", "boolean", False);
+			$AddAttribute(thisagent, "PhantomEternalSoulMaxHPBonus", "integer", 0);
+		end
+
+	If (thisagent's "PhantomEternalSoulActive")
+		return;
+
+	base_max_hp = $GetAttribute(thisagent, #ATTRIB_MaxHP);
+	current_hp = $GetAttribute(thisagent, #ATTRIB_HP);
+	bonus_max_hp = (base_max_hp * 30) / 100;
+	If (bonus_max_hp < 1)
+		bonus_max_hp = 1;
+
+	boosted_max_hp = base_max_hp + bonus_max_hp;
+	boosted_hp = ((current_hp * boosted_max_hp) + (base_max_hp / 2)) / base_max_hp;
+
+	thisagent's "PhantomEternalSoulActive" = True;
+	thisagent's "PhantomEternalSoulMaxHPBonus" = bonus_max_hp;
+	$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 15);
+	$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, 15);
+	$AdjustAttribute(thisagent, #ATTRIB_MaxHP, bonus_max_hp);
+	$SetAttribute(thisagent, #ATTRIB_HP, boosted_hp);
+	$CreateEffector(thisagent, "eternal_soul_icon", $GetSpellAttribute("eternal_soul", "effector_duration"));
+	$CreateEffector(thisagent, "eternal_soul_effector", 0);
+end
+
+function Eternal_Soul_End(agent thisagent)
+
+declare
+	integer boosted_max_hp, current_hp, bonus_max_hp, base_max_hp, restored_hp;
+
+begin
+	If ($HasAttribute("PhantomEternalSoulActive", thisagent) == False)
+		return;
+
+	If (thisagent's "PhantomEternalSoulActive" == False)
+		return;
+
+	thisagent's "PhantomEternalSoulActive" = False;
+	bonus_max_hp = thisagent's "PhantomEternalSoulMaxHPBonus";
+	thisagent's "PhantomEternalSoulMaxHPBonus" = 0;
+
+	$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, -15);
+	$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, -15);
+
+	boosted_max_hp = $GetAttribute(thisagent, #ATTRIB_MaxHP);
+	base_max_hp = boosted_max_hp - bonus_max_hp;
+	If (base_max_hp < 1)
+		base_max_hp = 1;
+
+	current_hp = $GetAttribute(thisagent, #ATTRIB_HP);
+	$AdjustAttribute(thisagent, #ATTRIB_MaxHP, -bonus_max_hp);
+
+	If ($IsDead(thisagent))
+		return;
+
+	restored_hp = ((current_hp * base_max_hp) + (boosted_max_hp / 2)) / boosted_max_hp;
+	If (restored_hp > base_max_hp)
+		restored_hp = base_max_hp;
+	$SetAttribute(thisagent, #ATTRIB_HP, restored_hp);
+end
+
+function Ice_Lance_Hit(agent thisagent, agent target)
+
+declare
+
+begin
+	$PlaySound(target, "Energy_Blast", "Attack");
+	$spell_attack(thisagent, target, 8);
+
+	If ($isdead(target))
+		return;
+
+	$createeffector(target, "ice_lance_hit_effector", 0);
+
+	If (target's "Type" == "Building" || target's "Type" == "Lair")
+		return;
+
+	$Phantom_Apply_Chill(thisagent, target, $GetSpellAttribute("ice_lance", "effector_duration"));
+end
+
+function Phantom_Apply_Chill(agent source, agent target, integer duration)
+
+declare
+	integer desired_tier;
+
+begin
+	desired_tier = 1;
+	If ($Phantom_Eternal_Soul_Active(source))
+		desired_tier = 2;
+
+	$Phantom_Apply_Chill_Tier(target, duration, desired_tier);
+end
+
+function Phantom_Apply_Chill_Tier(agent target, integer duration, integer desired_tier)
+
+declare
+
+begin
+	If ($isdead(target))
+		return;
+
+	If (target's "Type" == "Building" || target's "Type" == "Lair")
+		return;
+
+	If ($HasAttribute("PhantomChillRemaining", target) == False)
+		begin
+			$AddAttribute(target, "PhantomChillRemaining", "integer", duration);
+			$AddAttribute(target, "PhantomChillActive", "boolean", False);
+			$AddAttribute(target, "PhantomChillTier", "integer", 0);
+			$AddAttribute(target, "PhantomChillWatch", "function", $Phantom_Chill_Watch);
+		end
+	If ($HasAttribute("PhantomChillIconDelay", target) == False)
+		$AddAttribute(target, "PhantomChillIconDelay", "integer", 0);
+
+	If (target's "PhantomChillActive" == False)
+		begin
+			target's "PhantomChillActive" = True;
+			target's "PhantomChillTier" = desired_tier;
+			target's "PhantomChillRemaining" = duration;
+			If (desired_tier == 2)
+				begin
+					$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 100);
+					$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 1000);
+				end
+			Else
+				begin
+					$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
+					$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
+				end
+		end
+	Else If (desired_tier == 2)
+		begin
+			If (target's "PhantomChillTier" == 1)
+				begin
+					$AdjustAttribute(target, #ATTRIB_MovementRateModifier, 50);
+					$AdjustAttribute(target, #ATTRIB_ActionRateModifier, 500);
+				end
+			target's "PhantomChillTier" = 2;
+			target's "PhantomChillRemaining" = duration;
+		end
+	Else
+		begin
+			If (target's "PhantomChillTier" != 2)
+				begin
+					target's "PhantomChillTier" = 1;
+					target's "PhantomChillRemaining" = duration;
+				end
+		end
+
+	$Phantom_Chill_Sync_Icon(target);
+
+	If ($IsRunning(target's "PhantomChillWatch") == False)
+		$NewThread(target's "PhantomChillWatch", 100, target);
+end
+
+function Phantom_Chill_Sync_Icon(agent target)
+
+declare
+
+begin
+	If (target's "PhantomChillIconDelay" > 0)
+		return;
+
+	If (target's "PhantomChillTier" == 2)
+		begin
+			If ($CheckEffector(target, "ice_lance_chill_icon"))
+				begin
+					$DeleteEffector(target, "ice_lance_chill_icon");
+					target's "PhantomChillIconDelay" = 200;
+					return;
+				end
+			If ($CheckEffector(target, "ice_lance_empowered_chill_icon") == False)
+				$CreateEffector(target, "ice_lance_empowered_chill_icon", 1, "infinite");
+		end
+	Else
+		begin
+			If ($CheckEffector(target, "ice_lance_empowered_chill_icon"))
+				begin
+					$DeleteEffector(target, "ice_lance_empowered_chill_icon");
+					target's "PhantomChillIconDelay" = 200;
+					return;
+				end
+			If ($CheckEffector(target, "ice_lance_chill_icon") == False)
+				$CreateEffector(target, "ice_lance_chill_icon", 1, "infinite");
+		end
+end
+
+function Phantom_Chill_Watch(agent thisagent)
+
+declare
+
+begin
+	If ($IsValidGamePiece(thisagent) == False)
+		return;
+
+	If (thisagent's "PhantomChillActive" == False)
+		begin
+			$KillThread(thisagent's "PhantomChillWatch");
+			return;
+		end
+
+	If (thisagent's "PhantomChillIconDelay" > 0)
+		thisagent's "PhantomChillIconDelay" -= 100;
+	$Phantom_Chill_Sync_Icon(thisagent);
+
+	thisagent's "PhantomChillRemaining" -= 100;
+	If (thisagent's "PhantomChillRemaining" > 0)
+		return;
+
+	$KillThread(thisagent's "PhantomChillWatch");
+	thisagent's "PhantomChillActive" = False;
+	If (thisagent's "PhantomChillTier" == 2)
+		begin
+			$AdjustAttribute(thisagent, #ATTRIB_MovementRateModifier, -100);
+			$AdjustAttribute(thisagent, #ATTRIB_ActionRateModifier, -1000);
+		end
+	Else
+		begin
+			$AdjustAttribute(thisagent, #ATTRIB_MovementRateModifier, -50);
+			$AdjustAttribute(thisagent, #ATTRIB_ActionRateModifier, -500);
+		end
+	thisagent's "PhantomChillTier" = 0;
+	thisagent's "PhantomChillIconDelay" = 0;
+	If ($CheckEffector(thisagent, "ice_lance_chill_icon"))
+		$DeleteEffector(thisagent, "ice_lance_chill_icon");
+	If ($CheckEffector(thisagent, "ice_lance_empowered_chill_icon"))
+		$DeleteEffector(thisagent, "ice_lance_empowered_chill_icon");
+end
+
+function Phantom_Hero_Death(agent thisagent)
+
+declare
+
+begin
+	If (thisagent's "Reborn_Counter" == 1)
+		begin
+			$DeleteEffector(thisagent, "frost_armor_effector");
+			$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);
+			$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, -10000);
+		end
+	thisagent's "Reborn_Counter" = 0;
+	$Phantom_remove_starter_items(thisagent);
+	$gravestone(thisagent);
+end
+
+function Phantom_remove_starter_items(agent thisagent)
+
+declare
+
+begin
+	$Phantom_remove_cowl_items(thisagent);
+	$Phantom_remove_icerod_items(thisagent);
+
+	While ($AgentHasInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent)) do
+		begin
+			$DeleteInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent);
+		end
+end
+
+Function Hero_Drop_Quest_Items (agent ThisAgent)
+
+Declare
+	integer WhatItem;
+	string agentType;
+
+Begin
+	If (ThisAgent's "Title" == "Phantom")
+		begin
+			If ($isdead(ThisAgent) == False)
+				$KillThread(ThisAgent's "QuestScript");
+			$Phantom_remove_starter_items(ThisAgent);
+		end
+
+	WhatItem = -1;
+
+	While ($AgentHasInventoryItem(WhatItem, ThisAgent)) do
+		begin
+			$DeleteInventoryItem(WhatItem, ThisAgent);
+
+			If (WhatItem != #QItem_Magic_Sword &&
+				WhatItem != #MarketItem_Ring_Protection &&
+				WhatItem != #MarketItem_Market3_Item)
+				begin
+					If ($CanDropInventoryItem(WhatItem) == True)
+						begin
+							agentType = $GetInventoryItemAgentType(WhatItem);
+							$SpawnUnit(ThisAgent, agentType, "Override", $Concatenate($MakeInventoryAttribute(WhatItem), 0));
+						end
+				end
+
+			WhatItem = -1;
+		end
+End
+
+function Phantom_Grant_Frost_Armor_Bonus(agent thisagent)
+
+declare
+
+begin
+	If ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
+		return;
+
+	If ($AgentHasInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent))
+		return;
+
+	$CreateNewInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent, #Allow_Cloned_Quest_Item);
+	$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);
+end
+
+function Frost_Armor_Begin(agent thisagent, agent target)
+
+declare
+
+begin
+	If ($isdead(thisagent))
+		return;
+
+	If (thisagent's "Reborn_Counter" != 0)
+		return;
+
+	thisagent's "Reborn_Counter" = 1;
+	$createeffector(thisagent, "frost_armor_effector", 180000);
+	$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10000);
+	$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, 10000);
+	$clearlist(thisagent's "Hostiles");
+end
+
+function Frost_Armor_Check(agent thisagent) is integer
+
+declare
+
+begin
+	If ($isdead(thisagent))
+		return 0;
+
+	If (thisagent's "Reborn_Counter" != 0)
+		return 0;
+
+	return 1;
+end
+
+function Phantom_Try_Frost_Armor(agent thisagent) is boolean
+
+declare
+	list targets;
+
+begin
+	If ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
+		return False;
+
+	If ($Frost_Armor_Check(thisagent) == 0)
+		return False;
+
+	targets = $compile_enemies(thisagent, 240);
+	If ($ListSize(targets) == 0)
+		return False;
+
+	$Frost_Armor_Begin(thisagent, thisagent);
+	$PerformAction(thisagent, "Basic_Cast", thisagent);
+	return True;
+end
+
+function Phantom_Arm_Frost_Armor_In_Combat(agent thisagent) is boolean
+
+declare
+
+begin
+	If ($GetAttribute(thisagent, #ATTRIB_ExperienceLevel) < 3)
+		return False;
+
+	If ($Frost_Armor_Check(thisagent) == 0)
+		return False;
+
+	If (thisagent's "ActiveScript" != $Attack_object &&
+		thisagent's "BackScript" != $Attack_object)
+		return False;
+
+	$Frost_Armor_Begin(thisagent, thisagent);
+	$PerformAction(thisagent, "Basic_Cast", thisagent);
+	return True;
+end
+
+function Phantom_Frost_Armor_Watch(agent thisagent)
+
+declare
+	agent attacker;
+	agent hostile;
+	integer attack_range;
+
+begin
+	If ($isdead(thisagent))
+		begin
+			$KillThread(thisagent's "QuestScript");
+			return;
+		end
+
+	$Phantom_Grant_Frost_Armor_Bonus(thisagent);
+	$Phantom_Frost_Armor_Recharge_Check(thisagent);
+
+	If ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))
+		return;
+
+	If (thisagent's "Reborn_Counter" != 1)
+		return;
+
+	If ($CheckEffector(thisagent, "frost_armor_effector") == False)
+		$CreateEffector(thisagent, "frost_armor_effector", 180000);
+
+	If ($ListSize(thisagent's "Hostiles") == 0)
+		return;
+
+	attacker = $NullAgent();
+	Foreach hostile in thisagent's "Hostiles" do
+		begin
+			If ($notvalid(attacker))
+				If ($isvalidgamepiece(hostile))
+					If (hostile's "Target" == thisagent)
+						begin
+							attack_range = $GetAttribute(hostile, #ATTRIB_MaxAttackRange);
+							If ($DistanceBetweenAgents(hostile, thisagent) <= attack_range + 24)
+								attacker = hostile;
+						end
+		end
+
+	$ClearList(thisagent's "Hostiles");
+
+	If ($notvalid(attacker))
+		return;
+
+	thisagent's "Reborn_Counter" = 2;
+	$DeleteEffector(thisagent, "frost_armor_effector");
+	$adjustattribute(thisagent, #ATTRIB_Armor_Basic_Damage, -10000);
+	$adjustattribute(thisagent, #ATTRIB_Armor_Magic_Bonus, -10000);
+	$CreateEffector(thisagent, "ice_lance_hit_effector", 0);
+
+	If (attacker's "Type" == "Building" || attacker's "Type" == "Lair")
+		return;
+
+	$Frost_Armor_Freeze(attacker);
+end
+
+function Phantom_Frost_Armor_Recharge_Check(agent thisagent)
+
+declare
+
+begin
+	If (thisagent's "Reborn_Counter" != 2)
+		return;
+
+	If ($InsideBuilding(thisagent) == False)
+		return;
+
+	If (thisagent's "ActiveScript" == $rest_at_inn ||
+		thisagent's "ActiveScript" == $Done_resting_inn ||
+		thisagent's "ActiveScript" == $Rest_at_guild ||
+		thisagent's "ActiveScript" == $Phantom_Rest_At_Guild ||
+		thisagent's "ActiveScript" == $Done_resting_guild)
+		thisagent's "Reborn_Counter" = 0;
+end
+
+function Frost_Armor_Freeze(agent target)
+
+declare
+	integer max_hp;
+
+begin
+	If ($isdead(target))
+		return;
+
+	If (target's "Type" == "Building" || target's "Type" == "Lair")
+		return;
+
+	If ($CheckEffector(target, "frost_armor_frozen_timer"))
+		$DeleteEffector(target, "frost_armor_frozen_timer");
+	Else If ($GetAttribute(target, #ATTRIB_HasEffectPetrify) == 1)
+		return;
+
+	$SetAttribute(target, #ATTRIB_HasEffectPetrify, 1);
+	$GetProperUnitArt(target);
+	$Freeze_Unit(target);
+
+	max_hp = $GetAttribute(target, #ATTRIB_MaxHP);
+	If (max_hp < 50)
+		$CreateEffector(target, "frost_armor_frozen_small", 2700);
+	Else If (max_hp < 150)
+		$CreateEffector(target, "frost_armor_frozen_medium", 2700);
+	Else
+		$CreateEffector(target, "frost_armor_frozen_large", 2700);
+
+	$CreateEffector(target, "frost_armor_frozen_timer", 3000);
+end
+
+function Frost_Armor_Frozen_End(agent thisagent)
+
+declare
+
+begin
+	If ($isdead(thisagent))
+		return;
+
+	$DeleteEffector(thisagent, "frost_armor_frozen_small");
+	$DeleteEffector(thisagent, "frost_armor_frozen_medium");
+	$DeleteEffector(thisagent, "frost_armor_frozen_large");
+	$SetAttribute(thisagent, #ATTRIB_HasEffectPetrify, 0);
+	$GetProperUnitArt(thisagent);
+	$UnFreeze_Unit(thisagent);
+end
+
+function Phantom_Lived_In(agent thisagent)
+
+declare
+
+begin
+	$Lived_In(thisagent);
+	thisagent's "ActiveScript" = $Phantom_Rest_At_Guild;
+end
+
+function Phantom_Rest_At_Guild(agent thisagent)
+
+declare
+
+begin
+	$Rest_At_Guild(thisagent);
+
+	If (thisagent's "Reborn_Counter" == 2)
+		thisagent's "Reborn_Counter" = 0;
+end
+
+function Icy_Touch_Check(agent thisagent) is integer
+
+declare
+	agent target;
+	integer distance;
+
+begin
+	If ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 2)
+		return 0;
+
+	target = thisagent's "Target";
+
+	If ($NotValid(target))
+		return 0;
+
+	If ($IsDead(target))
+		return 0;
+
+	If (target's "Type" == "Building" || target's "Type" == "Lair")
+		return 0;
+
+	distance = $DistanceBetweenAgents(thisagent, target);
+
+	If (distance <= #Phantom_Icy_Touch_Range)
+		return 1;
+
+	return 0;
+end
+
+function Icy_Touch_Cast(agent thisagent, agent action_target)
+
+declare
+	agent target;
+
+begin
+	If ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 2)
+		return;
+
+	target = thisagent's "Target";
+
+	If ($NotValid(target))
+		return;
+
+	If ($IsDead(target))
+		return;
+
+	If (target's "Type" == "Building" || target's "Type" == "Lair")
+		return;
+
+	$make_attack(thisagent, target);
+
+	If ($IsDead(target))
+		return;
+
+	$spell_attack(thisagent, target, 30);
+
+	If ($IsDead(target))
+		return;
+
+	$Phantom_Apply_Chill(thisagent, target, $GetSpellAttribute("ice_lance", "effector_duration"));
+	$CreateEffector(target, "gravechill_hit_effector", 0);
+	$Phantom_Apply_Gravechill(target, 8000);
+end
+
+function Phantom_Apply_Gravechill(agent target, integer duration)
+
+declare
+
+begin
+	If ($isdead(target))
+		return;
+
+	If (target's "Type" == "Building" || target's "Type" == "Lair")
+		return;
+
+	If ($HasAttribute("PhantomGravechillRemaining", target) == False)
+		begin
+			$AddAttribute(target, "PhantomGravechillRemaining", "integer", duration);
+			$AddAttribute(target, "PhantomGravechillActive", "boolean", False);
+			$AddAttribute(target, "PhantomGravechillWatch", "function", $Phantom_Gravechill_Watch);
+		end
+	target's "PhantomGravechillRemaining" = duration;
+
+	If (target's "PhantomGravechillActive" == False)
+		begin
+			target's "PhantomGravechillActive" = True;
+			$MagicalAdjustAttribute(target, #ATTRIB_Strength, -5);
+			$MagicalAdjustAttribute(target, #ATTRIB_Parry, -2);
+			$MagicalAdjustAttribute(target, #ATTRIB_MagicResistance, -2);
+		end
+
+	If ($CheckEffector(target, "gravechill_icon") == False)
+		$CreateEffector(target, "gravechill_icon", 1, "infinite");
+
+	If ($IsRunning(target's "PhantomGravechillWatch") == False)
+		$NewThread(target's "PhantomGravechillWatch", 100, target);
+end
+
+function Phantom_Gravechill_Watch(agent thisagent)
+
+declare
+
+begin
+	If ($IsValidGamePiece(thisagent) == False)
+		return;
+
+	If (thisagent's "PhantomGravechillActive" == False)
+		begin
+			$KillThread(thisagent's "PhantomGravechillWatch");
+			return;
+		end
+
+	thisagent's "PhantomGravechillRemaining" -= 100;
+	If (thisagent's "PhantomGravechillRemaining" > 0)
+		return;
+
+	$KillThread(thisagent's "PhantomGravechillWatch");
+	thisagent's "PhantomGravechillActive" = False;
+	$MagicalAdjustAttribute(thisagent, #ATTRIB_Strength, 5);
+	$MagicalAdjustAttribute(thisagent, #ATTRIB_Parry, 2);
+	$MagicalAdjustAttribute(thisagent, #ATTRIB_MagicResistance, 2);
+	If ($CheckEffector(thisagent, "gravechill_icon"))
+		$DeleteEffector(thisagent, "gravechill_icon");
+end
+
+function Endless_Winter_Hit(agent thisagent, agent target)
+
+declare
+	integer cast_range;
+	list targets;
+	agent closest_enemy;
+	integer closest_distance;
+	integer target_distance;
+
+begin
+	If ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 3)
+		return;
+
+	cast_range = $Phantom_effective_casting_range(thisagent);
+	targets = $compile_enemies(thisagent, cast_range);
+	If ($ListSize(targets) == 0)
+		return;
+
+	closest_enemy = $Pick_Closest(thisagent, targets);
+	If ($notvalid(closest_enemy))
+		return;
+
+	If ($isvalidgamepiece(target))
+		If ($IsDead(target) == False)
+			If ($AgentInList(target, targets))
+				begin
+					closest_distance = $DistanceBetweenAgents(thisagent, closest_enemy);
+					target_distance = $DistanceBetweenAgents(thisagent, target);
+					If (target_distance == closest_distance)
+						closest_enemy = target;
+				end
+
+	$CreateSpellUnit(thisagent, "endless_winter_storm", closest_enemy);
+end
+
+function Endless_Winter_Check(agent thisagent) is integer
+
+declare
+	integer cast_range;
+	list targets;
+
+begin
+	If ($isdead(thisagent))
+		return 0;
+
+	If ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 3)
+		return 0;
+
+	cast_range = $Phantom_effective_casting_range(thisagent);
+	targets = $compile_enemies(thisagent, cast_range);
+	If ($ListSize(targets) > 0)
+		return 1;
+
+	return 0;
+end
+
+function Endless_Winter_Unit_Created(agent thisagent, agent target)
+
+declare
+	integer duration;
+
+begin
+	duration = $GetSpellAttribute("endless_winter", "effector_duration");
+	$SetParent(thisagent, target);
+	$SetSpellUnitTimeout(
+		thisagent,
+		duration + 500
+	);
+	$CreateEffector(
+		thisagent,
+		"endless_winter_vortex_effector",
+		duration
+	);
+	$AddAttribute(
+		thisagent,
+		"EndlessWinterTracking",
+		"function",
+		$Endless_Winter_Track
+	);
+	$AddAttribute(
+		thisagent,
+		"EndlessWinterCleanup",
+		"function",
+		$Endless_Winter_Cleanup
+	);
+	$RunThread(
+		thisagent's "EndlessWinterCleanup",
+		duration + 100,
+		thisagent
+	);
+	$NewThread(thisagent's "EndlessWinterTracking", 25, thisagent);
+	$NewThread(thisagent's "activeScript", 1600, thisagent);
+	$Endless_Winter_Track(thisagent);
+	$Endless_Winter_Active(thisagent);
+end
+
+function Endless_Winter_Cleanup(agent thisagent)
+
+declare
+
+begin
+	If ($isvalidgamepiece(thisagent) == False)
+		return;
+
+	$KillThread(thisagent's "EndlessWinterTracking");
+	$KillThread(thisagent's "activeScript");
+	$DeleteGamePiece(thisagent);
+end
+
+function Endless_Winter_Track(agent thisagent)
+
+declare
+	agent tracked_target;
+	coordinate anchor_location;
+	coordinate target_location;
+
+begin
+	If ($isvalidgamepiece(thisagent) == False)
+		return;
+
+	tracked_target = $Parent(thisagent);
+	If ($isvalidgamepiece(tracked_target))
+		If ($IsDead(tracked_target) == False)
+			begin
+				anchor_location = $LocationOf(thisagent);
+				target_location = $LocationOf(tracked_target);
+				If (($GetX(anchor_location) != $GetX(target_location)) || ($GetY(anchor_location) != $GetY(target_location)))
+					$TeleportToUnit(thisagent, 50000, tracked_target, 0);
+			end
+end
+
+function Endless_Winter_Active(agent thisagent)
+
+declare
+	list targets;
+	agent target;
+	integer distance;
+
+begin
+	If ($isvalidgamepiece(thisagent) == False)
+		return;
+
+	targets = $compile_enemies(thisagent, 175);
+
+	foreach target in targets do
+		begin
+			distance = $DistanceBetweenCoords(
+				$LocationOf(thisagent),
+				$LocationOf(target)
+			);
+			If (distance <= #Phantom_Icy_Touch_Range)
+				$CreateMissile("endless_winter_missile", thisagent, target);
+			Else If (distance <= 80)
+				$CreateMissile("endless_winter_missile_middle", thisagent, target);
+			Else
+				$CreateMissile("endless_winter_missile_outer", thisagent, target);
+		end
+end
+
+function Endless_Winter_Inner_Missile_Hit(agent thisagent, agent target)
+
+declare
+
+begin
+	$Endless_Winter_Missile_Hit(target, 8, 2);
+end
+
+function Endless_Winter_Middle_Missile_Hit(agent thisagent, agent target)
+
+declare
+
+begin
+	$Endless_Winter_Missile_Hit(target, 6, 1);
+end
+
+function Endless_Winter_Outer_Missile_Hit(agent thisagent, agent target)
+
+declare
+
+begin
+	$Endless_Winter_Missile_Hit(target, 4, 1);
+end
+
+function Endless_Winter_Missile_Hit(agent target, integer damage, integer chill_tier)
+
+declare
+
+begin
+	$CreateEffector(target, "endless_winter_hit_effector", 0);
+	$player_spell_attack(target, damage, damage);
+	$Phantom_Apply_Chill_Tier(
+		target,
+		$GetSpellAttribute("ice_lance", "effector_duration"),
+		chill_tier
+	);
+end
+
+function Blizzard_Check(agent thisagent) is integer
+
+declare
+	list targets;
+
+begin
+	targets = $compile_enemies(thisagent, 175);
+	if ($listsize(targets) > 0)
+		return 1;
+	else
+		return 0;
+end
+
+function Blizzard_Hit(agent thisagent, agent target)
+
+declare
+	list targets;
+	agent dude;
+
+begin
+	$createeffector(thisagent, "meteor_storm_effector2", 0);
+	targets = $compile_enemies(thisagent, 175);
+
+	foreach dude in targets do
+		begin
+			$createeffector(dude, "meteor_storm_effector2", 0);
+			$spell_attack(thisagent, dude, 18 + $GetAttribute(thisagent, #ATTRIB_ExperienceLevel));
+		end
+end
+

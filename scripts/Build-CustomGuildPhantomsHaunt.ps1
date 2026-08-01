@@ -292,7 +292,6 @@ $blizzardSpellIconRgb = Join-Path $tempDir "blizzard_spell_icon_24.rgb"
 $callToGraveSpellIconRgb = Join-Path $tempDir "call_to_grave_spell_icon_24.rgb"
 $phantomCowlIconRgb = Join-Path $tempDir "phantom_cowl_icon_23.rgb"
 $darkStaffSmallIconRgb = Join-Path $tempDir "dark_staff_icon_16.rgb"
-$darkStaffMxIconRgb = Join-Path $tempDir "dark_staff_icon_23.rgb"
 $darkStaffIconRgb = Join-Path $tempDir "dark_staff_icon_50x19.rgb"
 $interfacePanelRgb = Join-Path $tempDir "phantom_interface_panel_200x245.rgb"
 $buildingSpriteDir = Join-Path $tempDir "building_sprites"
@@ -389,7 +388,6 @@ if ($LASTEXITCODE -ne 0) {
     --call-to-grave-spell-icon-rgb $callToGraveSpellIconRgb `
     --phantom-cowl-icon-rgb $phantomCowlIconRgb `
     --dark-staff-small-icon-rgb $darkStaffSmallIconRgb `
-    --dark-staff-mx-icon-rgb $darkStaffMxIconRgb `
     --dark-staff-icon-rgb $darkStaffIconRgb `
     --voice-dir (Resolve-RepoPath $AudioRoot) `
     --unused-tile-mode $UnusedTileMode

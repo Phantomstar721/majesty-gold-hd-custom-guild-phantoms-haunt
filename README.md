@@ -227,6 +227,8 @@ assets/source/spells/            Spell and effect source art
 docs/                            Public technical documentation
 scripts/                         Build, review, generation, and audio tools
 src/                             CAM builder and package validator
+src/gpl/                         Static GPL source used by the builder
+tests/                           Unit tests for the builder's pure functions
 ```
 
 Generated packages live under `dist/`, and visual inspection output lives
@@ -259,6 +261,26 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaun
 
 `-AudioOnly` packages the checked-in, game-ready WAVs; it does not require the
 private recording projects or clean masters.
+
+### Gameplay source
+
+The static GPL body lives in `src/gpl/phantom.gpl` as ordinary GPL rather than
+inside a Python string, so it can be edited with syntax highlighting and gives
+readable diffs. The builder prepends the generated `expression` constants and
+appends the quest rule overrides it extracts from the SDK.
+
+### Tests
+
+The builder's pure functions have unit tests that need neither the game nor the
+SDK:
+
+```powershell
+..\.tools\python.cmd -m unittest discover -s tests
+```
+
+They cover TILE encoding and decoding, CAM container round-trips, string-table
+patching, tile reduction, palette selection, and the generated XML. Package
+correctness is still checked by the full validation that runs after every build.
 
 Every build ends with structural and semantic validation of the manifest, XML
 descriptions, CAM directories and payloads, WAVE formats, DSND routing, GPL
