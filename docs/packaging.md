@@ -13,7 +13,7 @@ Data/
   phantom_gpltext.cam
   phantom_interfacedata.cam
   phantom_maindata.cam
-  phantom_mx_interfacedata.cam
+  phantom_miscdata.cam
   phantom_overlays.xml
   phantom_particles.xml
   phantom_projectiles.xml
@@ -50,15 +50,35 @@ are available under both game datasets.
 The Python builder reads stock CAM directory structures and creates additive
 archives containing only required cloned structures and custom entries.
 
+### Tile slots and package size
+
+Majesty resolves a tile by its position within a CAM's TILE section. An archive
+that appends custom tiles must therefore contain an entry for every slot below
+the highest index it uses, and the Haunt's building art is cloned from Fervus
+temple records sitting near the very top of the stock table, so the array has to
+run the full length.
+
+Those in-between slots are written as **zero-length entries**. The engine treats
+a slot with no payload as no contribution and falls back to the stock archive,
+so stock artwork renders normally and the package ships none of it.
+
+Filling them with the stock artwork instead is what the builder used to do, and
+it produced a ~160 MB package of which roughly 157 MB was Majesty's own art.
+`--unused-tile-mode stock` still reproduces that layout, and package validation
+rejects it so the regression cannot ship unnoticed.
+
+Writing a valid but empty 1x1 tile does **not** work. The engine honours it and
+the stock art in that slot is destroyed.
+
 ## Archive responsibilities
 
 | Archive | Content |
 | --- | --- |
 | `phantom_maindata.cam` | Building, hero, spell, projectile, overlay, particle, icon, palette, and TILE data |
 | `phantom_interfacedata.cam` | Standard interface images and raw textures |
-| `phantom_mx_interfacedata.cam` | Northern Expansion interface additions |
 | `phantom_textdata.cam` | Menu and description strings |
 | `phantom_gpltext.cam` | GPL-facing names and help text |
+| `phantom_miscdata.cam` | Full stock BDEP table plus the Haunt's native level-2 Palace dependency |
 | `phantom_voices.cam` | Event-specific PCM WAVE payloads |
 | `phantom_sounddesc.cam` | Runtime DSND registrations |
 
@@ -72,6 +92,7 @@ After a complete validated package exists:
 
 ```powershell
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GplOnly
+.\scripts\Build-CustomGuildPhantomsHaunt.ps1 -TextOnly
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly
 ```
 

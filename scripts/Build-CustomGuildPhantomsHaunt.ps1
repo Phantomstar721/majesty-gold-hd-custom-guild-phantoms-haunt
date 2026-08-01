@@ -41,7 +41,20 @@ param(
     [string]$AudioRoot = ".\assets\audio",
     [switch]$AudioOnly,
     [switch]$GplOnly,
-    [string]$GplCompiler = ""
+    [switch]$TextOnly,
+    [string]$GplCompiler = "",
+    # Majesty addresses tiles by their slot in a CAM's TILE section, so the
+    # package must emit an entry for every slot below the highest custom tile.
+    #
+    #   empty (default) - zero-length entries; the engine falls back to the
+    #                     stock archive. Confirmed in game 2026-08-01.
+    #   stock           - fills those slots with Majesty's own artwork, giving
+    #                     the legacy ~160 MB package that redistributes roughly
+    #                     157 MB of the publisher's art.
+    #   blank           - BROKEN. A 1x1 empty tile is honoured by the engine and
+    #                     destroys the stock art in that slot.
+    [ValidateSet("empty", "stock", "blank")]
+    [string]$UnusedTileMode = "empty"
 )
 
 $ErrorActionPreference = "Stop"
@@ -143,8 +156,8 @@ $buildingSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_buildin
 $heroSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_hero_sprites.py"
 $outputRootPath = Join-Path $repoRoot $OutputRoot
 
-if ($AudioOnly -and $GplOnly) {
-    throw "-AudioOnly and -GplOnly are mutually exclusive."
+if ((@($AudioOnly, $GplOnly, $TextOnly) | Where-Object { $_ }).Count -gt 1) {
+    throw "-AudioOnly, -GplOnly, and -TextOnly are mutually exclusive."
 }
 
 if ($GplOnly) {
@@ -189,12 +202,39 @@ if ($GplOnly) {
     }
     Copy-Item -Path $compiledPath -Destination (Join-Path $dataDir "Phantom.bcd") -Force
 
-    & $toolsPython $validator --output-root $outputRootPath
+    # The validator only distinguishes "unreferenced slots are empty" from
+    # "they carry payload". The broken blank mode falls in the latter group.
+    $validatorTileMode = if ($UnusedTileMode -eq "empty") { "empty" } else { "stock" }
+    & $toolsPython $validator --output-root $outputRootPath --unused-tile-mode $validatorTileMode
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
 
     Write-Host "Updated GPL in existing validated mod package:"
+    Write-Host $outputRootPath
+    return
+}
+
+if ($TextOnly) {
+    if (-not (Test-Path $outputRootPath)) {
+        throw "Text-only build requires an existing validated package: $outputRootPath. Run a full build first."
+    }
+    if (-not (Test-Path $toolsPython)) {
+        throw "Shared tools Python does not exist: $toolsPython"
+    }
+
+    & $toolsPython $builder --game-path $GamePath --output-root $outputRootPath --text-only
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phantom text CAM builder failed with exit code $LASTEXITCODE"
+    }
+
+    $validatorTileMode = if ($UnusedTileMode -eq "empty") { "empty" } else { "stock" }
+    & $toolsPython $validator --output-root $outputRootPath --unused-tile-mode $validatorTileMode
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phantom package verification failed with exit code $LASTEXITCODE"
+    }
+
+    Write-Host "Updated text CAMs in existing validated mod package:"
     Write-Host $outputRootPath
     return
 }
@@ -218,7 +258,10 @@ if ($AudioOnly) {
         throw "Phantom voice CAM builder failed with exit code $LASTEXITCODE"
     }
 
-    & $toolsPython $validator --output-root $outputRootPath
+    # The validator only distinguishes "unreferenced slots are empty" from
+    # "they carry payload". The broken blank mode falls in the latter group.
+    $validatorTileMode = if ($UnusedTileMode -eq "empty") { "empty" } else { "stock" }
+    & $toolsPython $validator --output-root $outputRootPath --unused-tile-mode $validatorTileMode
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
@@ -348,7 +391,8 @@ if ($LASTEXITCODE -ne 0) {
     --dark-staff-small-icon-rgb $darkStaffSmallIconRgb `
     --dark-staff-mx-icon-rgb $darkStaffMxIconRgb `
     --dark-staff-icon-rgb $darkStaffIconRgb `
-    --voice-dir (Resolve-RepoPath $AudioRoot)
+    --voice-dir (Resolve-RepoPath $AudioRoot) `
+    --unused-tile-mode $UnusedTileMode
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom CAM builder failed with exit code $LASTEXITCODE"
 }
@@ -379,7 +423,10 @@ if (-not (Test-Path $compiledPath)) {
 }
 Copy-Item -Path $compiledPath -Destination (Join-Path $dataDir "Phantom.bcd") -Force
 
-& $toolsPython $validator --output-root $outputRootPath
+# The validator only distinguishes "unreferenced slots are empty" from
+# "they carry payload". The broken blank mode falls in the latter group.
+$validatorTileMode = if ($UnusedTileMode -eq "empty") { "empty" } else { "stock" }
+& $toolsPython $validator --output-root $outputRootPath --unused-tile-mode $validatorTileMode
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom package verification failed with exit code $LASTEXITCODE"
 }

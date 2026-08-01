@@ -19,7 +19,9 @@ ENTRY_HEADER_SIZE = 28
 
 MOD_ID = uuid.UUID("8c48289e-7c70-4426-8913-133f3544a182")
 HERO_ID = "PHM1"
-BUILDING_ID = "MBPhantomGuild"
+BUILDING_ID = "PHG1"
+BUILDING_LEVEL_2_ID = "PHG2"
+BUILDING_LEVEL_3_ID = "PHG3"
 BUILDING_TEXT_ID = "PHG1"
 # Majesty keys recruit-panel behavior in the exe by AP dialog id. Keep AP07 as
 # the Haunt's proven recruit-capable external ID, but feed it AP10's stock
@@ -192,6 +194,7 @@ def main() -> int:
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument("--voices-only", action="store_true")
     parser.add_argument("--gpl-only", action="store_true")
+    parser.add_argument("--text-only", action="store_true")
     parser.add_argument("--portrait-rgb", type=Path)
     parser.add_argument("--hero-icon-rgb", type=Path)
     parser.add_argument("--building-profile-rgb", type=Path)
@@ -222,6 +225,20 @@ def main() -> int:
     parser.add_argument("--dark-staff-icon-rgb", type=Path)
     parser.add_argument("--voice-dir", type=Path)
     parser.add_argument("--recruitment-voice-wav", type=Path)
+    parser.add_argument(
+        "--unused-tile-mode",
+        choices=UNUSED_TILE_MODES,
+        default="empty",
+        help=(
+            "What to write into tile slots the package does not reference. "
+            "'empty' (default) writes zero-length entries; the engine falls back "
+            "to the stock archive, confirmed in game 2026-08-01. "
+            "'stock' copies Majesty's own artwork into them, producing the legacy "
+            "~160 MB package that redistributes roughly 157 MB of the publisher's "
+            "art. 'blank' writes a 1x1 empty tile and is BROKEN: the engine honours "
+            "it and destroys the stock art in that slot."
+        ),
+    )
     args = parser.parse_args()
 
     data_dir = args.output_root / "Data"
@@ -261,6 +278,7 @@ def main() -> int:
     source_textdata = args.game_path / "Data" / "textdata.cam"
     source_gpltext = args.game_path / "Data" / "gpltext.cam"
     source_mx_gpltext = args.game_path / "DataMX" / "mx_gpltext.cam"
+    source_miscdata = args.game_path / "Data" / "miscdata.cam"
     source_maindata = args.game_path / "Data" / "maindata.cam"
     source_ice_effect_maindata = args.game_path / "DataMX" / "mx_maindata.cam"
     source_interfacedata = args.game_path / "Data" / "interfacedata.cam"
@@ -269,6 +287,8 @@ def main() -> int:
         raise FileNotFoundError(source_textdata)
     if not source_gpltext.exists():
         raise FileNotFoundError(source_gpltext)
+    if not source_miscdata.exists():
+        raise FileNotFoundError(source_miscdata)
     if not source_maindata.exists():
         raise FileNotFoundError(source_maindata)
     if not source_interfacedata.exists():
@@ -279,6 +299,10 @@ def main() -> int:
         source_mx_gpltext if source_mx_gpltext.exists() else source_gpltext,
         data_dir / "phantom_gpltext.cam",
     )
+    write_miscdata_cam(source_miscdata, data_dir / "phantom_miscdata.cam")
+    if args.text_only:
+        return 0
+
     write_maindata_cam(
         source_maindata,
         data_dir / "phantom_maindata.cam",
@@ -302,6 +326,7 @@ def main() -> int:
         args.endless_winter_hit_source_png,
         args.endless_winter_missile_source_png,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
+        args.unused_tile_mode,
     )
     write_interfacedata_cam(
         source_interfacedata,
@@ -314,13 +339,13 @@ def main() -> int:
         args.dark_staff_small_icon_rgb,
         args.dark_staff_icon_rgb,
         args.building_dialog_panel_rgb,
+        args.unused_tile_mode,
     )
-    if source_mx_interfacedata.exists():
-        write_mx_interfacedata_cam(
-            source_mx_interfacedata,
-            data_dir / "phantom_mx_interfacedata.cam",
-            args.dark_staff_mx_icon_rgb,
-        )
+    # phantom_mx_interfacedata.cam is deliberately not generated. Its only
+    # content was 753 stock tiles and one unchanged copy of the stock
+    # INBwicons weapons record, so it added 25.7 MB and overrode a stock
+    # interface record for no benefit. MX_STAFF_ICON_TILES is empty, so the
+    # customisation it was built for never actually ran.
     if args.voice_dir is None:
         raise ValueError("full build requires --voice-dir")
     write_voices_cam(
@@ -533,7 +558,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Flags value="NotInMiniMap"/>
 \t\t</Game>
 \t</Description>
-\t<Description type="Unit" subType="Building" ID="MBPhantomGuild" Name="Phantoms_Haunt" Description="Phantoms Haunt">
+\t<Description type="Unit" subType="Building" ID="PHG1" Name="Phantoms_Haunt" Description="Phantoms Haunt">
 \t\t<Engine version="1">
 \t\t\t<Info value="BlockGround"/>
 \t\t\t<Info value="BlockFlying"/>
@@ -562,7 +587,7 @@ def phantom_units_xml() -> str:
 \t\t\t</Produces>
 \t\t</Game>
 \t</Description>
-\t<Description type="Unit" subType="Building" ID="MBPhantomGuild2" Name="Phantoms_Haunt2" Description="Phantoms Haunt Level 2">
+\t<Description type="Unit" subType="Building" ID="PHG2" Name="Phantoms_Haunt2" Description="Phantoms Haunt Level 2">
 \t\t<Engine version="1">
 \t\t\t<Info value="BlockGround"/>
 \t\t\t<Info value="BlockFlying"/>
@@ -593,7 +618,7 @@ def phantom_units_xml() -> str:
 \t\t\t</Produces>
 \t\t</Game>
 \t</Description>
-\t<Description type="Unit" subType="Building" ID="MBPhantomGuild3" Name="Phantoms_Haunt3" Description="Phantoms Haunt Level 3">
+\t<Description type="Unit" subType="Building" ID="PHG3" Name="Phantoms_Haunt3" Description="Phantoms Haunt Level 3">
 \t\t<Engine version="1">
 \t\t\t<Info value="BlockGround"/>
 \t\t\t<Info value="BlockFlying"/>
@@ -1411,7 +1436,6 @@ def phantom_quest_rule_overrides(game_path: Path) -> str:
             r"(?im)^begin\s*$",
             (
                 'begin\n'
-                '\t$DisableUnitType("Phantoms_Haunt");\n'
                 "\t$Phantom_Lock_Haunt_For_Quest();"
             ),
             function,
@@ -1448,7 +1472,6 @@ def phantom_quest_rule_overrides(game_path: Path) -> str:
         r"(?im)^begin\s*$",
         (
             'begin\n'
-            '\t$DisableUnitType("Phantoms_Haunt");\n'
             "\t$Phantom_Lock_Haunt_For_Quest();"
         ),
         vigil,
@@ -1484,134 +1507,17 @@ def phantom_gpl(game_path: Path) -> str:
 Function Phantom_Lock_Haunt_For_Quest()
 
 Declare
-\tlist Palaces;
-\tagent Palace;
 
 Begin
-\tPalaces = $ListPalaces();
-\tForeach Palace in Palaces do
-\t\tbegin
-\t\t\tIf ($HasAttribute("PhantomHauntQuestDisabled", Palace) == False)
-\t\t\t\t$AddAttribute(
-\t\t\t\t\tPalace,
-\t\t\t\t\t"PhantomHauntQuestDisabled",
-\t\t\t\t\t"boolean",
-\t\t\t\t\tTrue
-\t\t\t\t);
-\t\t\tElse
-\t\t\t\tPalace's "PhantomHauntQuestDisabled" = True;
-\t\tend
+\t$DisableUnitType("Phantoms_Haunt");
 End
 
 Function Phantom_Unlock_Haunt_For_Quest()
 
 Declare
-\tlist Palaces;
-\tagent Palace;
 
 Begin
-\tPalaces = $ListPalaces();
-\tForeach Palace in Palaces do
-\t\tbegin
-\t\t\tIf ($HasAttribute("PhantomHauntQuestDisabled", Palace) == False)
-\t\t\t\t$AddAttribute(
-\t\t\t\t\tPalace,
-\t\t\t\t\t"PhantomHauntQuestDisabled",
-\t\t\t\t\t"boolean",
-\t\t\t\t\tFalse
-\t\t\t\t);
-\t\t\tElse
-\t\t\t\tPalace's "PhantomHauntQuestDisabled" = False;
-
-\t\t\tIf (Palace's "Level" >= 2)
-\t\t\t\t$EnableUnitType("Phantoms_Haunt");
-\t\tend
-End
-
-Function Phantom_Palace_Haunt_Availability_Watch(agent Palace)
-
-Declare
-\tinteger Availability_State;
-
-Begin
-\tIf ($IsValidGamePiece(Palace) == False)
-\t\treturn;
-
-\tIf ($HasAttribute("PhantomHauntAvailabilityState", Palace) == False)
-\t\t$AddAttribute(
-\t\t\tPalace,
-\t\t\t"PhantomHauntAvailabilityState",
-\t\t\t"integer",
-\t\t\t0
-\t\t);
-
-\tAvailability_State = Palace's "PhantomHauntAvailabilityState";
-\tIf (Palace's "Level" < 2)
-\t\tbegin
-\t\t\tIf (Availability_State != 1)
-\t\t\t\tbegin
-\t\t\t\t\t$DisableUnitType("Phantoms_Haunt");
-\t\t\t\t\tPalace's "PhantomHauntAvailabilityState" = 1;
-\t\t\t\tend
-\t\tend
-\tElse If (Availability_State != 2)
-\t\tbegin
-\t\t\tIf (
-\t\t\t\t$HasAttribute("PhantomHauntQuestDisabled", Palace) == False ||
-\t\t\t\tPalace's "PhantomHauntQuestDisabled" == False
-\t\t\t)
-\t\t\t\t$EnableUnitType("Phantoms_Haunt");
-\t\t\tPalace's "PhantomHauntAvailabilityState" = 2;
-\t\tend
-
-\t$NewThread(Palace's "PhantomHauntAvailabilityWatch", 1000, Palace);
-End
-
-// Exact stock Palace birth behavior plus one isolated availability watcher.
-// The watcher changes only the custom Haunt unit type and leaves every stock
-// Palace spawner, revenue thread, guard, and upgrade path untouched.
-Function Palace_Birth(agent ThisAgent)
-
-Declare
-
-Begin
-\tThisAgent's "in_danger" = False;
-\t$ClearList(ThisAgent's "tax_route");
-\t$ClearList(ThisAgent's "tax_targets");
-\t$NewThread(ThisAgent's "activeScript", #palace_revenue_cycle, ThisAgent);
-\t$NewThread(ThisAgent's "Guard_Function", #Normal_Cycle, ThisAgent);
-\t$RunThread(
-\t\tThisAgent's "Guard_Spawn_Function",
-\t\t#initial_Palace_guard_delay,
-\t\tThisAgent
-\t);
-\t$RunThread(
-\t\tThisAgent's "Tax_spawn",
-\t\t#initial_tax_collector_delay,
-\t\tThisAgent
-\t);
-\t$RunThread(
-\t\tThisAgent's "peasant_spawn",
-\t\t#initial_peasant_delay,
-\t\tThisAgent
-\t);
-
-\tIf ($HasAttribute("PhantomHauntAvailabilityWatch", ThisAgent) == False)
-\t\t$AddAttribute(
-\t\t\tThisAgent,
-\t\t\t"PhantomHauntAvailabilityWatch",
-\t\t\t"function",
-\t\t\t$Phantom_Palace_Haunt_Availability_Watch
-\t\t);
-
-\t// Palace_Birth runs once for a newly created Palace. Start this watcher
-\t// directly: testing showed that IsRunning can report the newly attached
-\t// function attribute as active before its first thread has actually run.
-\t$RunThread(
-\t\tThisAgent's "PhantomHauntAvailabilityWatch",
-\t\t250,
-\t\tThisAgent
-\t);
+\t$EnableUnitType("Phantoms_Haunt");
 End
 
 Function Phantom_Player_Has_Placed_Haunt(agent ThisAgent) is boolean
@@ -2555,6 +2461,61 @@ End
 
 // Keep the proven stock-shaped Rush unto Death route: retain the expansion
 // Priestess tree and call the Priestess-only clone of the stock selector.
+// Purchase_Bazaar and Hall_Champs_Check exist only in the Northern Expansion
+// (GPLMx/TaskModules/Buildings/Magic_Bazaar.gpl and
+// GPLMx/DecisionTrees/Modules/Hall_Champs_Check.gpl). This package ships one
+// GPL for both datasets under Dataset base="Any", and the Priestess tree below
+// is cloned from the expansion version, so calling them directly breaks
+// Priestesses in Original Majesty quests: the decision chain dies partway and
+// the hero is left in the Thinking state set at the top of the tree. That is
+// exactly what happened on "A Deal with the Demon".
+//
+// Guard each on the expansion-only building it shops at. Those buildings cannot
+// exist in Original Majesty, so the call is skipped there entirely. In the
+// expansion the guard only skips the decision when the player owns no such
+// building, which is a case the stock function would have rejected anyway.
+Function Phantom_Priestess_Bazaar_Check(agent ThisAgent, integer Chance) is boolean
+
+Declare
+\tlist Bazaars;
+
+Begin
+\t$ListObjects(
+\t\tThisAgent,
+\t\t"Building",
+\t\t-1,
+\t\tBazaars,
+\t\t#MyPlayer,
+\t\t#CheckTitles,
+\t\t"Magic_Bazaar"
+\t);
+\tIf ($ListSize(Bazaars) == 0)
+\t\treturn False;
+
+\treturn $Purchase_Bazaar(ThisAgent, Chance);
+End
+
+Function Phantom_Priestess_Champs_Check(agent ThisAgent, integer Chance) is boolean
+
+Declare
+\tlist Halls;
+
+Begin
+\t$ListObjects(
+\t\tThisAgent,
+\t\t"Building",
+\t\t-1,
+\t\tHalls,
+\t\t#MyPlayer,
+\t\t#CheckTitles,
+\t\t"HallOfChampions"
+\t);
+\tIf ($ListSize(Halls) == 0)
+\t\treturn False;
+
+\treturn $Hall_Champs_Check(ThisAgent, Chance);
+End
+
 // Defining Priestess_tree by its stock name lets the normal hero decision cycle
 // invoke it without forcing scripts from the Palace watcher.
 Function Phantom_Priestess_Follow_Check(agent ThisAgent) is boolean
@@ -2592,9 +2553,9 @@ Begin
 \tIf ($Defend_Home(ThisAgent) == False)
 \tIf ($Rest(ThisAgent) == False)
 \tIf ($Purchase_Equipment(ThisAgent) == False)
-\tIf ($Purchase_Bazaar(ThisAgent, 70) == False)
+\tIf ($Phantom_Priestess_Bazaar_Check(ThisAgent, 70) == False)
 \tIf ($Pursue_Entertainment(ThisAgent) == False)
-\tIf ($Hall_Champs_Check(ThisAgent, 40) == False)
+\tIf ($Phantom_Priestess_Champs_Check(ThisAgent, 40) == False)
 \tIf ($Combat_Wandering(ThisAgent, 75) == False)
 \tIf ($Combat_Wandering_Heroes(ThisAgent, 70) == False)
 \tIf ($Raid_Lair(ThisAgent, 40) == False)
@@ -4568,9 +4529,9 @@ def mod_xml() -> str:
     load_block = """\t\t\t\t<Load>
 \t\t\t\t\t<CAM>Data\\phantom_textdata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_gpltext.cam</CAM>
+\t\t\t\t\t<CAM>Data\\phantom_miscdata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_maindata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_interfacedata.cam</CAM>
-\t\t\t\t\t<CAM>Data\\phantom_mx_interfacedata.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_voices.cam</CAM>
 \t\t\t\t\t<CAM>Data\\phantom_sounddesc.cam</CAM>
 \t\t\t\t\t<Descriptions>Data\\phantom_units.xml</Descriptions>
@@ -4621,6 +4582,35 @@ def patch_ap10_menu_for_ap07(data: bytes) -> bytes:
     # AP10 control—including native Upgrade and Heroes—at its stock offset.
     struct.pack_into("<2I", output, AP10_SPELL_BUTTON_RECT_OFFSET + 8, 0, 0)
     return bytes(output)
+
+
+def write_miscdata_cam(source_miscdata: Path, output_path: Path) -> None:
+    """Add the Haunt to Majesty's native building dependency table."""
+    building_dependencies = read_cam_entry(source_miscdata, b"DATA", b"BDEP")
+    stock_data = building_dependencies.data
+    haunt_rule = b"PHG1 : ABJ2 ABJ3 NOT NOT ||"
+
+    if haunt_rule in stock_data:
+        raise ValueError("stock BDEP unexpectedly already contains the Haunt rule")
+    if not stock_data.endswith(b"\r\n"):
+        raise ValueError("stock BDEP no longer ends with its required blank line")
+
+    patched_data = (
+        stock_data
+        + b"\r\n# Phantoms Haunt requires a level 2 Palace or better\r\n"
+        + haunt_rule
+        + b"\r\n"
+    )
+    write_cam(
+        (
+            CamSection(
+                extension=b"DATA",
+                padding=b"\x00\x00\x00\x00",
+                entries=(CamEntry(name=pad_name(b"BDEP"), data=patched_data),),
+            ),
+        ),
+        output_path,
+    )
 
 
 def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
@@ -4762,6 +4752,7 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
                 "as more of a suggestion than a law."
             ),
             fourcc_id("hP34"): (
+                "- Requires a level 2 Palace\n\n"
                 "- Recruits Phantoms\n\n"
                 "- Houses up to four guild members\n\n"
                 "- Paladins refuse to remain in any realm that harbors a completed Haunt\n\n"
@@ -4905,6 +4896,7 @@ def write_maindata_cam(
     endless_winter_hit_source_png: Path | None,
     endless_winter_missile_source_png: Path | None,
     ice_effect_maindata: Path | None,
+    unused_tile_mode: str = "stock",
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
     hero_imag = replace_priestess_die_holds_with_directional_third_frames(hero_imag)
@@ -6162,6 +6154,13 @@ def write_maindata_cam(
             data=endless_winter_anchor_image,
         )
     )
+    tile_entries = reduce_unreferenced_tiles(
+        tile_entries,
+        [entry.data for entry in image_entries],
+        set(replacement_tiles) | set(range(max_tile_index + 1, len(tile_entries))),
+        unused_tile_mode,
+    )
+
     write_cam(
         (
             CamSection(
@@ -6180,6 +6179,7 @@ def write_mx_interfacedata_cam(
     source_interfacedata: Path,
     output_path: Path,
     dark_staff_mx_icon_rgb: Path | None,
+    unused_tile_mode: str = "stock",
 ) -> None:
     weapon_image = read_cam_entry(source_interfacedata, b"IMAG", WEAPON_ICON_IMAGE).data
     tiles = read_cam_entries(source_interfacedata, b"TILE")
@@ -6192,9 +6192,15 @@ def write_mx_interfacedata_cam(
     tile_indices = referenced_tile_indices(weapon_image, len(tiles))
     tile_indices.update(replacement_tiles)
     max_tile_index = max(tile_indices)
-    tile_entries = tuple(
+    tile_entries = [
         CamEntry(name=tiles[tile_index].name, data=replacement_tiles.get(tile_index, tiles[tile_index].data))
         for tile_index in range(max_tile_index + 1)
+    ]
+    tile_entries = reduce_unreferenced_tiles(
+        tile_entries,
+        [weapon_image],
+        set(replacement_tiles),
+        unused_tile_mode,
     )
 
     write_cam(
@@ -6204,7 +6210,7 @@ def write_mx_interfacedata_cam(
                 padding=b"\x00\x00\x00\x00",
                 entries=(CamEntry(name=pad_name(WEAPON_ICON_IMAGE), data=weapon_image),),
             ),
-            CamSection(extension=b"TILE", padding=b"\x01\x00\x00\x00", entries=tile_entries),
+            CamSection(extension=b"TILE", padding=b"\x01\x00\x00\x00", entries=tuple(tile_entries)),
         ),
         output_path,
     )
@@ -6221,6 +6227,7 @@ def write_interfacedata_cam(
     dark_staff_small_icon_rgb: Path | None,
     dark_staff_icon_rgb: Path | None,
     control_panel_rgb: Path | None,
+    unused_tile_mode: str = "stock",
 ) -> None:
     icon_images = {
         SPELL_LIST_ICON_IMAGE: read_cam_entry(source_interfacedata, b"IMAG", SPELL_LIST_ICON_IMAGE).data,
@@ -6294,15 +6301,23 @@ def write_interfacedata_cam(
     )
     tile_entries.extend(extra_tiles)
 
+    image_entries = (
+        *tuple(CamEntry(name=pad_name(name), data=data) for name, data in icon_images.items()),
+        CamEntry(name=pad_name(PHANTOM_RAW_TEXTURES_IMAGE), data=phantom_raw_texture_image),
+    )
+    tile_entries = reduce_unreferenced_tiles(
+        tile_entries,
+        [entry.data for entry in image_entries],
+        set(replacement_tiles) | set(range(base_max_tile_index + 1, len(tile_entries))),
+        unused_tile_mode,
+    )
+
     write_cam(
         (
             CamSection(
                 extension=b"IMAG",
                 padding=b"\x00\x00\x00\x00",
-                entries=(
-                    *tuple(CamEntry(name=pad_name(name), data=data) for name, data in icon_images.items()),
-                    CamEntry(name=pad_name(PHANTOM_RAW_TEXTURES_IMAGE), data=phantom_raw_texture_image),
-                ),
+                entries=image_entries,
             ),
             CamSection(extension=b"TILE", padding=b"\x01\x00\x00\x00", entries=tuple(tile_entries)),
         ),
@@ -7930,6 +7945,116 @@ def projectile_direction_frame_for_source_tile(tile_index: int) -> tuple[int, in
 def projectile_angle_for_direction(direction_index: int) -> float:
     direction = direction_index % ICE_LANCE_PROJECTILE_DIRECTIONS
     return -math.pi / 2.0 + (2.0 * math.pi * direction / ICE_LANCE_PROJECTILE_DIRECTIONS)
+
+
+UNUSED_TILE_MODES = ("stock", "blank", "empty")
+
+
+def engine_addressed_tile_indices() -> set[int]:
+    """Tile slots Majesty reaches by number, not through one of our IMAG records.
+
+    Tracking only IMAG references is not enough. The 2026-08-01 `blank` test
+    blanked BUILDING_ICON_TILE and the Haunt vanished from the build list,
+    because the build menu addresses that slot directly. HERO_PORTRAIT_TILE and
+    HERO_ICON_TILE survived that build only because they also happened to be in
+    `replacement_tiles`. Every slot this module names by constant belongs here.
+    """
+    indices: set[int] = {
+        HERO_PORTRAIT_TILE,
+        HERO_ICON_TILE,
+        BUILDING_PROFILE_TILE,
+        BUILDING_ICON_TILE,
+        HERO_INTERFACE_PANEL_TILE,
+        BUILDING_DIALOG_BACKING_TEMPLATE_TILE,
+        ICE_LANCE_ICON_TILE,
+        FIRE_BLAST_SPELL_ICON_TILE,
+    }
+    for group in (
+        BUILDING_DIALOG_BACKING_TILES,
+        ICE_LANCE_PROJECTILE_TILES,
+        ICE_LANCE_DIRECTIONAL_PROJECTILE_TILES,
+        ICE_LANCE_SPELL_ICON_TILES,
+        FROST_ARMOR_SPELL_ICON_TILES,
+        ICY_TOUCH_SPELL_ICON_TILES,
+        BLIZZARD_SPELL_ICON_TILES,
+        CALL_TO_GRAVE_SPELL_ICON_TILES,
+        ETERNAL_SOUL_SPELL_ICON_TILES,
+        STAFF_ICON_TILES,
+        STAFF_SMALL_ICON_TILES,
+        MX_STAFF_ICON_TILES,
+        LEATHER_ARMOR_ICON_TILES,
+    ):
+        indices.update(group)
+    return indices
+
+
+def minimal_placeholder_tile(palette_index: int = 0) -> bytes:
+    """Smallest structurally valid TILE v3 record that draws nothing.
+
+    Majesty resolves tiles by their position in a CAM's TILE section, so a mod
+    that appends custom tiles must still emit an entry for every slot below the
+    highest index it uses. Emitting the stock artwork for those slots is what
+    inflates the package to ~167 MB, nearly all of it Majesty's own art.
+
+    This is a 1x1 record whose single row terminates immediately with no opaque
+    runs. Layout: 26-byte header, one u32 row offset, one 4-byte end segment.
+    """
+    tile = bytearray(26)
+    struct.pack_into("<H", tile, 0, 3)              # version
+    struct.pack_into("<H", tile, 2, 1)              # height
+    struct.pack_into("<H", tile, 4, 1)              # width
+    struct.pack_into("<I", tile, 22, palette_index) # palette id
+    tile += struct.pack("<I", 4)                    # row 0 payload begins after the offset table
+    tile += struct.pack("<HBB", 0, 0, 0x80)         # x_end 0, count 0, terminating flag
+    return bytes(tile)
+
+
+def placeholder_tile_for(mode: str, original: bytes) -> bytes:
+    """Return what an unreferenced tile slot should contain under `mode`."""
+    if mode == "stock":
+        return original
+    if mode == "empty":
+        return b""
+    if mode == "blank":
+        palette_index = tile_palette_index(original)
+        return minimal_placeholder_tile(palette_index if palette_index is not None else 0)
+    raise ValueError(f"unknown unused-tile mode: {mode}")
+
+
+def imag_referenced_tile_indices(images: list[bytes], tile_count: int) -> set[int]:
+    """Every tile slot the supplied IMAG records can actually reach."""
+    referenced: set[int] = set()
+    for image in images:
+        referenced |= referenced_tile_indices(image, tile_count)
+        referenced |= referenced_low16_tile_indices(image, tile_count)
+    return referenced
+
+
+def reduce_unreferenced_tiles(
+    tile_entries: list[CamEntry],
+    images: list[bytes],
+    always_keep: set[int],
+    mode: str,
+) -> list[CamEntry]:
+    """Replace tile slots no emitted IMAG can reach with placeholders.
+
+    Entry names and positions are preserved, because Majesty addresses tiles by
+    their index within the section. Only the payload changes.
+    """
+    if mode == "stock":
+        return tile_entries
+
+    keep = (
+        imag_referenced_tile_indices(images, len(tile_entries))
+        | always_keep
+        | {index for index in engine_addressed_tile_indices() if index < len(tile_entries)}
+    )
+    return [
+        entry
+        if index in keep
+        else CamEntry(name=entry.name, data=placeholder_tile_for(mode, entry.data))
+        for index, entry in enumerate(tile_entries)
+    ]
 
 
 def blank_indexed_v3_tile(template_tile: bytes) -> bytes:

@@ -14,9 +14,13 @@ It is recommended to leverage an AI coding agent to ingest the content in this r
 
 ## Phantom and Haunt
 
-The Haunt becomes available at Palace level 2. It recruits Phantoms for 700
-gold with a 16-second recruitment time. A new Phantom begins with 1,600 level
-XP, 8 Vitality, 8 Strength, 25 Magic Resistance, and 25 Dodge.
+The Haunt requires a level 2 Palace. Its build-menu availability uses Majesty's
+native `BDEP` building dependency table—the same mechanism used by the stock
+Wizard and temple guilds—so it is hidden at Palace level 1 and appears normally
+at level 2. It recruits Phantoms for 700 gold with a 16-second recruitment
+time. This transition is confirmed in game in both A Deal with a Demon and Rise
+of the Rat King. A new Phantom begins with 1,600 level XP, 8 Vitality, 8
+Strength, 25 Magic Resistance, and 25 Dodge.
 
 Phantoms use Wizard-like spell decisions with a 30% retreat threshold, an
 enemy-estimation multiplier of 1.0, and a self-estimation multiplier of 1.2.
@@ -162,7 +166,7 @@ runtime permits it.
 | Interface | Custom raw-texture and icon CAM entries |
 | Text | Dedicated STRT and SMNU additions |
 | Audio | PCM WAVE records with stock-shaped DSND descriptors |
-| Compatibility | Dataset base `Any`, unique IDs, and guarded stock-compatible hooks |
+| Compatibility | Dataset base `Any`, native BDEP Palace gating, unique IDs, and guarded stock-compatible hooks |
 
 Technical package names use `CustomGuildPhantomsHaunt`; player-facing text uses
 `Custom Guild: Phantoms Haunt`.
@@ -173,6 +177,12 @@ The builder reads stock CAM structures, clones only the required records, and
 appends namespaced custom entries. Building and hero frames are fitted to the
 native TILE geometry rather than replacing stock assets.
 
+Majesty addresses tiles by their position within a CAM's TILE section, so an
+archive that appends custom tiles must still contain an entry for every slot
+below the highest index it uses. Those unreferenced slots are written as
+zero-length entries; the engine then falls back to the stock archive for them.
+The package therefore contains only its own artwork, and none of Majesty's.
+
 Custom building shadows use Majesty's reserved palette-control indices. Each
 construction, active, damaged, collapsed, and destroyed frame receives a
 geometry-derived shadow before TILE encoding. See
@@ -181,9 +191,11 @@ geometry-derived shadow before TILE encoding. See
 ### GPL and quest compatibility
 
 Generated GPL implements Phantom progression, decisions, equipment, spells,
-Haunt upgrades, Priestess interactions, Paladin exclusivity, and guarded
-availability handling. The package uses `Dataset base="Any"` so one build can
-load in Original Majesty and the Northern Expansion. See
+Haunt upgrades, Priestess interactions, Paladin exclusivity, and guarded quest
+handling. Palace availability is data-driven through the stock `BDEP` table,
+not a Palace watcher or construction callback. The package uses
+`Dataset base="Any"` so one build can load in Original Majesty and the Northern
+Expansion. See
 [Quest compatibility](docs/quest-compatibility.md).
 
 ### Voice pipeline

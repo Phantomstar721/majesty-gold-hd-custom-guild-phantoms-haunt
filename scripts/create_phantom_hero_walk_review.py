@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT.parent / "external-BrandonWill-Majesty"))
+sys.path.insert(0, str(ROOT.parent / "external" / "BrandonWill-Majesty"))
 
 import build_phantom_guild as builder  # noqa: E402
 import sprite_extractor as extractor  # noqa: E402

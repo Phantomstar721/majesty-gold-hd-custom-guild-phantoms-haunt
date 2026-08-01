@@ -5,9 +5,22 @@ for both Original Majesty and the Northern Expansion.
 
 ## Availability
 
-The Palace owns a lightweight availability watcher. It exposes the Haunt when
-the current quest permits its building category and the player's Palace has
-reached level 2.
+The Haunt uses Majesty's native `DATA/BDEP` building dependency table. Its
+stock-shaped four-character building ID, `PHG1`, has the same Palace condition
+as the Wizard Guild and level-2 temple guilds:
+
+```text
+PHG1 : ABJ2 ABJ3 NOT NOT ||
+```
+
+The engine therefore hides the Haunt at Palace level 1 and exposes it at level
+2 or 3 before any construction order exists. There is no placement deletion,
+refund, Palace polling thread, or Palace lifecycle override.
+
+Confirmed in game on 2026-08-01: A Deal with a Demon hides the Haunt at Palace
+level 1, exposes it immediately after the Palace reaches level 2, and peasants
+construct it normally. Rise of the Rat King exposes it from its starting
+level-2 Palace.
 
 The Haunt is treated as a temple-tier arcane guild when matching stock quest
 restrictions. Restrictions aimed only at non-human settlements do not exclude
@@ -37,9 +50,11 @@ recruitment:
 
 ## Palace and quest startup
 
-The Palace begins the Haunt availability watcher during its birth callback.
-The watcher then reevaluates the current Palace level and quest restrictions
-without requiring changes to individual quest files.
+The mod does not override Palace birth or upgrade callbacks. Palace-level
+availability never calls `DisableUnitType` or `EnableUnitType`; it is evaluated
+by `BDEP`, just like stock guild dependencies. Quest scripts that deliberately
+forbid a class of buildings continue to use Majesty's ordinary unit-type
+restriction calls through shared lock/unlock helpers.
 
 ## Priestess and Paladin interactions
 
@@ -57,7 +72,7 @@ The release validator checks:
 
 - `Dataset base="Any"` packaging;
 - unique custom identities;
-- Palace-level availability behavior;
+- native `BDEP` Palace-level gating and preservation of the stock table;
 - Embassy and Outpost selection;
 - Paladin exclusion and restoration;
 - Priestess support routing;

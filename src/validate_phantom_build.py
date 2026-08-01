@@ -115,6 +115,9 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
     "phantom_gpltext.cam": {
         b"STRT": {b"QITM", b"AITX", b"HPTX", b"HN41", b"HN42"},
     },
+    "phantom_miscdata.cam": {
+        b"DATA": {b"BDEP"},
+    },
     "phantom_maindata.cam": {
         b"IMAG": {
             b"PHM1Phantom",
@@ -157,10 +160,10 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
         },
         b"TILE": set(),
     },
-    "phantom_mx_interfacedata.cam": {
-        b"IMAG": {b"INBwicons weapons"},
-        b"TILE": set(),
-    },
+    # phantom_mx_interfacedata.cam was removed. It carried 753 tiles, every one
+    # byte-identical to stock, zero custom tiles, and a single unchanged copy of
+    # the stock INBwicons weapons record. It contributed nothing but 25.7 MB and
+    # an unnecessary override of a stock interface record.
     "phantom_voices.cam": {
         b"WAVE": {
             b"PHS1",
@@ -191,9 +194,9 @@ EXPECTED_DESCRIPTION_IDS = {
         *((("Unit", agent_name) for _, agent_name, _, _ in phantom_equipment_item_records())),
         ("Unit", "FrostArmorBonus"),
         ("Unit", "PHW1"),
-        ("Unit", "MBPhantomGuild"),
-        ("Unit", "MBPhantomGuild2"),
-        ("Unit", "MBPhantomGuild3"),
+        ("Unit", "PHG1"),
+        ("Unit", "PHG2"),
+        ("Unit", "PHG3"),
     },
     "phantom_actions.xml": {
         ("Action", "WRg1"),
@@ -358,6 +361,13 @@ EXPECTED_BUILDING_DESTRUCTION_ATTACHMENTS = {
 }
 
 
+# True for the normal `empty` build, where unreferenced tile slots are
+# zero-length and the engine falls back to the stock archive. Set False only for
+# a `--unused-tile-mode stock` build, which fills those slots with Majesty's own
+# artwork and inflates the package to roughly 160 MB.
+ALLOW_EMPTY_TILES = True
+
+
 def fail(message: str) -> None:
     raise ValidationError(message)
 
@@ -505,7 +515,7 @@ def validate_archive(path: Path) -> tuple[dict[bytes, list[Entry]], dict[tuple[b
                     fail(f"{path}: {extension!r} entry {entry_index} has an empty name")
                 if name and name in seen_names:
                     fail(f"{path}: duplicate entry: {extension.decode(errors='replace')}/{name!r}")
-                if size == 0:
+                if size == 0 and not (ALLOW_EMPTY_TILES and extension == b"TILE"):
                     fail(f"{path}: {extension.decode(errors='replace')}/{name!r} is empty")
                 if offset < content_end or offset + size > file_size:
                     fail(
@@ -547,6 +557,12 @@ def validate_archive(path: Path) -> tuple[dict[bytes, list[Entry]], dict[tuple[b
             payload = bytes(data[entry.offset : entry.offset + entry.size])
             validate_strt(path, entry, payload)
             captured[(entry.section, entry.name)] = payload
+
+        for entry in sections.get(b"DATA", []):
+            if entry.name == b"BDEP":
+                captured[(entry.section, entry.name)] = bytes(
+                    data[entry.offset : entry.offset + entry.size]
+                )
 
         for entry in sections.get(b"SMNU", []):
             if entry.name == b"AP07":
@@ -1238,6 +1254,58 @@ def referenced_indices(image: bytes, mode: str, tile_count: int) -> set[int]:
     return values
 
 
+def validate_no_redistributed_stock_art(
+    path: Path,
+    sections: dict[bytes, list[Entry]],
+) -> None:
+    """Reject tile slots that carry payload the package does not reference.
+
+    Majesty addresses tiles by their position in a CAM's TILE section, so a mod
+    appending custom tiles must emit an entry for every slot below the highest
+    index it uses. Filling those slots with Majesty's own artwork is what once
+    made this package ~160 MB, roughly 157 MB of which was the publisher's art
+    rather than ours.
+
+    Leaving them zero-length is confirmed to work: the engine falls back to the
+    stock archive for a slot the mod supplies no payload for. This check exists
+    so that behaviour cannot silently regress and quietly reintroduce ~157 MB of
+    redistributed art, which is exactly how the packaging documentation and the
+    shipped artifact drifted apart in the first place.
+    """
+    tiles = sections.get(b"TILE")
+    if not tiles:
+        return
+
+    data = path.read_bytes()
+    referenced: set[int] = set()
+    for entry in sections.get(b"IMAG", []):
+        image = data[entry.offset : entry.offset + entry.size]
+        referenced |= referenced_indices(image, "full", len(tiles))
+        referenced |= referenced_indices(image, "low16", len(tiles))
+
+    offenders = [
+        entry.index
+        for entry in tiles
+        if entry.index not in referenced and entry.size > 0
+    ]
+    if not offenders:
+        return
+
+    by_index = {entry.index: entry.size for entry in tiles}
+    carried = sum(by_index[index] for index in offenders)
+    # Slots the engine addresses by number rather than through one of our IMAG
+    # records must keep real data, so a small allowance is expected. Anything
+    # near the full stock archive is the regression this guards against.
+    if carried > 2_000_000:
+        fail(
+            f"{path}: {len(offenders)} unreferenced tile slots carry "
+            f"{carried / 1e6:.1f} MB of payload. Unreferenced slots must be "
+            f"zero-length so the engine falls back to the stock archive. "
+            f"Building with --unused-tile-mode stock reintroduces roughly "
+            f"157 MB of redistributed Majesty artwork."
+        )
+
+
 def validate_custom_tile_references(
     path: Path,
     sections: dict[bytes, list[Entry]],
@@ -1812,7 +1880,7 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
             f"{units_path}: Phantom must cost 700 gold and recruit in 16000 ms"
         )
     expected_building_identity = (
-        'ID="MBPhantomGuild" Name="Phantoms_Haunt" Description="Phantoms Haunt"'
+        'ID="PHG1" Name="Phantoms_Haunt" Description="Phantoms Haunt"'
     )
     if expected_building_identity not in units:
         fail(f"{units_path}: building identity was not renamed to Phantoms Haunt")
@@ -1926,7 +1994,7 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
     tree = parse_xml(units_path)
     expected_levels = (
         (
-            "MBPhantomGuild",
+            "PHG1",
             "Phantoms_Haunt",
             "PHG1",
             None,
@@ -1936,7 +2004,7 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
             "1400",
         ),
         (
-            "MBPhantomGuild2",
+            "PHG2",
             "Phantoms_Haunt2",
             "PHG2",
             "Phantoms_Haunt",
@@ -1946,7 +2014,7 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
             "1800",
         ),
         (
-            "MBPhantomGuild3",
+            "PHG3",
             "Phantoms_Haunt3",
             "PHG3",
             "Phantoms_Haunt2",
@@ -2086,8 +2154,14 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         "function Priestess_tree(agent ThisAgent)",
         "$Build_Horde(ThisAgent, 95) == False",
         "$Phantom_Priestess_Follow_Check(ThisAgent) == False",
-        "$Purchase_Bazaar(ThisAgent, 70) == False",
-        "$Hall_Champs_Check(ThisAgent, 40) == False",
+        # The two expansion-only decisions must go through the guarded
+        # wrappers, never be called directly. Purchase_Bazaar and
+        # Hall_Champs_Check do not exist in Original Majesty, and calling them
+        # there kills the Priestess decision chain mid-tree.
+        "$Phantom_Priestess_Bazaar_Check(ThisAgent, 70) == False",
+        "$Phantom_Priestess_Champs_Check(ThisAgent, 40) == False",
+        'Bazaars,\n\t\t#MyPlayer,\n\t\t#CheckTitles,\n\t\t"Magic_Bazaar"',
+        'Halls,\n\t\t#MyPlayer,\n\t\t#CheckTitles,\n\t\t"HallOfChampions"',
         "function follow_support_check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean",
         'If (ThisAgent\'s "Title" == "Phantom")',
         "$Wizard_tree(thisagent);",
@@ -4639,7 +4713,7 @@ def validate_paladin_recruitment_restriction(output_root: Path) -> None:
         < construction.rindex("$ListObjects(")
         < construction.index('$DisableUnitType("Paladin");')
         < construction.index("$MessageFlag(")
-        < construction.index("$LocalChatMessage(")
+        < construction.rindex("$LocalChatMessage(")
     ):
         fail(
             f"{gpl_path}: Haunt construction must preserve basic_birth before "
@@ -4790,14 +4864,19 @@ def validate_quest_compatibility(output_root: Path) -> None:
         candidates = [value for value in (next_lower, next_upper) if value >= 0]
         end = min(candidates) if candidates else len(gpl)
         quest_override = gpl[start:end]
-        if (
-            '$DisableUnitType("Phantoms_Haunt");' not in quest_override
-            or "$Phantom_Lock_Haunt_For_Quest();" not in quest_override
-        ):
+        if "$Phantom_Lock_Haunt_For_Quest();" not in quest_override:
             fail(
-                f"{gpl_path}: {function_name} must disable and persistently "
-                "lock Haunt construction"
+                f"{gpl_path}: {function_name} must apply the quest's native "
+                "unit-type restriction through the shared Haunt helper"
             )
+
+    lock_start = gpl.index("Function Phantom_Lock_Haunt_For_Quest()")
+    lock_end = gpl.index("Function Phantom_Unlock_Haunt_For_Quest()", lock_start)
+    unlock_end = gpl.index("Function Phantom_Player_Has_Placed_Haunt", lock_end)
+    if '$DisableUnitType("Phantoms_Haunt");' not in gpl[lock_start:lock_end]:
+        fail(f"{gpl_path}: quest lock helper must use stock DisableUnitType")
+    if '$EnableUnitType("Phantoms_Haunt");' not in gpl[lock_end:unlock_end]:
+        fail(f"{gpl_path}: quest unlock helper must use stock EnableUnitType")
 
     slay_start = gpl.find("function SLAY_DRAGON")
     slay_end = gpl.find("\nfunction ", slay_start + 1)
@@ -4854,42 +4933,42 @@ def validate_release_playtest_contract(output_root: Path) -> None:
             f"test structures {present_test_scaffolding}"
         )
 
-    palace_contract = (
+    forbidden_dynamic_toggles = (
+        "Function Phantom_Palace_Haunt_Availability_Watch",
         "Function Palace_Birth(agent ThisAgent)",
-        '$NewThread(ThisAgent\'s "activeScript", #palace_revenue_cycle, ThisAgent);',
-        '$NewThread(ThisAgent\'s "Guard_Function", #Normal_Cycle, ThisAgent);',
-        "Phantom_Palace_Haunt_Availability_Watch",
-        'Palace\'s "Level" < 2',
-        '$DisableUnitType("Phantoms_Haunt");',
-        '$EnableUnitType("Phantoms_Haunt");',
-        "PhantomHauntQuestDisabled",
+        "Function Palace_upgrade2(agent ThisAgent)",
     )
-    missing_palace = [value for value in palace_contract if value not in gpl]
-    if missing_palace:
+    present_toggles = [value for value in forbidden_dynamic_toggles if value in gpl]
+    if present_toggles:
         fail(
-            f"{gpl_path}: Palace-level-2 Haunt availability contract is "
-            f"missing {missing_palace}"
+            f"{gpl_path}: release GPL must preserve the stock Palace lifecycle; "
+            f"found {present_toggles}"
         )
 
-    palace_start = gpl.index("Function Palace_Birth(agent ThisAgent)")
-    palace_end = gpl.index("\nFunction ", palace_start + 1)
-    palace_birth = gpl[palace_start:palace_end]
-    direct_start = (
-        '$RunThread(\n'
-        '\t\tThisAgent\'s "PhantomHauntAvailabilityWatch",\n'
-        '\t\t250,\n'
-        '\t\tThisAgent\n'
-        '\t);'
+    construction_start = gpl.index(
+        "Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)"
     )
-    if direct_start not in palace_birth:
+    construction_end = gpl.index("\nFunction ", construction_start + 1)
+    construction = gpl[construction_start:construction_end]
+    if "$basic_birth(ThisAgent);" not in construction:
+        fail(f"{gpl_path}: Haunt construction must retain stock basic_birth")
+    forbidden_construction_gate = (
+        'Palace = $GetPalace(ThisAgent);',
+        'Palace\'s "Level" < 2',
+        "PhantomHauntQuestDisabled",
+        "#Phantom_Palace_Level_Message",
+        "#Phantom_Quest_Locked_Message",
+        "#Phantom_Haunt_Base_Cost",
+        "$Clean_Palace_Construction_Lists(ThisAgent);",
+        "$DeleteGamePiece(ThisAgent);",
+    )
+    present_construction_gate = [
+        value for value in forbidden_construction_gate if value in construction
+    ]
+    if present_construction_gate:
         fail(
-            f"{gpl_path}: Palace_Birth must directly start the Haunt "
-            "availability watcher"
-        )
-    if '$IsRunning(ThisAgent\'s "PhantomHauntAvailabilityWatch")' in palace_birth:
-        fail(
-            f"{gpl_path}: Palace_Birth must not gate the availability watcher's "
-            "first run behind IsRunning"
+            f"{gpl_path}: construction contains obsolete Palace-gating hacks "
+            f"{present_construction_gate}"
         )
 
 
@@ -4923,6 +5002,8 @@ def validate(output_root: Path) -> None:
             fail(f"{path}: required archive is missing")
         result = validate_archive(path)
         validate_expected_entries(path, result[0])
+        if ALLOW_EMPTY_TILES:
+            validate_no_redistributed_stock_art(path, result[0])
         archive_results[filename] = result
 
     gpltext_path = output_root / "Data" / "phantom_gpltext.cam"
@@ -4952,7 +5033,7 @@ def validate(output_root: Path) -> None:
     if advisor_count <= 177:
         fail(
             f"{gpltext_path}: STRT/AITX has {advisor_count} strings; "
-            "Paladin construction warning requires slot 177"
+            "the Paladin construction warning requires slot 177"
         )
     warning_offset = struct.unpack_from("<I", advisor_text, 4 + 177 * 4)[0]
     warning_id = struct.unpack_from("<I", advisor_text, warning_offset)[0]
@@ -4965,6 +5046,37 @@ def validate(output_root: Path) -> None:
         fail(
             f"{gpltext_path}: STRT/AITX slot 177 is not the known-good "
             "plain-text Paladin construction warning"
+        )
+    miscdata_path = output_root / "Data" / "phantom_miscdata.cam"
+    building_dependencies = archive_results["phantom_miscdata.cam"][1].get(
+        (b"DATA", b"BDEP")
+    )
+    if building_dependencies is None:
+        fail(f"{miscdata_path}: DATA/BDEP was not found")
+    haunt_rule = b"PHG1 : ABJ2 ABJ3 NOT NOT ||"
+    if building_dependencies.count(haunt_rule) != 1:
+        fail(
+            f"{miscdata_path}: BDEP must contain exactly one native level-2 "
+            "Palace dependency for PHG1"
+        )
+    required_stock_rules = (
+        b"ABP1 : ABJ2 ABJ3 NOT NOT ||",
+        b"ABQ1 : ABJ2 ABJ3 NOT NOT ||",
+        b"ABY1 : ABJ2 ABJ3 NOT NOT ||",
+        b"ABk1 : ABJ2 ABJ3 NOT NOT ||",
+    )
+    missing_stock_rules = [
+        rule for rule in required_stock_rules if rule not in building_dependencies
+    ]
+    if missing_stock_rules:
+        fail(
+            f"{miscdata_path}: BDEP did not preserve the stock dependency table; "
+            f"missing {missing_stock_rules}"
+        )
+    if not building_dependencies.endswith(haunt_rule + b"\r\n"):
+        fail(
+            f"{miscdata_path}: Haunt BDEP rule must be last and retain the "
+            "parser's required blank final line"
         )
 
     textdata_path = output_root / "Data" / "phantom_textdata.cam"
@@ -5237,9 +5349,23 @@ def validate(output_root: Path) -> None:
 
 
 def main() -> int:
+    global ALLOW_EMPTY_TILES
+
     parser = argparse.ArgumentParser(description="Validate a generated Phantoms Haunt package.")
     parser.add_argument("--output-root", required=True, type=Path)
+    parser.add_argument(
+        "--unused-tile-mode",
+        choices=("empty", "stock"),
+        default="empty",
+        help=(
+            "Must match how the package was built. 'empty' expects zero-length "
+            "entries in unreferenced tile slots and rejects a package that "
+            "carries redistributed stock artwork there. 'stock' is the legacy "
+            "~160 MB layout."
+        ),
+    )
     args = parser.parse_args()
+    ALLOW_EMPTY_TILES = args.unused_tile_mode == "empty"
     try:
         validate(args.output_root.resolve())
     except ValidationError as exc:
