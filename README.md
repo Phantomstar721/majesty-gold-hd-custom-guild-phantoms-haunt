@@ -8,6 +8,10 @@ assets, audio, progression, AI behavior, and quest compatibility.
 The playable mod is available as
 [Custom Guild: Phantoms Haunt on Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3769947406).
 
+Note that I do not claim the methods used here are the BEST way to do anything I have done, but they are functional ways! I encourage others to try themmselves and share any improvements, corrections, additions, or better strategies.
+
+It is recommended to leverage an AI coding agent to ingest the content in this repo and make it significantly easier to do the CAM unpacking/repacking required for this level of Majesty modding.
+
 ## Phantom and Haunt
 
 The Haunt becomes available at Palace level 2. It recruits Phantoms for 700
