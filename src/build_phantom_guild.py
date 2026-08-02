@@ -160,6 +160,16 @@ SHARED_PRIESTESS_PHANTOM_ENDINGS = (
     "Mournsong", "of the Last Veil", "of Winter's Wake",
     "of the Quiet Grave", "of the Long Night", "the Gravewise", "the Veiled",
 )
+TEMPLE_LOCKED_EPIC_QUESTS = (
+    "DARK_FOREST",
+    "DAY_OF_RECKONING",
+    "SLAY_DRAGON",
+    "FORSAKEN_LANDS",
+    "SAVE_PRINCE",
+    "WIZARDS_CURSE",
+)
+TEMPLE_LOCKED_EXPANSION_QUESTS = ("VIGIL",)
+TEMPLE_LOCKED_DEMO_QUESTS = ("VAMPIRIC_REVENGE",)
 
 
 @dataclass(frozen=True)
@@ -181,6 +191,7 @@ def main() -> int:
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument("--voices-only", action="store_true")
     parser.add_argument("--gpl-only", action="store_true")
+    parser.add_argument("--units-only", action="store_true")
     parser.add_argument("--text-only", action="store_true")
     parser.add_argument("--portrait-rgb", type=Path)
     parser.add_argument("--hero-icon-rgb", type=Path)
@@ -239,6 +250,13 @@ def main() -> int:
 
     if args.gpl_only:
         write_gpl_sources(args.game_path, gpl_dir)
+        return 0
+
+    if args.units_only:
+        (data_dir / "phantom_units.xml").write_text(
+            phantom_units_xml(),
+            encoding="utf-8",
+        )
         return 0
 
     source_textdata = args.game_path / "Data" / "textdata.cam"
@@ -441,7 +459,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Experience value="1600"/>
 \t\t\t<MaxHP value="18"/>
 \t\t\t<SightRange value="240"/>
-\t\t\t<Speed value="4"/>
+\t\t\t<Speed value="1"/>
 \t\t\t<AttackRange min="1" max="240"/>
 \t\t\t<Vitality value="8"/>
 \t\t\t<Artifice value="8"/>
@@ -527,7 +545,7 @@ def phantom_units_xml() -> str:
 \t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
 \t\t\t<Cost value="1400"/>
 \t\t\t<UpgradeTo value="Phantoms_Haunt2"/>
-\t\t\t<Multiplier value="1.0"/>
+\t\t\t<Multiplier value="2.0"/>
 \t\t\t<IncomeType value="2"/>
 \t\t\t<IncomeAmount value="40"/>
 \t\t\t<MaxHP value="250"/>
@@ -557,7 +575,7 @@ def phantom_units_xml() -> str:
 \t\t\t<Cost value="1800"/>
 \t\t\t<UpgradeTo value="Phantoms_Haunt3"/>
 \t\t\t<UpgradeFrom value="Phantoms_Haunt"/>
-\t\t\t<Multiplier value="1.0"/>
+\t\t\t<Multiplier value="2.0"/>
 \t\t\t<IncomeType value="2"/>
 \t\t\t<IncomeAmount value="40"/>
 \t\t\t<MaxHP value="350"/>
@@ -587,7 +605,7 @@ def phantom_units_xml() -> str:
 \t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
 \t\t\t<Cost value="2200"/>
 \t\t\t<UpgradeFrom value="Phantoms_Haunt2"/>
-\t\t\t<Multiplier value="1.0"/>
+\t\t\t<Multiplier value="2.0"/>
 \t\t\t<IncomeType value="2"/>
 \t\t\t<IncomeAmount value="40"/>
 \t\t\t<MaxHP value="475"/>
@@ -1239,7 +1257,7 @@ def phantom_hero_data() -> str:
 \t\t(PercentageHPRetreat 20)
 \t\t(enemy_estimation 1.0)
 \t\t(self_estimation 1.4)
-\t\t(Loyalty 55)
+\t\t(Loyalty 30)
 \t\t(Greed 12)
 \t\t(Luck 12)
 \t\t(Upgrade_Armor_Chance\t100)
@@ -1424,20 +1442,10 @@ def phantom_quest_rule_overrides(game_path: Path) -> str:
         encoding="cp1252"
     )
     expansion_source = (sdk_rules / "Quests_2.gpl").read_text(encoding="cp1252")
+    demo_source = (sdk_rules / "mx_Demo.gpl").read_text(encoding="cp1252")
 
-    disabled_quests = (
-        "BARREN_WASTE",
-        "BELL_BOOK_CANDLE",
-        "DARK_FOREST",
-        "DAY_OF_RECKONING",
-        "SLAY_DRAGON",
-        "FORSAKEN_LANDS",
-        "LICHE_QUEEN",
-        "SAVE_PRINCE",
-        "WIZARDS_CURSE",
-    )
     overrides: list[str] = []
-    for function_name in disabled_quests:
+    for function_name in TEMPLE_LOCKED_EPIC_QUESTS:
         function = extract_gpl_function(epic_source, function_name)
         if function_name == "DARK_FOREST":
             function = patch_dark_forest_entry_for_haunt(function)
@@ -1470,14 +1478,25 @@ def phantom_quest_rule_overrides(game_path: Path) -> str:
     )
     overrides.append(dark_forest_victory)
 
-    vigil = extract_gpl_function(expansion_source, "VIGIL")
-    vigil = substitute_once(
-        vigil,
-        r"(?im)^begin\s*$",
-        'begin\n\t$Phantom_Lock_Haunt_For_Quest();',
-        "lock the Haunt at the start of VIGIL",
-    )
-    overrides.append(vigil)
+    for function_name in TEMPLE_LOCKED_EXPANSION_QUESTS:
+        function = extract_gpl_function(expansion_source, function_name)
+        function = substitute_once(
+            function,
+            r"(?im)^begin\s*$",
+            'begin\n\t$Phantom_Lock_Haunt_For_Quest();',
+            f"lock the Haunt at the start of {function_name}",
+        )
+        overrides.append(function)
+
+    for function_name in TEMPLE_LOCKED_DEMO_QUESTS:
+        function = extract_gpl_function(demo_source, function_name)
+        function = substitute_once(
+            function,
+            r"(?im)^begin\s*$",
+            'begin\n\t$Phantom_Lock_Haunt_For_Quest();',
+            f"lock the Haunt at the start of {function_name}",
+        )
+        overrides.append(function)
 
     return "\n\n".join(overrides) + "\n"
 
@@ -1521,6 +1540,8 @@ def phantom_gpl(game_path: Path) -> str:
     item_expressions += "expression #Phantom_Paladin_Warning_Message 177\n"
     item_expressions += "expression #Phantom_Rush_Movement_Bonus -22\n"
     item_expressions += "expression #Phantom_Rush_Action_Bonus -10\n"
+    item_expressions += "expression #Phantom_Rush_Range_Bonus 60\n"
+    item_expressions += "expression #Phantom_Base_Movement_Bonus -15\n"
     return item_expressions + phantom_gpl_template() + "\n" + phantom_quest_rule_overrides(game_path)
 
 
@@ -1791,7 +1812,8 @@ def write_gpltext_cam(source_gpltext: Path, output_path: Path) -> None:
             ),
             fourcc_id("hP36"): (
                 "- Allows veteran Phantoms to master Endless Winter\n\n"
-                "- Rush unto Death hastens allied Priestesses and may draw them to support Phantoms in combat\n\n\n"
+                "- Rush unto Death hastens allied Priestesses, extends their attack and spell range, and may "
+                "draw them to support Phantoms in combat\n\n\n"
                 "\x01BCBCFFAt its greatest extent, the Haunt pierces the Veil with a crown of deathless ice. "
                 "Its cold beacon can be felt throughout the realm, drawing Phantoms and Priestesses together "
                 "beneath the promise that even death may be made to serve."
@@ -6314,6 +6336,16 @@ def write_voices_cam(output_path: Path, voice_dir: Path) -> None:
     write_cam((CamSection(extension=b"WAVE", padding=b"\x00\x00\x00\x00", entries=entries),), output_path)
 
 
+def dsnd_head_size(sound_name: bytes) -> int:
+    """Return the stock DSND HEAD identity-body size for *sound_name*.
+
+    HEAD has eight bytes of ID/type data followed by the raw sound name and
+    the stock two-null terminator. It is not four-byte aligned: stock's
+    13-character Rage_of_Krolm record declares a 23-byte HEAD body.
+    """
+    return 8 + len(sound_name) + 2
+
+
 def write_sounddesc_cam(source_path: Path, output_path: Path) -> None:
     # The CAM-tool audio probes proved new GPL-callable sounds by transforming
     # the stock RM01/Rage_of_Krolm DSND. Keep every field and size unchanged:
@@ -6356,7 +6388,7 @@ def write_sounddesc_cam(source_path: Path, output_path: Path) -> None:
     hero_template = read_cam_entry(source_path, b"DSND", b"WZ01Wizard").data
     hero_payload = hero_template.replace(b"WZ01", b"PV01").replace(
         b"Wizard\x00\x00",
-        b"Phantom\x00\x00",
+        b"Phantom_Voice\x00\x00",
     )
     hero_wave_replacements = {
         b"WZGT": b"PHC1",
@@ -6389,7 +6421,12 @@ def write_sounddesc_cam(source_path: Path, output_path: Path) -> None:
         raise ValueError(f"{source_path}: Wizard DSND template has no HEAD block")
     struct.pack_into("<I", hero_payload, 4, len(hero_payload) - 16)
     struct.pack_into("<I", hero_payload, 20, len(hero_payload) - 32)
-    struct.pack_into("<I", hero_payload, head_offset + 4, 17)
+    struct.pack_into(
+        "<I",
+        hero_payload,
+        head_offset + 4,
+        dsnd_head_size(b"Phantom_Voice"),
+    )
     hero_entry = CamEntry(
         name=pad_name(b"PV01Phantom_Voice"),
         data=bytes(hero_payload),

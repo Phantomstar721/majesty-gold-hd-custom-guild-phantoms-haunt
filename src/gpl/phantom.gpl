@@ -72,6 +72,12 @@ Begin
 		#ATTRIB_ActionRateModifier,
 		#Phantom_Rush_Action_Bonus
 	);
+	$AdjustAttribute(
+		ThisAgent,
+		#ATTRIB_MaxAttackRange,
+		#Phantom_Rush_Range_Bonus
+	);
+	ThisAgent's "castingrange" += #Phantom_Rush_Range_Bonus;
 	$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 1);
 End
 
@@ -90,7 +96,50 @@ Begin
 		#ATTRIB_ActionRateModifier,
 		- #Phantom_Rush_Action_Bonus
 	);
+	$AdjustAttribute(
+		ThisAgent,
+		#ATTRIB_MaxAttackRange,
+		- #Phantom_Rush_Range_Bonus
+	);
+	ThisAgent's "castingrange" -= #Phantom_Rush_Range_Bonus;
 	$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 0);
+End
+
+Function Phantom_Sync_Speed_Profile(agent ThisAgent)
+
+Declare
+	integer Call_To_Grave_Level;
+
+Begin
+	If ($HasAttribute("PhantomBaseMovementApplied", ThisAgent) == False)
+		$AddAttribute(
+			ThisAgent,
+			"PhantomBaseMovementApplied",
+			"boolean",
+			False
+		);
+
+	If (ThisAgent's "PhantomBaseMovementApplied" == False)
+		begin
+			$AdjustAttribute(
+				ThisAgent,
+				#ATTRIB_MovementRateModifier,
+				#Phantom_Base_Movement_Bonus
+			);
+			ThisAgent's "PhantomBaseMovementApplied" = True;
+		end
+
+	Call_To_Grave_Level = $GetSpellAttribute(
+		"call_to_grave",
+		"character_level"
+	);
+	If (
+		$GetAttribute(ThisAgent, #ATTRIB_ExperienceLevel) >=
+		Call_To_Grave_Level
+	)
+		$SetAttribute(ThisAgent, #ATTRIB_Speed, 5);
+	Else
+		$SetAttribute(ThisAgent, #ATTRIB_Speed, 1);
 End
 
 Function Phantom_Start_Player_Perk_Watch(agent ThisAgent)
@@ -185,6 +234,8 @@ Begin
 	Foreach Phantom in Phantoms do
 		If ($IsDead(Phantom) == False)
 			begin
+				$Phantom_Sync_Speed_Profile(Phantom);
+
 				If ($HasAttribute("PhantomIcyTouchHauntUnlocked", Phantom) == False)
 					$AddAttribute(
 						Phantom,
@@ -587,6 +638,7 @@ function Phantom_Priestess_Follow_Support(agent ThisAgent)
 declare
 	agent Target,New_Target;
 	integer TargetRange;
+	boolean Join_Attack;
 
 begin
 	Target = ThisAgent's "BackTarget";
@@ -678,13 +730,25 @@ begin
 											New_Target = Target's "Target";
 											TargetRange =
 												$DistanceBetweenAgents(New_Target, Target);
+											Join_Attack = False;
 											If (
+												New_Target's "Type" == "Building" ||
+												New_Target's "Type" == "Lair"
+											)
+												begin
+													If (Target's "ActiveScript" == $Attack_Object)
+														Join_Attack = True;
+												end
+											Else If (
 												TargetRange <
 												$GetAttribute(
 													ThisAgent,
 													#ATTRIB_MaxAttackRange
 												)
 											)
+												Join_Attack = True;
+
+											If (Join_Attack)
 												begin
 													ThisAgent's "ActiveScript" =
 														$Attack_Object;
@@ -1829,6 +1893,13 @@ begin
 
 	$createeffector(thisagent,"thought_bubble_danger",#danger_bubble_time);
 	$say(thisagent,"VFX_FLEE_COMBAT");
+
+	if (
+		thisagent's "Title" == "Phantom" &&
+		$isspellavailable(thisagent,"call_to_grave",1) &&
+		$Call_To_Grave_Check(thisagent) == 1
+	)
+		$castspell(thisagent,"call_to_grave",thisagent,"");
 end
 
 function Phantom_tree (agent thisagent)
@@ -1839,7 +1910,40 @@ begin
 	$DebugOut("Phantom deciding");
 
 	If ($Phantom_Try_Frost_Armor(thisagent) == False)
-		$Wizard_tree(thisagent);
+
+	if ($check_nearby(thisagent) == False)
+
+	if ($Check_rewards(thisagent,FALSE) == False)
+
+	if ($Defend_home(thisagent) == False)
+
+	if ($rest(thisagent) == False)
+
+	if ($Purchase_equipment(thisagent) == False)
+
+	if ($pursue_entertainment(thisagent) == False)
+
+	if ($Raid_lair(thisagent,80) == False)
+
+	if ($raid_enemy_building(thisagent,65) == False)
+
+	if ($Combat_wandering(thisagent,90) == False)
+
+	if ($combat_wandering_heroes(thisagent,75) == False)
+
+	if ($Explore_Map(thisagent,75) == False)
+
+	if ($Visit_Building(ThisAgent, "Royal_gardens", 5) == False)
+
+	if ($check_library(thisagent,15, "Train_magic_resist") == FALSE)
+
+	if ($Go_Home(thisagent,30) == False)
+
+		begin
+			$SpecifyIntent (ThisAgent, #intent_wandering);
+			thisagent's "counter" = 0;
+			thisagent's "activescript" = $hero_wander;
+		end
 end
 
 function Phantom_Hero_Birth (agent thisagent)
@@ -1868,6 +1972,7 @@ begin
 						);
 				end
 	$Phantom_grant_starter_items(thisagent);
+	$Phantom_Sync_Speed_Profile(thisagent);
 	$LearnSpell(thisagent, "ice_lance");
 	$ForgetSpell(thisagent, "icy_touch");
 	$ForgetSpell(thisagent, "endless_winter");
@@ -2517,6 +2622,15 @@ begin
 			return;
 		end
 
+	$Phantom_Sync_Speed_Profile(thisagent);
+	if (
+		$isspellavailable(thisagent,"call_to_grave",1) &&
+		$Call_To_Grave_Check(thisagent) == 1
+	)
+		begin
+			$castspell(thisagent,"call_to_grave",thisagent,"");
+			return;
+		end
 	$Phantom_Grant_Frost_Armor_Bonus(thisagent);
 	$Phantom_Frost_Armor_Recharge_Check(thisagent);
 

@@ -12,6 +12,7 @@ correctness is checked by src/validate_phantom_build.py after every build.
 from __future__ import annotations
 
 import ast
+import inspect
 import re
 import shutil
 import struct
@@ -389,6 +390,34 @@ class GplSourceTests(unittest.TestCase):
         self.assertNotIn("Phantom_Lock_Haunt_For_Quest", entry)
         self.assertNotIn("Phantom_Unlock_Haunt_For_Quest", victory)
 
+    def test_quest_lock_set_follows_temple_classification(self):
+        self.assertEqual(
+            builder.TEMPLE_LOCKED_EPIC_QUESTS,
+            (
+                "DARK_FOREST",
+                "DAY_OF_RECKONING",
+                "SLAY_DRAGON",
+                "FORSAKEN_LANDS",
+                "SAVE_PRINCE",
+                "WIZARDS_CURSE",
+            ),
+        )
+        self.assertEqual(builder.TEMPLE_LOCKED_EXPANSION_QUESTS, ("VIGIL",))
+        self.assertEqual(
+            builder.TEMPLE_LOCKED_DEMO_QUESTS,
+            ("VAMPIRIC_REVENGE",),
+        )
+        haunt_available_quests = {
+            "BARREN_WASTE",
+            "BELL_BOOK_CANDLE",
+            "LICHE_QUEEN",
+            "SCIONS_CHAOS",
+            "SIEGE",
+        }
+        self.assertTrue(
+            haunt_available_quests.isdisjoint(builder.TEMPLE_LOCKED_EPIC_QUESTS)
+        )
+
 
 class GplTemplateTests(unittest.TestCase):
     """The static GPL body lives in src/gpl/phantom.gpl rather than inside a
@@ -424,6 +453,53 @@ class GplTemplateTests(unittest.TestCase):
             "Function Phantom_Priestess_Champs_Check",
         ):
             self.assertIn(name, text, f"missing {name}")
+
+    def test_phantom_uses_field_oriented_decision_tree(self):
+        text = builder.phantom_gpl_template()
+        start = text.index("function Phantom_tree (agent thisagent)")
+        end = text.index("\nfunction Phantom_Hero_Birth", start)
+        tree = text[start:end]
+        expected_in_order = (
+            "$Phantom_Try_Frost_Armor(thisagent)",
+            "$check_nearby(thisagent)",
+            "$Check_rewards(thisagent,FALSE)",
+            "$Defend_home(thisagent)",
+            "$rest(thisagent)",
+            "$Purchase_equipment(thisagent)",
+            "$pursue_entertainment(thisagent)",
+            "$Raid_lair(thisagent,80)",
+            "$raid_enemy_building(thisagent,65)",
+            "$Combat_wandering(thisagent,90)",
+            "$combat_wandering_heroes(thisagent,75)",
+            "$Explore_Map(thisagent,75)",
+            '$Visit_Building(ThisAgent, "Royal_gardens", 5)',
+            '$check_library(thisagent,15, "Train_magic_resist")',
+            "$Go_Home(thisagent,30)",
+            "$hero_wander",
+        )
+        positions = [tree.index(value) for value in expected_in_order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn("$Wizard_tree(thisagent);", tree)
+
+    def test_phantom_uses_tuned_base_movement_profile(self):
+        root = ET.fromstring(builder.phantom_units_xml())
+        phantom = root.find('.//Description[@ID="PHM1"]')
+        self.assertIsNotNone(phantom)
+        movement = phantom.find('./Engine/Attachment[@kind="Movement"]')
+        speed = phantom.find("./Game/Speed")
+        self.assertEqual(movement.attrib["ID"], "Class 1")
+        self.assertEqual(speed.attrib["value"], "1")
+
+    def test_phantom_speed_profile_tracks_call_to_grave_level(self):
+        text = builder.phantom_gpl_template()
+        start = text.index("Function Phantom_Sync_Speed_Profile(agent ThisAgent)")
+        end = text.index("\nFunction Phantom_Start_Player_Perk_Watch", start)
+        profile = text[start:end]
+        self.assertIn("#Phantom_Base_Movement_Bonus", profile)
+        self.assertIn('"call_to_grave",\n\t\t"character_level"', profile)
+        self.assertIn("#ATTRIB_ExperienceLevel", profile)
+        self.assertIn("$SetAttribute(ThisAgent, #ATTRIB_Speed, 5);", profile)
+        self.assertIn("$SetAttribute(ThisAgent, #ATTRIB_Speed, 1);", profile)
 
     def test_stock_functions_replaced_by_name_are_present(self):
         """These are overridden by their stock names, which is how the mod
@@ -513,6 +589,11 @@ class GeneratedXmlTests(unittest.TestCase):
     def test_manifest_is_well_formed(self):
         ET.fromstring(builder.mod_xml())
 
+    def test_phantom_loyalty_matches_priestess(self):
+        hero_data = builder.phantom_hero_data()
+        self.assertIn("(Loyalty 30)", hero_data)
+        self.assertNotIn("(Loyalty 55)", hero_data)
+
     def test_manifest_declares_exactly_one_dataset(self):
         """Majesty recognises only the first sibling Dataset and silently drops
         the rest, so one 'Any' block is the only correct shape."""
@@ -528,6 +609,16 @@ class GeneratedXmlTests(unittest.TestCase):
         root = ET.fromstring(builder.phantom_units_xml())
         ids = [d.get("ID") for d in root.iter("Description") if d.get("ID")]
         self.assertEqual(len(ids), len(set(ids)), "duplicate Description ID")
+
+    def test_haunt_levels_use_stock_krypta_repeat_build_multiplier(self):
+        root = ET.fromstring(builder.phantom_units_xml())
+        for description_id in ("PHG1", "PHG2", "PHG3"):
+            with self.subTest(description_id=description_id):
+                multiplier = root.find(
+                    f'.//Description[@ID="{description_id}"]/Game/Multiplier'
+                )
+                self.assertIsNotNone(multiplier)
+                self.assertEqual(multiplier.get("value"), "2.0")
 
 
 class HelperTests(unittest.TestCase):
@@ -743,6 +834,87 @@ class RecruitmentVoiceTests(unittest.TestCase):
         self.assertIn('$HasAttribute("PhantomRecruitmentVoice", thisagent) == False', gpl)
         self.assertIn("$RandomNumber(100) + 1 <= 20", gpl)
         self.assertIn('$PlaySound(thisagent, "Phantom_Hired", "Begin")', gpl)
+
+    def test_multi_event_descriptor_uses_runtime_sound_name(self):
+        source = inspect.getsource(builder.write_sounddesc_cam)
+        self.assertIn('b"Phantom_Voice\\x00\\x00"', source)
+        self.assertNotIn('b"Phantom\\x00\\x00"', source)
+
+    def test_multi_event_descriptor_head_matches_stock_binary_shape(self):
+        self.assertEqual(builder.dsnd_head_size(b"Wizard"), 16)
+        self.assertEqual(builder.dsnd_head_size(b"Rage_of_Krolm"), 23)
+        self.assertEqual(builder.dsnd_head_size(b"Phantom_Voice"), 23)
+
+
+class CallToGraveTests(unittest.TestCase):
+    def test_fleeing_phantom_explicitly_casts_when_spell_is_ready(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index(
+            "function flee_part_II(agent thisagent, list places, integer intent)"
+        )
+        end = gpl.index("\nfunction Phantom_tree", start)
+        flee = gpl[start:end]
+        self.assertIn('$isspellavailable(thisagent,"call_to_grave",1)', flee)
+        self.assertIn("$Call_To_Grave_Check(thisagent) == 1", flee)
+        self.assertIn('$castspell(thisagent,"call_to_grave",thisagent,"");', flee)
+
+    def test_homeward_watcher_retries_after_cooldown(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index("function Phantom_Frost_Armor_Watch(agent thisagent)")
+        end = gpl.index("\nfunction Phantom_Frost_Armor_Recharge_Check", start)
+        watcher = gpl[start:end]
+        ready = watcher.index('$isspellavailable(thisagent,"call_to_grave",1)')
+        valid = watcher.index("$Call_To_Grave_Check(thisagent) == 1", ready)
+        cast = watcher.index(
+            '$castspell(thisagent,"call_to_grave",thisagent,"");', valid
+        )
+        armor = watcher.index("$Phantom_Grant_Frost_Armor_Bonus(thisagent);", cast)
+        self.assertLess(ready, valid)
+        self.assertLess(valid, cast)
+        self.assertLess(cast, armor)
+
+
+class PriestessPhantomSupportTests(unittest.TestCase):
+    def test_rush_range_bonus_is_paired_and_reversible(self):
+        gpl = builder.phantom_gpl_template()
+        begin_start = gpl.index(
+            "Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)"
+        )
+        end_start = gpl.index(
+            "Function Phantom_Rush_Unto_Death_End(agent ThisAgent)", begin_start
+        )
+        after_end = gpl.index(
+            "Function Phantom_Sync_Speed_Profile(agent ThisAgent)", end_start
+        )
+        begin = gpl[begin_start:end_start]
+        end = gpl[end_start:after_end]
+        self.assertIn("#ATTRIB_MaxAttackRange", begin)
+        self.assertIn(
+            'ThisAgent\'s "castingrange" += #Phantom_Rush_Range_Bonus;', begin
+        )
+        self.assertIn("#ATTRIB_MaxAttackRange", end)
+        self.assertIn(
+            'ThisAgent\'s "castingrange" -= #Phantom_Rush_Range_Bonus;', end
+        )
+
+    def test_supporter_inherits_followed_phantoms_building_target(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index(
+            "function Phantom_Priestess_Follow_Support(agent ThisAgent)"
+        )
+        end = gpl.index("\nFunction Phantom_Priestess_Assigned_To", start)
+        support = gpl[start:end]
+        building = support.index('New_Target\'s "Type" == "Building"')
+        lair = support.index('New_Target\'s "Type" == "Lair"', building)
+        active = support.index(
+            'If (Target\'s "ActiveScript" == $Attack_Object)', lair
+        )
+        join = support.index("If (Join_Attack)", active)
+        attack = support.index('$Attack_Object;', join)
+        self.assertLess(building, lair)
+        self.assertLess(lair, active)
+        self.assertLess(active, join)
+        self.assertLess(join, attack)
 
 
 class StandaloneRepoTests(unittest.TestCase):

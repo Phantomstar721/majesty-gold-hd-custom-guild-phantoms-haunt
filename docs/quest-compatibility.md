@@ -43,9 +43,26 @@ the Haunt remains unavailable before the Fervus event and becomes normally
 buildable afterward under the same quest transition that restores stock guilds,
 temples, and Elven availability.
 
-The Haunt is treated as a temple-tier arcane guild when matching stock quest
-restrictions. Restrictions aimed only at non-human settlements do not exclude
-it.
+The Haunt follows each quest's temple-guild intent rather than inheriting every
+Wizard Guild restriction. The audited classifications are:
+
+| Quest | Stock restriction | Haunt |
+| --- | --- | --- |
+| Barren Waste | Wizard Guild only | Available |
+| The Bell, the Book, and the Candle | Wizard Guild only | Available |
+| Dark Forest | Guilds and all temples until the Fervus event | Locked, then unlocked by the stock event |
+| Day of Reckoning | All temples | Locked |
+| Slay the Mighty Dragon | All guilds and temples | Locked |
+| The Forsaken Lands | All temples | Locked |
+| The Liche Queen | Temple to Krypta only | Available |
+| Save the Prince | All temples | Locked |
+| The Wizard's Curse | Wizard Guild and every original-game temple named in the briefing | Locked |
+| Scions of Chaos | All temples except Krypta and Fervus; Wizard Guild | Available as a dark temple guild |
+| Vigil for a Fallen Hero | Guilds and all temples | Locked |
+| The Siege | Wizard Guild only | Available |
+| Vampiric Revenge | All seven temple types in the quest GPL | Locked |
+
+Restrictions aimed only at non-human settlements do not exclude the Haunt.
 
 ## Unique identities
 
@@ -82,6 +99,11 @@ restriction calls through shared lock/unlock helpers.
 Priestess behavior keeps the complete Northern Expansion decision order and
 adds the Phantom-specific support opportunity at the stock support point.
 Phantoms are treated as undead for the Haunt-enhanced Drain Life interaction.
+At Haunt level 3, the nearest eligible Priestess may follow one Phantom and
+inherits its building or lair target only after the Phantom actively attacks.
+Rush unto Death raises the Priestess's casting and maximum attack ranges from
+160 to 220 while active, preventing stock `Attack_Object` from advancing her
+past the Phantom's maximum firing line.
 
 Placing a Haunt disables future Paladin recruitment. Completing a Haunt
 dismisses living player-owned Paladins through the game's ordinary dismissal

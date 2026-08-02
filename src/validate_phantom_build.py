@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import mmap
+import re
 import struct
 import sys
 import xml.etree.ElementTree as ET
@@ -569,8 +570,9 @@ def validate_archive(path: Path) -> tuple[dict[bytes, list[Entry]], dict[tuple[b
                 captured[(entry.section, entry.name)] = payload
 
         for entry in sections.get(b"DSND", []):
+            payload = bytes(data[entry.offset : entry.offset + entry.size])
+            validate_dsnd(path, entry, payload)
             if entry.name == b"PH01Phantom_Hired":
-                payload = bytes(data[entry.offset : entry.offset + entry.size])
                 required = (
                     b"DSND",
                     b"PH01",
@@ -587,11 +589,10 @@ def validate_archive(path: Path) -> tuple[dict[bytes, list[Entry]], dict[tuple[b
                     )
                 captured[(entry.section, entry.name)] = payload
             elif entry.name == b"PV01Phantom_Voice":
-                payload = bytes(data[entry.offset : entry.offset + entry.size])
                 required = (
                     b"DSND",
                     b"PV01",
-                    b"Phantom",
+                    b"Phantom_Voice",
                     b"GVC0",
                     b"PHC1",
                     b"SG04",
@@ -705,6 +706,27 @@ def validate_wave(path: Path, entry: Entry, data: bytes) -> None:
             f"{path}: {entry.label} must be mono 22050 Hz 16-bit PCM; got "
             f"format={audio_format} channels={channels} rate={sample_rate} "
             f"bits={bits_per_sample}"
+        )
+
+
+def validate_dsnd(path: Path, entry: Entry, data: bytes) -> None:
+    if len(data) < 64 or data[:4] != b"DSND" or data[16:20] != b"DATA":
+        fail(f"{path}: {entry.label} is not a stock-shaped DSND payload")
+    if struct.unpack_from("<I", data, 4)[0] != len(data) - 16:
+        fail(f"{path}: {entry.label} has an invalid DSND size")
+    if struct.unpack_from("<I", data, 20)[0] != len(data) - 32:
+        fail(f"{path}: {entry.label} has an invalid DATA size")
+
+    head_offset = data.find(b"HEAD", 32)
+    prim_offset = data.find(b"PRIM", 32)
+    if head_offset < 0 or prim_offset < 0:
+        fail(f"{path}: {entry.label} is missing its HEAD or PRIM block")
+    head_size = struct.unpack_from("<I", data, head_offset + 4)[0]
+    expected_prim = head_offset + 16 + head_size
+    if prim_offset != expected_prim:
+        fail(
+            f"{path}: {entry.label} declares a {head_size}-byte HEAD body, "
+            f"which places PRIM at {expected_prim}, not {prim_offset}"
         )
 
 
@@ -1852,6 +1874,21 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
     if phantom_help is None or phantom_help.get("value") != "hPH0":
         fail(f"{units_path}: Phantom must use its dedicated hPH0 help page")
     phantom_game = phantom.find("./Game") if phantom is not None else None
+    phantom_engine = phantom.find("./Engine") if phantom is not None else None
+    phantom_movement = (
+        phantom_engine.find('./Attachment[@kind="Movement"]')
+        if phantom_engine is not None
+        else None
+    )
+    phantom_speed = phantom_game.find("./Speed") if phantom_game is not None else None
+    if (
+        phantom_movement is None
+        or phantom_movement.get("type") != "Walk"
+        or phantom_movement.get("ID") != "Class 1"
+        or phantom_speed is None
+        or phantom_speed.get("value") != "1"
+    ):
+        fail(f"{units_path}: Phantom must use the tuned Walk/Class 1, Speed 1 profile")
     phantom_cost = phantom_game.find("./Cost") if phantom_game is not None else None
     phantom_recruit = (
         phantom_game.find("./RecruitDelay") if phantom_game is not None else None
@@ -1961,6 +1998,7 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
         "(PercentageHPRetreat 20)",
         "(enemy_estimation 1.0)",
         "(self_estimation 1.4)",
+        "(Loyalty 30)",
         "(evaluationScript\teval_enemies_nearby)",
     )
     missing = [value for value in playtest_values if value not in hero_data]
@@ -2040,16 +2078,19 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
                 f"{units_path}: {description_id} must use help page {help_id}"
             )
         actual_cost = game.find("./Cost")
+        actual_multiplier = game.find("./Multiplier")
         actual_income = game.find("./IncomeAmount")
         if (
             actual_cost is None
             or actual_cost.get("value") != cost
+            or actual_multiplier is None
+            or actual_multiplier.get("value") != "2.0"
             or actual_income is None
             or actual_income.get("value") != "40"
         ):
             fail(
                 f"{units_path}: {description_id} must cost {cost} gold and "
-                "generate stock Krypta income 40"
+                "use stock Krypta repeat-build multiplier 2.0 and income 40"
             )
         actual_from = game.find("./UpgradeFrom")
         actual_to = game.find("./UpgradeTo")
@@ -2110,16 +2151,31 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         '#CheckTitles,\n\t\t"Priestess"',
         "expression #Phantom_Rush_Movement_Bonus -22",
         "expression #Phantom_Rush_Action_Bonus -10",
+        "expression #Phantom_Rush_Range_Bonus 60",
+        "expression #Phantom_Base_Movement_Bonus -15",
         "Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)",
         "#ATTRIB_MovementRateModifier,\n\t\t#Phantom_Rush_Movement_Bonus",
         "#ATTRIB_ActionRateModifier,\n\t\t#Phantom_Rush_Action_Bonus",
+        "#ATTRIB_MaxAttackRange,\n\t\t#Phantom_Rush_Range_Bonus",
+        'ThisAgent\'s "castingrange" += #Phantom_Rush_Range_Bonus;',
         "$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 1);",
         "Function Phantom_Rush_Unto_Death_End(agent ThisAgent)",
         "#ATTRIB_MovementRateModifier,\n\t\t- #Phantom_Rush_Movement_Bonus",
         "#ATTRIB_ActionRateModifier,\n\t\t- #Phantom_Rush_Action_Bonus",
+        "#ATTRIB_MaxAttackRange,\n\t\t- #Phantom_Rush_Range_Bonus",
+        'ThisAgent\'s "castingrange" -= #Phantom_Rush_Range_Bonus;',
         "$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 0);",
         "$Phantom_Rush_Unto_Death_Begin(Priestess);",
         "$Phantom_Rush_Unto_Death_End(Priestess);",
+        "Function Phantom_Sync_Speed_Profile(agent ThisAgent)",
+        '$HasAttribute("PhantomBaseMovementApplied", ThisAgent)',
+        'ThisAgent\'s "PhantomBaseMovementApplied" = True;',
+        "#ATTRIB_MovementRateModifier,\n\t\t\t\t#Phantom_Base_Movement_Bonus",
+        '$GetSpellAttribute(\n\t\t"call_to_grave",\n\t\t"character_level"',
+        "$SetAttribute(ThisAgent, #ATTRIB_Speed, 5);",
+        "$SetAttribute(ThisAgent, #ATTRIB_Speed, 1);",
+        "$Phantom_Sync_Speed_Profile(Phantom);",
+        "$Phantom_Sync_Speed_Profile(thisagent);",
         'Priestess\'s "PhantomRushUntoDeathActive" = True;',
         'Priestess\'s "PhantomRushUntoDeathActive" = False;',
         "function Phantom_Priestess_Follow_Support_Check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean",
@@ -2133,6 +2189,11 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         'ThisAgent\'s "Destination" = $LocationOf(Target);',
         'ThisAgent\'s "Target" = ThisAgent;',
         'ThisAgent\'s "Destination",\n\t\t\t\t\t\t\t\t"avoid_vehicles"',
+        'New_Target\'s "Type" == "Building"',
+        'New_Target\'s "Type" == "Lair"',
+        'If (Target\'s "ActiveScript" == $Attack_Object)',
+        "Join_Attack = True;",
+        "If (Join_Attack)",
         "Function Phantom_Priestess_Follow_Check(agent ThisAgent) is boolean",
         "If ($Phantom_Player_Max_Completed_Haunt_Level(ThisAgent) < 3)",
         "$Phantom_Priestess_Follow_Support_Check(",
@@ -2150,7 +2211,13 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         'Halls,\n\t\t#MyPlayer,\n\t\t#CheckTitles,\n\t\t"HallOfChampions"',
         "function follow_support_check(agent ThisAgent, string WhatToSupport, integer Chance) is boolean",
         'If (ThisAgent\'s "Title" == "Phantom")',
-        "$Wizard_tree(thisagent);",
+        "$Raid_lair(thisagent,80)",
+        "$raid_enemy_building(thisagent,65)",
+        "$Combat_wandering(thisagent,90)",
+        "$combat_wandering_heroes(thisagent,75)",
+        "$Explore_Map(thisagent,75)",
+        '$check_library(thisagent,15, "Train_magic_resist")',
+        "$Go_Home(thisagent,30)",
         "Healing = 10;",
     )
     missing_gameplay = [value for value in gameplay_contract if value not in gpl]
@@ -2198,6 +2265,20 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         rush_begin_start,
     )
     rush_functions = gpl[rush_begin_start:rush_end]
+    if rush_functions.count("#ATTRIB_MaxAttackRange") != 2:
+        fail(
+            f"{gpl_path}: Rush unto Death must apply and remove exactly one "
+            "maximum-attack-range bonus"
+        )
+    if rush_functions.count(
+        'ThisAgent\'s "castingrange" += #Phantom_Rush_Range_Bonus;'
+    ) != 1 or rush_functions.count(
+        'ThisAgent\'s "castingrange" -= #Phantom_Rush_Range_Bonus;'
+    ) != 1:
+        fail(
+            f"{gpl_path}: Rush unto Death casting-range bonus is not paired "
+            "and reversible"
+        )
     forbidden_rush_visuals = (
         "$TurnOnSpeedTrail",
         "$TurnOffSpeedTrail",
@@ -2267,6 +2348,16 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: Priestess active follow clone still contains the "
             "disproved moving-target distance condition"
+        )
+    building_gate = active_follow.index('New_Target\'s "Type" == "Building"')
+    active_attack_gate = active_follow.index(
+        'If (Target\'s "ActiveScript" == $Attack_Object)', building_gate
+    )
+    join_attack = active_follow.index("If (Join_Attack)", active_attack_gate)
+    if not building_gate < active_attack_gate < join_attack:
+        fail(
+            f"{gpl_path}: Priestess building support must wait until the "
+            "followed Phantom is actively attacking"
         )
     priestess_tree = gpl.index("function Priestess_tree(agent ThisAgent)")
     build_horde = gpl.index("$Build_Horde(ThisAgent, 95) == False", priestess_tree)
@@ -2976,7 +3067,12 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     gpl = gpl_path.read_text(encoding="utf-8")
     gpl_contract = (
         "If ($Phantom_Try_Frost_Armor(thisagent) == False)",
-        "$Wizard_tree(thisagent);",
+        "$Raid_lair(thisagent,80)",
+        "$raid_enemy_building(thisagent,65)",
+        "$Combat_wandering(thisagent,90)",
+        "$combat_wandering_heroes(thisagent,75)",
+        "$Explore_Map(thisagent,75)",
+        "$Go_Home(thisagent,30)",
         "function Frost_Armor_Begin(agent thisagent, agent target)",
         'thisagent\'s "Reborn_Counter" = 1;',
         '$createeffector(thisagent, "frost_armor_effector", 180000);',
@@ -2997,6 +3093,9 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         "$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);",
         "$Phantom_Grant_Frost_Armor_Bonus(thisagent);",
         "$Phantom_Frost_Armor_Recharge_Check(thisagent);",
+        '$isspellavailable(thisagent,"call_to_grave",1)',
+        "$Call_To_Grave_Check(thisagent) == 1",
+        '$castspell(thisagent,"call_to_grave",thisagent,"");',
         "If ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))",
         'If (thisagent\'s "Reborn_Counter" != 1)',
         'If ($CheckEffector(thisagent, "frost_armor_effector") == False)',
@@ -4196,6 +4295,9 @@ def validate_phantom_flee_home_contract(output_root: Path) -> None:
         'thisagent\'s "destination" = $locationof(thisagent\'s "target");',
         '$createeffector(thisagent,"thought_bubble_danger",#danger_bubble_time);',
         '$say(thisagent,"VFX_FLEE_COMBAT");',
+        '$isspellavailable(thisagent,"call_to_grave",1)',
+        "$Call_To_Grave_Check(thisagent) == 1",
+        '$castspell(thisagent,"call_to_grave",thisagent,"");',
     )
     missing = [value for value in contract if value not in flee_function]
     if missing:
@@ -4258,8 +4360,11 @@ def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: unstable local Wizard-tree potion wrapper is present"
         )
-    if "$Wizard_tree(thisagent);" not in gpl:
-        fail(f"{gpl_path}: Phantom no longer uses the stock Wizard tree")
+    phantom_tree_start = gpl.index("function Phantom_tree (agent thisagent)")
+    phantom_tree_end = gpl.index("\nfunction Phantom_Hero_Birth", phantom_tree_start)
+    phantom_tree = gpl[phantom_tree_start:phantom_tree_end]
+    if "$Wizard_tree(thisagent);" in phantom_tree:
+        fail(f"{gpl_path}: Phantom still delegates decisions to the stock Wizard tree")
 
 
 def validate_phantom_equipment_upgrade_contract(output_root: Path) -> None:
@@ -4829,16 +4934,14 @@ def validate_quest_compatibility(output_root: Path) -> None:
         )
 
     disabled_quests = (
-        "BARREN_WASTE",
-        "BELL_BOOK_CANDLE",
         "DARK_FOREST",
         "DAY_OF_RECKONING",
         "SLAY_DRAGON",
         "FORSAKEN_LANDS",
-        "LICHE_QUEEN",
         "SAVE_PRINCE",
         "WIZARDS_CURSE",
         "VIGIL",
+        "VAMPIRIC_REVENGE",
     )
     for function_name in disabled_quests:
         marker = f"function {function_name}"
@@ -4871,6 +4974,23 @@ def validate_quest_compatibility(output_root: Path) -> None:
                 "unit-type restriction through the shared Haunt helper"
             )
 
+    temple_available_quests = (
+        "BARREN_WASTE",
+        "BELL_BOOK_CANDLE",
+        "LICHE_QUEEN",
+        "SCIONS_CHAOS",
+        "SIEGE",
+    )
+    present_overrides = [
+        function_name
+        for function_name in temple_available_quests
+        if re.search(rf"(?im)^function\s+{function_name}\s*\(", gpl)
+    ]
+    if present_overrides:
+        fail(
+            f"{gpl_path}: Haunt has quest overrides where its temple "
+            f"classification remains available {present_overrides}"
+        )
     lock_start = gpl.index("Function Phantom_Lock_Haunt_For_Quest()")
     lock_end = gpl.index("Function Phantom_Player_Has_Placed_Haunt", lock_start)
     if '$DisableUnitType("Phantoms_Haunt");' not in gpl[lock_start:lock_end]:

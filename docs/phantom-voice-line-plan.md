@@ -55,6 +55,23 @@ the hero receives its Haunt home.
 
 Both DSND entries retain stock voice cooldown groups and spatial behavior.
 
+The recruitment descriptor was the only route confirmed in-game during the
+initial audio pass. A later runtime audit found that the multi-event DSND's
+internal name was `Phantom` while the unit and sound description requested
+`Phantom_Voice`. The package now uses `Phantom_Voice` consistently in the CAM
+directory, DSND payload, sound XML, and Phantom unit data. That name correction
+exposed a second binary defect: the longer identity physically occupied 23
+bytes, but the cloned Wizard HEAD still declared only 17. This pointed the
+stock reader six bytes into the identity instead of at the `PRIM` phase table.
+The generator now derives the stock HEAD size as the eight-byte identity prefix,
+raw name, and two-null terminator; both Phantom descriptors consequently declare
+23 bytes and land exactly on `PRIM`. Validation now checks the nested DSND, DATA,
+and HEAD boundaries rather than merely searching for expected tokens.
+
+Structural package validation is not treated as in-game confirmation for these
+event barks. The corrected multi-event descriptor still requires an in-game
+test before its route is considered proven.
+
 ## Approved lines
 
 | Event | Line |

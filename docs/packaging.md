@@ -123,15 +123,22 @@ After a complete validated package exists:
 
 ```powershell
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GplOnly
+.\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GameplayOnly
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -TextOnly
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly
+.\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly -GplOnly
 ```
 
 `-GplOnly` regenerates and compiles gameplay source without rebuilding art.
+`-GameplayOnly` regenerates unit-description XML and compiles GPL without
+rebuilding art; use it when a change spans data values and decision logic.
 `-AudioOnly` consumes the final `assets/audio/phantom-*-game.wav` files and
 rebuilds the voice, sound, unit, and manifest components required by the audio
 contract. Raw recording projects and clean intermediate masters are not
 required or published.
+`-AudioOnly -GplOnly` updates both runtime areas in one staged transaction when
+a change spans sound registration and behavior, while still leaving art CAMs
+untouched.
 
 ## Validation
 
@@ -139,7 +146,7 @@ required or published.
 
 - the exact expected package file set;
 - CAM headers, directories, section names, entry ranges, and payload bounds;
-- custom WAVE format and DSND phase routing;
+- custom WAVE format, DSND nested sizes and boundaries, and phase routing;
 - XML identity and cross-reference contracts;
 - unique custom IDs and stock-record preservation;
 - indexed TILE structure, palette mappings, shadow controls, and custom image

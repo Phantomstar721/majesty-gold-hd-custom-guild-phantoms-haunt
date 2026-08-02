@@ -18,12 +18,17 @@ The Haunt requires a level 2 Palace. Its build-menu availability uses Majesty's
 native `BDEP` building dependency table—the same mechanism used by the stock
 Wizard and temple guilds—so it is hidden at Palace level 1 and appears normally
 at level 2. It recruits Phantoms for 700 gold with a 16-second recruitment
-time. A new Phantom begins with 1,600 level XP, 8 Vitality, 8
-Strength, 25 Magic Resistance, and 25 Dodge.
+time. Like the Temple to Krypta, every Haunt level uses a `2.0` repeat-build
+multiplier, so constructing another Haunt increases its price normally. A new
+Phantom begins with 1,600 level XP, 8 Vitality, 8 Strength, 25 Magic Resistance,
+and 25 Dodge.
 
-Phantoms use Wizard-like spell decisions with a 20% retreat threshold, an
-enemy-estimation multiplier of 1.0, and a self-estimation multiplier of 1.4.
-Their spell-confidence weights are:
+Phantoms use a dedicated field-oriented decision tree that prioritizes nearby
+threats, rewards, defense, equipment, lairs, enemy buildings, roaming combat,
+and exploration before making a reduced 30-percent go-home check. They use a
+20-percent retreat threshold, enemy estimation `1.0`, self estimation `1.4`,
+Priestess-matched loyalty `30`, and greed `12`. Their spell-confidence weights
+are:
 
 | Spell | Confidence |
 | --- | ---: |
@@ -37,6 +42,12 @@ Their spell-confidence weights are:
 The Haunt has three functional levels with unique active, construction,
 damaged, destroyed, and collapsed art. Its upgrades unlock later Phantom magic
 and add support interactions with Priestesses of Krypta.
+
+Phantoms use the stock `Class 1` walk profile with a mild
+`MovementRateModifier −15`. Their AI-facing Speed rating is `1` until Call to
+Grave becomes available at level 5, then becomes `5` so threat evaluation
+recognizes that they can escape almost any pursuer; this rating change does not
+replace their walking animation or movement-rate tuning.
 
 ### Equipment
 
@@ -103,7 +114,12 @@ The spell requires a completed level-2 Haunt.
 Call to Grave is a custom portal return modeled on the Wizard's teleport
 behavior. It has a 50,000-unit movement range, a five-second cooldown, and a
 500-unit minimum-use distance. It is eligible only when the Phantom's current
-task is `go_home` and its destination is its home Haunt, or when `fleeing_in_terror` and forces the flee target to always be the home Haunt.
+task is `go_home` and its destination is its home Haunt. When fleeing, the
+Phantom always targets its Haunt and explicitly casts Call to Grave whenever
+the spell is ready and the Haunt is beyond the minimum-use distance. Its
+existing behavior watcher continues checking during the trip, so a Phantom
+that begins walking while Call to Grave is cooling down casts it as soon as it
+becomes available.
 
 ### Eternal Soul — level 6, rank 5
 
@@ -141,9 +157,15 @@ The spell requires a completed level-3 Haunt.
   Priestesses for any unit.
 - A level-3 Haunt's `Rush unto Death` gives allied Priestesses a persistent mild
   movement and action boost using `MovementRateModifier −22` and
-  `ActionRateModifier −10`.
-- With a level 3 Haunt, Priestess support selects the nearest Phantom and uses a local follower
-  threshold that allows one established follower.
+  `ActionRateModifier −10`. It also raises their casting and maximum attack
+  ranges from 160 to 220 so they can support a Phantom without advancing ahead
+  of its firing line.
+- With a level 3 Haunt, Priestess support selects the nearest Phantom and uses a
+  local follower threshold that allows one established follower. A supporting
+  Priestess inherits a followed Phantom's building or lair target only after
+  the Phantom actively begins attacking. The aligned 220-unit Rush ranges let
+  stock `Attack_Object` engage without pulling her ahead of the Phantom. A
+  merely queued raid remains in follow mode.
 - Ordinary healers, healing potions, and player healing do not heal Phantoms.
   The Priestess's undead-healing exception prioritizes the Priestess herself,
   injured Phantoms, and then other undead.
@@ -269,11 +291,17 @@ the faster incremental paths:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GplOnly
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GameplayOnly
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -TextOnly
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly -GplOnly
 ```
 
-`-AudioOnly` packages the checked-in, game-ready WAVs; it does not require the
-private recording projects or clean masters.
+`-GplOnly` recompiles behavior, `-GameplayOnly` regenerates unit XML and GPL,
+and `-TextOnly` refreshes text CAMs. `-AudioOnly` packages the checked-in,
+game-ready WAVs without requiring private recording projects or clean masters.
+Combine `-AudioOnly -GplOnly` for an atomic runtime update that spans sound
+registration and GPL without rebuilding art.
 
 ### Gameplay source
 

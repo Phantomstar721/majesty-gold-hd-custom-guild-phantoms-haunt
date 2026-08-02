@@ -41,6 +41,7 @@ param(
     [string]$AudioRoot = ".\assets\audio",
     [switch]$AudioOnly,
     [switch]$GplOnly,
+    [switch]$GameplayOnly,
     [switch]$TextOnly,
     [string]$GplCompiler = ""
 )
@@ -146,11 +147,13 @@ $buildOutputHelpers = Join-Path $repoRoot "scripts\HauntBuildOutput.ps1"
 . $buildOutputHelpers
 $outputRootPath = Get-SafeHauntBuildOutputPath -RepoRoot $repoRoot -OutputRoot $OutputRoot
 
-if ((@($AudioOnly, $GplOnly, $TextOnly) | Where-Object { $_ }).Count -gt 1) {
-    throw "-AudioOnly, -GplOnly, and -TextOnly are mutually exclusive."
+$partialModeCount = (@($AudioOnly, $GplOnly, $GameplayOnly, $TextOnly) | Where-Object { $_ }).Count
+$isCombinedAudioGplBuild = $AudioOnly -and $GplOnly -and $partialModeCount -eq 2
+if ($partialModeCount -gt 1 -and -not $isCombinedAudioGplBuild) {
+    throw "Partial modes are mutually exclusive except for the supported -AudioOnly -GplOnly combination."
 }
 
-$isPartialBuild = $AudioOnly -or $GplOnly -or $TextOnly
+$isPartialBuild = $AudioOnly -or $GplOnly -or $GameplayOnly -or $TextOnly
 $finalOutputRootPath = $outputRootPath
 if ($isPartialBuild -and -not (Test-Path -LiteralPath $finalOutputRootPath -PathType Container)) {
     throw "Partial build requires an existing validated package: $finalOutputRootPath. Run a full build first."
@@ -170,12 +173,34 @@ if ($isPartialBuild) {
 $outputRootPath = $stagingRootPath
 
 try {
-if ($GplOnly) {
+if ($GplOnly -or $GameplayOnly) {
     if (-not (Test-Path $outputRootPath)) {
         throw "GPL-only build requires an existing validated package: $outputRootPath. Run a full build first."
     }
     if (-not (Test-Path $toolsPython)) {
         throw "Shared tools Python does not exist: $toolsPython"
+    }
+
+    if ($GameplayOnly) {
+        & $toolsPython $builder `
+            --game-path $GamePath `
+            --output-root $outputRootPath `
+            --units-only
+        if ($LASTEXITCODE -ne 0) {
+            throw "Phantom unit data generation failed with exit code $LASTEXITCODE"
+        }
+    }
+
+    if ($AudioOnly) {
+        $audioRootPath = Resolve-RepoPath $AudioRoot
+        & $toolsPython $builder `
+            --game-path $GamePath `
+            --output-root $outputRootPath `
+            --voices-only `
+            --voice-dir $audioRootPath
+        if ($LASTEXITCODE -ne 0) {
+            throw "Phantom voice CAM builder failed with exit code $LASTEXITCODE"
+        }
     }
 
     & $toolsPython $builder `
@@ -222,7 +247,15 @@ if ($GplOnly) {
         -FinalRoot $finalOutputRootPath `
         -BackupRoot $backupRootPath
 
-    Write-Host "Updated GPL in existing validated mod package:"
+    if ($isCombinedAudioGplBuild) {
+        Write-Host "Updated audio and GPL in existing validated mod package:"
+    }
+    elseif ($GameplayOnly) {
+        Write-Host "Updated gameplay XML and GPL in existing validated mod package:"
+    }
+    else {
+        Write-Host "Updated GPL in existing validated mod package:"
+    }
     Write-Host $finalOutputRootPath
     return
 }
