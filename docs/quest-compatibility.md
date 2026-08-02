@@ -17,6 +17,11 @@ The engine therefore hides the Haunt at Palace level 1 and exposes it at level
 2 or 3 before any construction order exists. There is no placement deletion,
 refund, Palace polling thread, or Palace lifecycle override.
 
+Majesty resolves `DATA/BDEP` as one whole CAM resource; it does not merge
+individual dependency lines supplied by different mods. A second mod that also
+provides BDEP therefore needs a combined compatibility record. This affects only
+mods that replace the building dependency table, not ordinary content mods.
+
 Confirmed in game on 2026-08-01: A Deal with a Demon hides the Haunt at Palace
 level 1, exposes it immediately after the Palace reaches level 2, and peasants
 construct it normally. Rise of the Rat King exposes it from its starting
@@ -73,6 +78,7 @@ The release validator checks:
 - `Dataset base="Any"` packaging;
 - unique custom identities;
 - native `BDEP` Palace-level gating and preservation of the stock table;
+- documentation of the whole-record BDEP compatibility requirement;
 - Embassy and Outpost selection;
 - Paladin exclusion and restoration;
 - Priestess support routing;

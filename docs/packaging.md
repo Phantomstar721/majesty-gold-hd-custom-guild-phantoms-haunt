@@ -60,15 +60,42 @@ run the full length.
 
 Those in-between slots are written as **zero-length entries**. The engine treats
 a slot with no payload as no contribution and falls back to the stock archive,
-so stock artwork renders normally and the package ships none of it.
+so stock artwork renders normally and the package ships none of it. The current
+validated package is roughly 16 MB; its exact size may move slightly as custom
+art and audio evolve.
 
-Filling them with the stock artwork instead is what the builder used to do, and
-it produced a ~160 MB package of which roughly 157 MB was Majesty's own art.
-`--unused-tile-mode stock` still reproduces that layout, and package validation
-rejects it so the regression cannot ship unnoticed.
+Package validation uses archive-specific allowlists and rejects any nonempty
+unreferenced TILE payload, even a single unexpected byte.
 
-Writing a valid but empty 1x1 tile does **not** work. The engine honours it and
-the stock art in that slot is destroyed.
+### BDEP mod compatibility
+
+Majesty requests one `DATA/BDEP` resource and parses the returned blob as the
+complete building dependency table. CAM records with the same section and name
+override one another according to the effective mod/archive order; their text
+payloads are not concatenated or merged.
+
+The official Haunt package therefore contains the complete installed stock BDEP
+table followed by its one rule:
+
+```text
+PHG1 : ABJ2 ABJ3 NOT NOT ||
+```
+
+If another custom-building mod also supplies `DATA/BDEP`, a separate
+compatibility provider must be made:
+
+1. Start with the unmodified BDEP payload from the installed game's
+   `Data/miscdata.cam`.
+2. Append each mod's custom dependency rule exactly once, retaining CRLF line
+   endings and the final newline.
+3. Package that combined payload as the single effective `DATA/BDEP` record
+   after the individual providers in the active mod/archive order.
+4. Test every affected building's visibility at each relevant Palace level.
+
+Do not concatenate two complete modded BDEP payloads: that duplicates the stock
+table. Do not edit either mod's official archive in place. The compatibility
+provider should be separately named and versioned for the exact pair of mods it
+supports.
 
 ## Archive responsibilities
 

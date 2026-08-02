@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import ast
 import re
+import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -23,10 +25,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUILDER_PATH = REPO_ROOT / "src" / "build_phantom_guild.py"
 BUILD_SCRIPT_PATH = REPO_ROOT / "scripts" / "Build-CustomGuildPhantomsHaunt.ps1"
+BUILD_OUTPUT_HELPER_PATH = REPO_ROOT / "scripts" / "HauntBuildOutput.ps1"
 
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import build_phantom_guild as builder  # noqa: E402
+import validate_phantom_build as validator  # noqa: E402
 
 
 def make_tile(pixels: list[list[int]], palette_index: int = 0) -> bytes:
@@ -100,35 +104,6 @@ class TileEncodingTests(unittest.TestCase):
         self.assertTrue(all(value == 0 for row in out for value in row))
 
 
-class PlaceholderTileTests(unittest.TestCase):
-    """The package relies on unreferenced slots being empty so the engine falls
-    back to the stock archive. A 1x1 tile is honoured instead and destroys the
-    stock art, which is why 'blank' mode is kept only as a documented dead end.
-    """
-
-    def test_minimal_placeholder_is_structurally_valid(self):
-        tile = builder.minimal_placeholder_tile(0)
-        decoded = builder.decode_indexed_v3_tile(tile)
-        self.assertIsNotNone(decoded)
-        height, _, pixels = decoded
-        self.assertEqual(height, 1)
-        self.assertTrue(all(value == 0 for row in pixels for value in row))
-
-    def test_minimal_placeholder_keeps_palette(self):
-        self.assertEqual(builder.tile_palette_index(builder.minimal_placeholder_tile(42)), 42)
-
-    def test_empty_mode_produces_zero_length(self):
-        self.assertEqual(builder.placeholder_tile_for("empty", make_tile([[1]])), b"")
-
-    def test_stock_mode_is_identity(self):
-        original = make_tile([[1, 2]])
-        self.assertIs(builder.placeholder_tile_for("stock", original), original)
-
-    def test_unknown_mode_raises(self):
-        with self.assertRaises(ValueError):
-            builder.placeholder_tile_for("nonsense", make_tile([[1]]))
-
-
 class TileReductionTests(unittest.TestCase):
     def _entries(self, count: int):
         return [
@@ -139,15 +114,10 @@ class TileReductionTests(unittest.TestCase):
     def _imag_referencing(self, indices):
         return b"".join(struct.pack("<I", i) for i in indices)
 
-    def test_stock_mode_changes_nothing(self):
-        entries = self._entries(10)
-        out = builder.reduce_unreferenced_tiles(entries, [self._imag_referencing([3])], set(), "stock")
-        self.assertEqual(out, entries)
-
     def test_referenced_slots_survive(self):
         entries = self._entries(10)
         out = builder.reduce_unreferenced_tiles(
-            entries, [self._imag_referencing([2, 5])], set(), "empty"
+            entries, [self._imag_referencing([2, 5])], set(), set()
         )
         self.assertEqual(out[2].data, entries[2].data)
         self.assertEqual(out[5].data, entries[5].data)
@@ -155,14 +125,14 @@ class TileReductionTests(unittest.TestCase):
     def test_unreferenced_slots_are_emptied(self):
         entries = self._entries(10)
         out = builder.reduce_unreferenced_tiles(
-            entries, [self._imag_referencing([2])], set(), "empty"
+            entries, [self._imag_referencing([2])], set(), set()
         )
         self.assertEqual(out[7].data, b"")
 
     def test_always_keep_is_honoured(self):
         entries = self._entries(10)
         out = builder.reduce_unreferenced_tiles(
-            entries, [self._imag_referencing([2])], {8}, "empty"
+            entries, [self._imag_referencing([2])], {8}, set()
         )
         self.assertEqual(out[8].data, entries[8].data)
 
@@ -171,7 +141,7 @@ class TileReductionTests(unittest.TestCase):
         or drop an entry."""
         entries = self._entries(12)
         out = builder.reduce_unreferenced_tiles(
-            entries, [self._imag_referencing([1])], set(), "empty"
+            entries, [self._imag_referencing([1])], set(), set()
         )
         self.assertEqual(len(out), len(entries))
         self.assertEqual([e.name for e in out], [e.name for e in entries])
@@ -180,16 +150,17 @@ class TileReductionTests(unittest.TestCase):
         """These are reached by slot number rather than through an IMAG record.
         Blanking BUILDING_ICON_TILE once made the Haunt vanish from the build
         menu."""
-        size = max(builder.engine_addressed_tile_indices()) + 2
+        engine_addressed = builder.maindata_engine_addressed_tile_indices()
+        size = max(engine_addressed) + 2
         entries = self._entries(size)
         out = builder.reduce_unreferenced_tiles(
-            entries, [self._imag_referencing([0])], set(), "empty"
+            entries, [self._imag_referencing([0])], set(), engine_addressed
         )
-        for index in builder.engine_addressed_tile_indices():
+        for index in engine_addressed:
             self.assertNotEqual(out[index].data, b"", f"tile {index} must not be emptied")
 
     def test_named_constants_are_in_the_keep_set(self):
-        keep = builder.engine_addressed_tile_indices()
+        keep = builder.maindata_engine_addressed_tile_indices()
         for name in (
             "HERO_PORTRAIT_TILE",
             "HERO_ICON_TILE",
@@ -198,6 +169,66 @@ class TileReductionTests(unittest.TestCase):
             "HERO_INTERFACE_PANEL_TILE",
         ):
             self.assertIn(getattr(builder, name), keep, f"{name} missing from keep set")
+
+    def test_archive_specific_keep_sets_do_not_leak_into_each_other(self):
+        main = builder.maindata_engine_addressed_tile_indices()
+        interface = builder.interfacedata_engine_addressed_tile_indices()
+        self.assertTrue(interface)
+        self.assertTrue(main.isdisjoint(interface))
+        self.assertNotIn(builder.BUILDING_ICON_TILE, interface)
+        self.assertNotIn(builder.ICE_LANCE_SPELL_ICON_TILES[0], main)
+
+
+class PackageInvariantTests(unittest.TestCase):
+    def test_one_unexpected_unreferenced_tile_byte_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "phantom_interfacedata.cam"
+            path.write_bytes(b"x")
+            sections = {
+                b"TILE": [validator.Entry(b"TILE", b"unexpected", 0, 1, 0)],
+            }
+            with self.assertRaises(validator.ValidationError):
+                validator.validate_no_redistributed_stock_art(path, sections)
+
+    def test_exact_engine_addressed_tile_is_allowed_without_an_imag_reference(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "phantom_interfacedata.cam"
+            path.write_bytes(b"x")
+            tile_index = builder.ICE_LANCE_SPELL_ICON_TILES[0]
+            sections = {
+                b"TILE": [validator.Entry(b"TILE", b"spell", 0, 1, tile_index)],
+            }
+            validator.validate_no_redistributed_stock_art(path, sections)
+
+    def test_bdep_append_preserves_every_stock_byte(self):
+        stock = b"# stock\r\nABP1 : ABJ2 ABJ3 NOT NOT ||\r\n"
+        built = builder.append_haunt_building_dependency(stock)
+        self.assertTrue(built.startswith(stock))
+        self.assertEqual(built.count(builder.HAUNT_BDEP_RULE), 1)
+        validator.validate_building_dependencies_against_stock(
+            Path("phantom_miscdata.cam"), built, stock
+        )
+
+    def test_altered_stock_bdep_byte_is_rejected(self):
+        stock = b"# stock\r\nABP1 : ABJ2 ABJ3 NOT NOT ||\r\n"
+        built = bytearray(builder.append_haunt_building_dependency(stock))
+        built[2] ^= 1
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_building_dependencies_against_stock(
+                Path("phantom_miscdata.cam"), bytes(built), stock
+            )
+
+    def test_bdep_append_rejects_an_existing_haunt_rule(self):
+        with self.assertRaises(ValueError):
+            builder.append_haunt_building_dependency(
+                builder.HAUNT_BDEP_RULE + b"\r\n"
+            )
+
+    def test_bdep_whole_record_compatibility_is_documented(self):
+        packaging = (REPO_ROOT / "docs" / "packaging.md").read_text(encoding="utf-8")
+        self.assertIn("BDEP mod compatibility", packaging)
+        self.assertIn("not concatenated or merged", packaging)
+        self.assertIn(builder.HAUNT_BDEP_RULE.decode("ascii"), packaging)
 
 
 class ImagReferenceTests(unittest.TestCase):
@@ -587,6 +618,117 @@ class CliContractTests(unittest.TestCase):
             "build script passes arguments the builder does not declare: "
             + ", ".join(undeclared),
         )
+
+    def test_legacy_unused_tile_modes_are_not_exposed(self):
+        validator_source = (REPO_ROOT / "src" / "validate_phantom_build.py").read_text(
+            encoding="utf-8"
+        )
+        build_script = BUILD_SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("--unused-tile-mode", self._builder_source())
+        self.assertNotIn("--unused-tile-mode", validator_source)
+        self.assertNotIn("UnusedTileMode", build_script)
+
+
+class BuildOutputSafetyTests(unittest.TestCase):
+    """The packaging script may replace only a validated child of dist."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if cls.powershell is None:
+            raise unittest.SkipTest("PowerShell is required for build-output safety tests")
+
+    def _run_helper(self, body: str) -> subprocess.CompletedProcess[str]:
+        command = f". '{BUILD_OUTPUT_HELPER_PATH}'; {body}"
+        return subprocess.run(
+            [
+                self.powershell,
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                command,
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_only_package_directories_below_dist_are_accepted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp) / "repo"
+            (repo / "dist").mkdir(parents=True)
+            accepted = self._run_helper(
+                f"Get-SafeHauntBuildOutputPath -RepoRoot '{repo}' "
+                "-OutputRoot '.\\dist\\package'"
+            )
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            self.assertEqual(
+                Path(accepted.stdout.strip()),
+                repo / "dist" / "package",
+            )
+
+            for unsafe in (".", "..", ".\\dist", str(Path(temp) / "outside")):
+                with self.subTest(unsafe=unsafe):
+                    rejected = self._run_helper(
+                        f"Get-SafeHauntBuildOutputPath -RepoRoot '{repo}' "
+                        f"-OutputRoot '{unsafe}'"
+                    )
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertIn("Unsafe Haunt build output", rejected.stderr)
+
+    def test_validated_stage_replaces_previous_package(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            staged = root / "staged"
+            final = root / "final"
+            backup = root / "backup"
+            staged.mkdir()
+            final.mkdir()
+            (staged / "version.txt").write_text("new", encoding="ascii")
+            (final / "version.txt").write_text("old", encoding="ascii")
+
+            result = self._run_helper(
+                f"Publish-ValidatedHauntBuild -StagedRoot '{staged}' "
+                f"-FinalRoot '{final}' -BackupRoot '{backup}'"
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((final / "version.txt").read_text(encoding="ascii"), "new")
+            self.assertFalse(staged.exists())
+            self.assertFalse(backup.exists())
+
+    def test_failure_before_publication_preserves_previous_package(self):
+        dist = REPO_ROOT / "dist"
+        dist.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="safety-test-", dir=dist) as output:
+            output_path = Path(output)
+            sentinel = output_path / "known-good.txt"
+            sentinel.write_text("keep", encoding="ascii")
+            missing = REPO_ROOT / "does-not-exist-for-output-safety-test.png"
+            result = subprocess.run(
+                [
+                    self.powershell,
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(BUILD_SCRIPT_PATH),
+                    "-OutputRoot",
+                    str(output_path),
+                    "-PortraitImage",
+                    str(missing),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(sentinel.read_text(encoding="ascii"), "keep")
+            leftovers = list(dist.glob(f".staging-{output_path.name}-*"))
+            leftovers += list(dist.glob(f".work-{output_path.name}-*"))
+            self.assertEqual(leftovers, [])
 
 
 class RecruitmentVoiceTests(unittest.TestCase):

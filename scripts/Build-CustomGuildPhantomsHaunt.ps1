@@ -42,19 +42,7 @@ param(
     [switch]$AudioOnly,
     [switch]$GplOnly,
     [switch]$TextOnly,
-    [string]$GplCompiler = "",
-    # Majesty addresses tiles by their slot in a CAM's TILE section, so the
-    # package must emit an entry for every slot below the highest custom tile.
-    #
-    #   empty (default) - zero-length entries; the engine falls back to the
-    #                     stock archive. Confirmed in game 2026-08-01.
-    #   stock           - fills those slots with Majesty's own artwork, giving
-    #                     the legacy ~160 MB package that redistributes roughly
-    #                     157 MB of the publisher's art.
-    #   blank           - BROKEN. A 1x1 empty tile is honoured by the engine and
-    #                     destroys the stock art in that slot.
-    [ValidateSet("empty", "stock", "blank")]
-    [string]$UnusedTileMode = "empty"
+    [string]$GplCompiler = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -154,12 +142,34 @@ $validator = Join-Path $repoRoot "src\validate_phantom_build.py"
 $iconGenerator = Join-Path $repoRoot "scripts\generate_phantom_icons.py"
 $buildingSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_building_sprites.py"
 $heroSpriteGenerator = Join-Path $repoRoot "scripts\generate_phantom_hero_sprites.py"
-$outputRootPath = Join-Path $repoRoot $OutputRoot
+$buildOutputHelpers = Join-Path $repoRoot "scripts\HauntBuildOutput.ps1"
+. $buildOutputHelpers
+$outputRootPath = Get-SafeHauntBuildOutputPath -RepoRoot $repoRoot -OutputRoot $OutputRoot
 
 if ((@($AudioOnly, $GplOnly, $TextOnly) | Where-Object { $_ }).Count -gt 1) {
     throw "-AudioOnly, -GplOnly, and -TextOnly are mutually exclusive."
 }
 
+$isPartialBuild = $AudioOnly -or $GplOnly -or $TextOnly
+$finalOutputRootPath = $outputRootPath
+if ($isPartialBuild -and -not (Test-Path -LiteralPath $finalOutputRootPath -PathType Container)) {
+    throw "Partial build requires an existing validated package: $finalOutputRootPath. Run a full build first."
+}
+
+$distRootPath = Join-Path $repoRoot "dist"
+New-Item -ItemType Directory -Force -Path $distRootPath | Out-Null
+$transactionId = [System.Guid]::NewGuid().ToString("N")
+$outputLeaf = Split-Path -Leaf $finalOutputRootPath
+$stagingRootPath = Join-Path $distRootPath ".staging-$outputLeaf-$transactionId"
+$backupRootPath = Join-Path $distRootPath ".previous-$outputLeaf-$transactionId"
+$tempDir = Join-Path $distRootPath ".work-$outputLeaf-$transactionId"
+
+if ($isPartialBuild) {
+    Copy-Item -LiteralPath $finalOutputRootPath -Destination $stagingRootPath -Recurse
+}
+$outputRootPath = $stagingRootPath
+
+try {
 if ($GplOnly) {
     if (-not (Test-Path $outputRootPath)) {
         throw "GPL-only build requires an existing validated package: $outputRootPath. Run a full build first."
@@ -202,16 +212,18 @@ if ($GplOnly) {
     }
     Copy-Item -Path $compiledPath -Destination (Join-Path $dataDir "Phantom.bcd") -Force
 
-    # The validator only distinguishes "unreferenced slots are empty" from
-    # "they carry payload". The broken blank mode falls in the latter group.
-    $validatorTileMode = if ($UnusedTileMode -eq "empty") { "empty" } else { "stock" }
-    & $toolsPython $validator --output-root $outputRootPath --unused-tile-mode $validatorTileMode
+    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
 
+    Publish-ValidatedHauntBuild `
+        -StagedRoot $stagingRootPath `
+        -FinalRoot $finalOutputRootPath `
+        -BackupRoot $backupRootPath
+
     Write-Host "Updated GPL in existing validated mod package:"
-    Write-Host $outputRootPath
+    Write-Host $finalOutputRootPath
     return
 }
 
@@ -228,14 +240,18 @@ if ($TextOnly) {
         throw "Phantom text CAM builder failed with exit code $LASTEXITCODE"
     }
 
-    $validatorTileMode = if ($UnusedTileMode -eq "empty") { "empty" } else { "stock" }
-    & $toolsPython $validator --output-root $outputRootPath --unused-tile-mode $validatorTileMode
+    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
 
+    Publish-ValidatedHauntBuild `
+        -StagedRoot $stagingRootPath `
+        -FinalRoot $finalOutputRootPath `
+        -BackupRoot $backupRootPath
+
     Write-Host "Updated text CAMs in existing validated mod package:"
-    Write-Host $outputRootPath
+    Write-Host $finalOutputRootPath
     return
 }
 
@@ -258,27 +274,21 @@ if ($AudioOnly) {
         throw "Phantom voice CAM builder failed with exit code $LASTEXITCODE"
     }
 
-    # The validator only distinguishes "unreferenced slots are empty" from
-    # "they carry payload". The broken blank mode falls in the latter group.
-    $validatorTileMode = if ($UnusedTileMode -eq "empty") { "empty" } else { "stock" }
-    & $toolsPython $validator --output-root $outputRootPath --unused-tile-mode $validatorTileMode
+    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
 
+    Publish-ValidatedHauntBuild `
+        -StagedRoot $stagingRootPath `
+        -FinalRoot $finalOutputRootPath `
+        -BackupRoot $backupRootPath
+
     Write-Host "Updated audio in existing validated mod package:"
-    Write-Host $outputRootPath
+    Write-Host $finalOutputRootPath
     return
 }
 
-if (Test-Path $outputRootPath) {
-    Remove-Item -LiteralPath $outputRootPath -Recurse -Force
-}
-
-$tempDir = Join-Path $repoRoot "dist\temp"
-if (Test-Path $tempDir) {
-    Remove-Item -LiteralPath $tempDir -Recurse -Force
-}
 New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
 $portraitRgb = Join-Path $tempDir "phantom_portrait_100.rgb"
@@ -389,8 +399,7 @@ if ($LASTEXITCODE -ne 0) {
     --phantom-cowl-icon-rgb $phantomCowlIconRgb `
     --dark-staff-small-icon-rgb $darkStaffSmallIconRgb `
     --dark-staff-icon-rgb $darkStaffIconRgb `
-    --voice-dir (Resolve-RepoPath $AudioRoot) `
-    --unused-tile-mode $UnusedTileMode
+    --voice-dir (Resolve-RepoPath $AudioRoot)
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom CAM builder failed with exit code $LASTEXITCODE"
 }
@@ -421,13 +430,24 @@ if (-not (Test-Path $compiledPath)) {
 }
 Copy-Item -Path $compiledPath -Destination (Join-Path $dataDir "Phantom.bcd") -Force
 
-# The validator only distinguishes "unreferenced slots are empty" from
-# "they carry payload". The broken blank mode falls in the latter group.
-$validatorTileMode = if ($UnusedTileMode -eq "empty") { "empty" } else { "stock" }
-& $toolsPython $validator --output-root $outputRootPath --unused-tile-mode $validatorTileMode
+& $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom package verification failed with exit code $LASTEXITCODE"
 }
 
+Publish-ValidatedHauntBuild `
+    -StagedRoot $stagingRootPath `
+    -FinalRoot $finalOutputRootPath `
+    -BackupRoot $backupRootPath
+
 Write-Host "Built local mod package:"
-Write-Host $outputRootPath
+Write-Host $finalOutputRootPath
+}
+finally {
+    if (Test-Path -LiteralPath $stagingRootPath) {
+        Remove-Item -LiteralPath $stagingRootPath -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $tempDir) {
+        Remove-Item -LiteralPath $tempDir -Recurse -Force
+    }
+}

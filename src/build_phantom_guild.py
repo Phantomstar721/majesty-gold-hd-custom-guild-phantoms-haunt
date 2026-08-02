@@ -126,6 +126,8 @@ LEATHER_ARMOR_ICON_TILES: tuple[int, ...] = ()
 PHANTOM_COWL_BASE_ITEM_ID = 80
 PHANTOM_ICEROD_BASE_ITEM_ID = 81
 PHANTOM_FROST_ARMOR_ITEM_ID = 82
+HAUNT_BDEP_RULE = b"PHG1 : ABJ2 ABJ3 NOT NOT ||"
+HAUNT_BDEP_COMMENT = b"# Phantoms Haunt requires a level 2 Palace or better"
 PHANTOM_COWL_VARIANT_FIRST_ID = 83
 PHANTOM_COWL_VARIANT_LAST_ID = 97
 PHANTOM_ICEROD_VARIANT_FIRST_ID = 98
@@ -226,20 +228,6 @@ def main() -> int:
     # phantom-recruitment-game.wav (PHS1 / Phantom_Hired), not a separate
     # argument.
     parser.add_argument("--voice-dir", type=Path)
-    parser.add_argument(
-        "--unused-tile-mode",
-        choices=UNUSED_TILE_MODES,
-        default="empty",
-        help=(
-            "What to write into tile slots the package does not reference. "
-            "'empty' (default) writes zero-length entries; the engine falls back "
-            "to the stock archive, confirmed in game 2026-08-01. "
-            "'stock' copies Majesty's own artwork into them, producing the legacy "
-            "~160 MB package that redistributes roughly 157 MB of the publisher's "
-            "art. 'blank' writes a 1x1 empty tile and is BROKEN: the engine honours "
-            "it and destroys the stock art in that slot."
-        ),
-    )
     args = parser.parse_args()
 
     data_dir = args.output_root / "Data"
@@ -327,7 +315,6 @@ def main() -> int:
         args.endless_winter_hit_source_png,
         args.endless_winter_missile_source_png,
         source_ice_effect_maindata if source_ice_effect_maindata.exists() else None,
-        args.unused_tile_mode,
     )
     write_interfacedata_cam(
         source_interfacedata,
@@ -340,7 +327,6 @@ def main() -> int:
         args.dark_staff_small_icon_rgb,
         args.dark_staff_icon_rgb,
         args.building_dialog_panel_rgb,
-        args.unused_tile_mode,
     )
     # phantom_mx_interfacedata.cam is deliberately not generated. Its only
     # content was 753 stock tiles and one unchanged copy of the stock
@@ -1620,20 +1606,8 @@ def patch_ap10_menu_for_ap07(data: bytes) -> bytes:
 def write_miscdata_cam(source_miscdata: Path, output_path: Path) -> None:
     """Add the Haunt to Majesty's native building dependency table."""
     building_dependencies = read_cam_entry(source_miscdata, b"DATA", b"BDEP")
-    stock_data = building_dependencies.data
-    haunt_rule = b"PHG1 : ABJ2 ABJ3 NOT NOT ||"
+    patched_data = append_haunt_building_dependency(building_dependencies.data)
 
-    if haunt_rule in stock_data:
-        raise ValueError("stock BDEP unexpectedly already contains the Haunt rule")
-    if not stock_data.endswith(b"\r\n"):
-        raise ValueError("stock BDEP no longer ends with its required blank line")
-
-    patched_data = (
-        stock_data
-        + b"\r\n# Phantoms Haunt requires a level 2 Palace or better\r\n"
-        + haunt_rule
-        + b"\r\n"
-    )
     write_cam(
         (
             CamSection(
@@ -1643,6 +1617,23 @@ def write_miscdata_cam(source_miscdata: Path, output_path: Path) -> None:
             ),
         ),
         output_path,
+    )
+
+
+def append_haunt_building_dependency(stock_data: bytes) -> bytes:
+    """Preserve the complete stock table and append exactly one Haunt rule."""
+    if HAUNT_BDEP_RULE in stock_data:
+        raise ValueError("stock BDEP unexpectedly already contains the Haunt rule")
+    if not stock_data.endswith(b"\r\n"):
+        raise ValueError("stock BDEP no longer ends with its required blank line")
+
+    return (
+        stock_data
+        + b"\r\n"
+        + HAUNT_BDEP_COMMENT
+        + b"\r\n"
+        + HAUNT_BDEP_RULE
+        + b"\r\n"
     )
 
 
@@ -1929,7 +1920,6 @@ def write_maindata_cam(
     endless_winter_hit_source_png: Path | None,
     endless_winter_missile_source_png: Path | None,
     ice_effect_maindata: Path | None,
-    unused_tile_mode: str = "stock",
 ) -> None:
     hero_imag = read_cam_entry(source_maindata, b"IMAG", SOURCE_PHANTOM_SPRITE_IMAGE).data
     hero_imag = replace_priestess_die_holds_with_directional_third_frames(hero_imag)
@@ -3191,7 +3181,7 @@ def write_maindata_cam(
         tile_entries,
         [entry.data for entry in image_entries],
         set(replacement_tiles) | set(range(max_tile_index + 1, len(tile_entries))),
-        unused_tile_mode,
+        maindata_engine_addressed_tile_indices(),
     )
 
     write_cam(
@@ -3219,7 +3209,6 @@ def write_interfacedata_cam(
     dark_staff_small_icon_rgb: Path | None,
     dark_staff_icon_rgb: Path | None,
     control_panel_rgb: Path | None,
-    unused_tile_mode: str = "stock",
 ) -> None:
     icon_images = {
         SPELL_LIST_ICON_IMAGE: read_cam_entry(source_interfacedata, b"IMAG", SPELL_LIST_ICON_IMAGE).data,
@@ -3301,7 +3290,7 @@ def write_interfacedata_cam(
         tile_entries,
         [entry.data for entry in image_entries],
         set(replacement_tiles) | set(range(base_max_tile_index + 1, len(tile_entries))),
-        unused_tile_mode,
+        interfacedata_engine_addressed_tile_indices(),
     )
 
     write_cam(
@@ -4939,32 +4928,28 @@ def projectile_angle_for_direction(direction_index: int) -> float:
     return -math.pi / 2.0 + (2.0 * math.pi * direction / ICE_LANCE_PROJECTILE_DIRECTIONS)
 
 
-UNUSED_TILE_MODES = ("stock", "blank", "empty")
+def maindata_engine_addressed_tile_indices() -> set[int]:
+    """Main-art slots retained even when no emitted IMAG record names them.
 
-
-def engine_addressed_tile_indices() -> set[int]:
-    """Tile slots Majesty reaches by number, not through one of our IMAG records.
-
-    Tracking only IMAG references is not enough. The 2026-08-01 `blank` test
-    blanked BUILDING_ICON_TILE and the Haunt vanished from the build list,
-    because the build menu addresses that slot directly. HERO_PORTRAIT_TILE and
-    HERO_ICON_TILE survived that build only because they also happened to be in
-    `replacement_tiles`. Every slot this module names by constant belongs here.
+    Tracking only IMAG references is not enough. Investigation on 2026-08-01
+    established that the build menu addresses BUILDING_ICON_TILE directly.
+    This set is deliberately archive-specific: interface indices must not retain
+    unrelated publisher art in phantom_maindata.cam.
     """
-    indices: set[int] = {
+    return {
         HERO_PORTRAIT_TILE,
         HERO_ICON_TILE,
         BUILDING_PROFILE_TILE,
         BUILDING_ICON_TILE,
         HERO_INTERFACE_PANEL_TILE,
-        BUILDING_DIALOG_BACKING_TEMPLATE_TILE,
-        ICE_LANCE_ICON_TILE,
-        FIRE_BLAST_SPELL_ICON_TILE,
+        *ICE_LANCE_PROJECTILE_TILES,
     }
+
+
+def interfacedata_engine_addressed_tile_indices() -> set[int]:
+    """Interface slots Majesty associates with actions or inventory directly."""
+    indices: set[int] = set()
     for group in (
-        BUILDING_DIALOG_BACKING_TILES,
-        ICE_LANCE_PROJECTILE_TILES,
-        ICE_LANCE_DIRECTIONAL_PROJECTILE_TILES,
         ICE_LANCE_SPELL_ICON_TILES,
         FROST_ARMOR_SPELL_ICON_TILES,
         ICY_TOUCH_SPELL_ICON_TILES,
@@ -4980,39 +4965,6 @@ def engine_addressed_tile_indices() -> set[int]:
     return indices
 
 
-def minimal_placeholder_tile(palette_index: int = 0) -> bytes:
-    """Smallest structurally valid TILE v3 record that draws nothing.
-
-    Majesty resolves tiles by their position in a CAM's TILE section, so a mod
-    that appends custom tiles must still emit an entry for every slot below the
-    highest index it uses. Emitting the stock artwork for those slots is what
-    inflates the package to ~167 MB, nearly all of it Majesty's own art.
-
-    This is a 1x1 record whose single row terminates immediately with no opaque
-    runs. Layout: 26-byte header, one u32 row offset, one 4-byte end segment.
-    """
-    tile = bytearray(26)
-    struct.pack_into("<H", tile, 0, 3)              # version
-    struct.pack_into("<H", tile, 2, 1)              # height
-    struct.pack_into("<H", tile, 4, 1)              # width
-    struct.pack_into("<I", tile, 22, palette_index) # palette id
-    tile += struct.pack("<I", 4)                    # row 0 payload begins after the offset table
-    tile += struct.pack("<HBB", 0, 0, 0x80)         # x_end 0, count 0, terminating flag
-    return bytes(tile)
-
-
-def placeholder_tile_for(mode: str, original: bytes) -> bytes:
-    """Return what an unreferenced tile slot should contain under `mode`."""
-    if mode == "stock":
-        return original
-    if mode == "empty":
-        return b""
-    if mode == "blank":
-        palette_index = tile_palette_index(original)
-        return minimal_placeholder_tile(palette_index if palette_index is not None else 0)
-    raise ValueError(f"unknown unused-tile mode: {mode}")
-
-
 def imag_referenced_tile_indices(images: list[bytes], tile_count: int) -> set[int]:
     """Every tile slot the supplied IMAG records can actually reach."""
     referenced: set[int] = set()
@@ -5026,25 +4978,23 @@ def reduce_unreferenced_tiles(
     tile_entries: list[CamEntry],
     images: list[bytes],
     always_keep: set[int],
-    mode: str,
+    engine_addressed: set[int],
 ) -> list[CamEntry]:
-    """Replace tile slots no emitted IMAG can reach with placeholders.
+    """Empty tile slots no emitted IMAG can reach.
 
     Entry names and positions are preserved, because Majesty addresses tiles by
-    their index within the section. Only the payload changes.
+    their index within the section. A zero-length payload makes the engine fall
+    back to its stock archive; writing a valid transparent tile does not.
     """
-    if mode == "stock":
-        return tile_entries
-
     keep = (
         imag_referenced_tile_indices(images, len(tile_entries))
         | always_keep
-        | {index for index in engine_addressed_tile_indices() if index < len(tile_entries)}
+        | {index for index in engine_addressed if index < len(tile_entries)}
     )
     return [
         entry
         if index in keep
-        else CamEntry(name=entry.name, data=placeholder_tile_for(mode, entry.data))
+        else CamEntry(name=entry.name, data=b"")
         for index, entry in enumerate(tile_entries)
     ]
 

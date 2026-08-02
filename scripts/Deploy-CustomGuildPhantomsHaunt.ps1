@@ -4,52 +4,40 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "HauntDeployment.ps1")
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$source = Join-Path $repoRoot $SourceRoot
-$target = Join-Path $ModsRoot "CustomGuildPhantomsHaunt"
+$source = if ([IO.Path]::IsPathRooted($SourceRoot)) {
+    Get-HauntCanonicalPath $SourceRoot
+} else {
+    Get-HauntCanonicalPath (Join-Path $repoRoot $SourceRoot)
+}
+$deploymentPaths = Get-SafeHauntDeploymentPaths $ModsRoot
+$target = $deploymentPaths.Target
 
-if (-not (Test-Path $source)) {
+if (-not (Test-Path -LiteralPath $source -PathType Container)) {
     throw "Build output does not exist: $source"
 }
+$sourcePrefix = $source + [IO.Path]::DirectorySeparatorChar
+$targetPrefix = $target + [IO.Path]::DirectorySeparatorChar
+if ($source.Equals($target, [StringComparison]::OrdinalIgnoreCase) -or
+    $source.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+    $target.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Unsafe Haunt deployment: source and target directories overlap."
+}
+$sourceManifest = Get-HauntDeploymentManifest $source
+if ($sourceManifest.Count -eq 0) {
+    throw "Refusing to replace the installed Haunt with an empty source package: $source"
+}
 
-if (Test-Path $target) {
+if (Test-Path -LiteralPath $target) {
     Remove-Item -LiteralPath $target -Recurse -Force
 }
 
 New-Item -ItemType Directory -Force -Path $target | Out-Null
-Copy-Item -Path (Join-Path (Resolve-Path $source).Path "*") -Destination $target -Recurse -Force
-
-$sourceRoot = (Resolve-Path $source).Path
-$targetRoot = (Resolve-Path $target).Path
-$sourceFiles = @{}
-$targetFiles = @{}
-
-Get-ChildItem -LiteralPath $sourceRoot -Recurse -File | ForEach-Object {
-    $relative = $_.FullName.Substring($sourceRoot.Length).TrimStart('\')
-    $sourceFiles[$relative] = $_.Length
-}
-
-Get-ChildItem -LiteralPath $targetRoot -Recurse -File | ForEach-Object {
-    $relative = $_.FullName.Substring($targetRoot.Length).TrimStart('\')
-    $targetFiles[$relative] = $_.Length
-}
-
-foreach ($relative in $sourceFiles.Keys) {
-    if (-not $targetFiles.ContainsKey($relative)) {
-        throw "Deploy verification failed, missing file in target: $relative"
-    }
-    if ($targetFiles[$relative] -ne $sourceFiles[$relative]) {
-        throw "Deploy verification failed, size mismatch: $relative"
-    }
-}
-
-foreach ($relative in $targetFiles.Keys) {
-    if (-not $sourceFiles.ContainsKey($relative)) {
-        throw "Deploy verification failed, extra file in target: $relative"
-    }
-}
+Get-ChildItem -LiteralPath $source -Force | Copy-Item -Destination $target -Recurse -Force
+$matchedFileCount = Assert-HauntDeploymentMatches -SourceRoot $source -TargetRoot $target
 
 Write-Host "Deployed local mod package:"
 Write-Host $target
-Write-Host "Deploy verification matched $($sourceFiles.Count) files."
+Write-Host "Deploy verification matched $matchedFileCount files by size and SHA-256."

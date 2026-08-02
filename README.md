@@ -171,6 +171,11 @@ runtime permits it.
 Technical package names use `CustomGuildPhantomsHaunt`; player-facing text uses
 `Custom Guild: Phantoms Haunt`.
 
+Compatibility note: Majesty treats `DATA/BDEP` as one whole resource rather
+than merging rules from multiple mods. Another mod that supplies its own BDEP
+table needs a small compatibility patch containing the stock table plus both
+mods' custom rules. See [Packaging architecture](docs/packaging.md#bdep-mod-compatibility).
+
 ### CAM and sprite work
 
 The builder reads stock CAM structures, clones only the required records, and
@@ -281,11 +286,14 @@ SDK:
 
 ```powershell
 ..\.tools\python.cmd -m unittest discover -s tests
+powershell -ExecutionPolicy Bypass -File .\tests\Test-HauntDeployment.ps1
 ```
 
 They cover TILE encoding and decoding, CAM container round-trips, string-table
-patching, tile reduction, palette selection, and the generated XML. Package
-correctness is still checked by the full validation that runs after every build.
+patching, tile reduction, palette selection, the generated XML, and safe,
+content-exact local deployment. The deployment test uses disposable directories
+and does not touch the installed mod. Package correctness is still checked by
+the full validation that runs after every build.
 
 Every build ends with structural and semantic validation of the manifest, XML
 descriptions, CAM directories and payloads, WAVE formats, DSND routing, GPL

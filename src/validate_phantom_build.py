@@ -8,6 +8,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+import build_phantom_guild as builder
+
 
 MAGIC = b"CYLBPC  \x01\x00\x01\x00"
 HEADER_SIZE = 20
@@ -361,13 +363,6 @@ EXPECTED_BUILDING_DESTRUCTION_ATTACHMENTS = {
 }
 
 
-# True for the normal `empty` build, where unreferenced tile slots are
-# zero-length and the engine falls back to the stock archive. Set False only for
-# a `--unused-tile-mode stock` build, which fills those slots with Majesty's own
-# artwork and inflates the package to roughly 160 MB.
-ALLOW_EMPTY_TILES = True
-
-
 def fail(message: str) -> None:
     raise ValidationError(message)
 
@@ -515,7 +510,7 @@ def validate_archive(path: Path) -> tuple[dict[bytes, list[Entry]], dict[tuple[b
                     fail(f"{path}: {extension!r} entry {entry_index} has an empty name")
                 if name and name in seen_names:
                     fail(f"{path}: duplicate entry: {extension.decode(errors='replace')}/{name!r}")
-                if size == 0 and not (ALLOW_EMPTY_TILES and extension == b"TILE"):
+                if size == 0 and extension != b"TILE":
                     fail(f"{path}: {extension.decode(errors='replace')}/{name!r} is empty")
                 if offset < content_end or offset + size > file_size:
                     fail(
@@ -1262,15 +1257,9 @@ def validate_no_redistributed_stock_art(
 
     Majesty addresses tiles by their position in a CAM's TILE section, so a mod
     appending custom tiles must emit an entry for every slot below the highest
-    index it uses. Filling those slots with Majesty's own artwork is what once
-    made this package ~160 MB, roughly 157 MB of which was the publisher's art
-    rather than ours.
-
-    Leaving them zero-length is confirmed to work: the engine falls back to the
-    stock archive for a slot the mod supplies no payload for. This check exists
-    so that behaviour cannot silently regress and quietly reintroduce ~157 MB of
-    redistributed art, which is exactly how the packaging documentation and the
-    shipped artifact drifted apart in the first place.
+    index it uses. Those unused entries must have zero-length payloads so the
+    engine falls back to the installed stock archive. This exact check prevents
+    unrelated artwork from being carried in the generated package.
     """
     tiles = sections.get(b"TILE")
     if not tiles:
@@ -1283,27 +1272,28 @@ def validate_no_redistributed_stock_art(
         referenced |= referenced_indices(image, "full", len(tiles))
         referenced |= referenced_indices(image, "low16", len(tiles))
 
+    allowed_unreferenced = {
+        "phantom_maindata.cam": builder.maindata_engine_addressed_tile_indices(),
+        "phantom_interfacedata.cam": builder.interfacedata_engine_addressed_tile_indices(),
+    }.get(path.name, set())
     offenders = [
         entry.index
         for entry in tiles
-        if entry.index not in referenced and entry.size > 0
+        if entry.index not in referenced
+        and entry.index not in allowed_unreferenced
+        and entry.size > 0
     ]
     if not offenders:
         return
 
     by_index = {entry.index: entry.size for entry in tiles}
     carried = sum(by_index[index] for index in offenders)
-    # Slots the engine addresses by number rather than through one of our IMAG
-    # records must keep real data, so a small allowance is expected. Anything
-    # near the full stock archive is the regression this guards against.
-    if carried > 2_000_000:
-        fail(
-            f"{path}: {len(offenders)} unreferenced tile slots carry "
-            f"{carried / 1e6:.1f} MB of payload. Unreferenced slots must be "
-            f"zero-length so the engine falls back to the stock archive. "
-            f"Building with --unused-tile-mode stock reintroduces roughly "
-            f"157 MB of redistributed Majesty artwork."
-        )
+    fail(
+        f"{path}: {len(offenders)} unexpected unreferenced tile slots carry "
+        f"{carried} bytes of payload at indices {offenders[:20]}. Only emitted "
+        f"IMAG references and the archive's exact engine-addressed allowlist may "
+        f"carry TILE data."
+    )
 
 
 def validate_custom_tile_references(
@@ -4972,7 +4962,34 @@ def validate_release_playtest_contract(output_root: Path) -> None:
         )
 
 
-def validate(output_root: Path) -> None:
+def validate_building_dependencies_against_stock(
+    path: Path,
+    building_dependencies: bytes,
+    stock_data: bytes,
+) -> None:
+    try:
+        expected = builder.append_haunt_building_dependency(stock_data)
+    except ValueError as exc:
+        fail(f"{path}: cannot establish the expected stock BDEP prefix: {exc}")
+    if building_dependencies != expected:
+        mismatch = next(
+            (
+                index
+                for index, (actual, wanted) in enumerate(
+                    zip(building_dependencies, expected)
+                )
+                if actual != wanted
+            ),
+            min(len(building_dependencies), len(expected)),
+        )
+        fail(
+            f"{path}: DATA/BDEP differs from the complete stock table plus the "
+            f"single Haunt dependency at byte {mismatch} "
+            f"(built={len(building_dependencies)} bytes, expected={len(expected)} bytes)"
+        )
+
+
+def validate(output_root: Path, game_path: Path) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
     validate_manifest(output_root)
@@ -5002,8 +5019,7 @@ def validate(output_root: Path) -> None:
             fail(f"{path}: required archive is missing")
         result = validate_archive(path)
         validate_expected_entries(path, result[0])
-        if ALLOW_EMPTY_TILES:
-            validate_no_redistributed_stock_art(path, result[0])
+        validate_no_redistributed_stock_art(path, result[0])
         archive_results[filename] = result
 
     gpltext_path = output_root / "Data" / "phantom_gpltext.cam"
@@ -5078,6 +5094,19 @@ def validate(output_root: Path) -> None:
             f"{miscdata_path}: Haunt BDEP rule must be last and retain the "
             "parser's required blank final line"
         )
+    source_miscdata = game_path / "Data" / "miscdata.cam"
+    if not source_miscdata.is_file():
+        fail(f"{source_miscdata}: stock miscdata archive was not found")
+    stock_dependencies = builder.read_cam_entry(
+        source_miscdata,
+        b"DATA",
+        b"BDEP",
+    ).data
+    validate_building_dependencies_against_stock(
+        miscdata_path,
+        building_dependencies,
+        stock_dependencies,
+    )
 
     textdata_path = output_root / "Data" / "phantom_textdata.cam"
     textdata_captured = archive_results["phantom_textdata.cam"][1]
@@ -5349,25 +5378,20 @@ def validate(output_root: Path) -> None:
 
 
 def main() -> int:
-    global ALLOW_EMPTY_TILES
-
     parser = argparse.ArgumentParser(description="Validate a generated Phantoms Haunt package.")
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument(
-        "--unused-tile-mode",
-        choices=("empty", "stock"),
-        default="empty",
-        help=(
-            "Must match how the package was built. 'empty' expects zero-length "
-            "entries in unreferenced tile slots and rejects a package that "
-            "carries redistributed stock artwork there. 'stock' is the legacy "
-            "~160 MB layout."
-        ),
+        "--game-path",
+        required=True,
+        type=Path,
+        help="Game root used to compare DATA/BDEP byte-for-byte with stock.",
     )
     args = parser.parse_args()
-    ALLOW_EMPTY_TILES = args.unused_tile_mode == "empty"
     try:
-        validate(args.output_root.resolve())
+        validate(
+            args.output_root.resolve(),
+            args.game_path.resolve(),
+        )
     except ValidationError as exc:
         print(f"Verification failed: {exc}", file=sys.stderr)
         return 1
