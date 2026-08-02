@@ -4854,19 +4854,31 @@ def validate_quest_compatibility(output_root: Path) -> None:
         candidates = [value for value in (next_lower, next_upper) if value >= 0]
         end = min(candidates) if candidates else len(gpl)
         quest_override = gpl[start:end]
-        if "$Phantom_Lock_Haunt_For_Quest();" not in quest_override:
+        if function_name == "DARK_FOREST":
+            expected_pair = (
+                '$disableunittype("Gnome_hovel");\n'
+                '\t$DisableUnitType("Phantoms_Haunt");'
+            )
+            if expected_pair not in quest_override:
+                fail(
+                    f"{gpl_path}: Dark Forest must place the Haunt directly "
+                    "in the stock unit-type lock list"
+                )
+            if "$Phantom_Lock_Haunt_For_Quest();" in quest_override:
+                fail(
+                    f"{gpl_path}: Dark Forest must not route its stock-shaped "
+                    "unit-type lock through the shared helper"
+                )
+        elif "$Phantom_Lock_Haunt_For_Quest();" not in quest_override:
             fail(
                 f"{gpl_path}: {function_name} must apply the quest's native "
                 "unit-type restriction through the shared Haunt helper"
             )
 
     lock_start = gpl.index("Function Phantom_Lock_Haunt_For_Quest()")
-    lock_end = gpl.index("Function Phantom_Unlock_Haunt_For_Quest()", lock_start)
-    unlock_end = gpl.index("Function Phantom_Player_Has_Placed_Haunt", lock_end)
+    lock_end = gpl.index("Function Phantom_Player_Has_Placed_Haunt", lock_start)
     if '$DisableUnitType("Phantoms_Haunt");' not in gpl[lock_start:lock_end]:
         fail(f"{gpl_path}: quest lock helper must use stock DisableUnitType")
-    if '$EnableUnitType("Phantoms_Haunt");' not in gpl[lock_end:unlock_end]:
-        fail(f"{gpl_path}: quest unlock helper must use stock EnableUnitType")
 
     slay_start = gpl.find("function SLAY_DRAGON")
     slay_end = gpl.find("\nfunction ", slay_start + 1)
@@ -4884,14 +4896,20 @@ def validate_quest_compatibility(output_root: Path) -> None:
 
     dark_victory_start = gpl.find("function dark_forest_victory")
     dark_victory_end = gpl.find("\nfunction ", dark_victory_start + 1)
-    if (
-        dark_victory_start < 0
-        or "$Phantom_Unlock_Haunt_For_Quest();"
-        not in gpl[dark_victory_start:dark_victory_end]
-    ):
+    dark_victory = gpl[dark_victory_start:dark_victory_end]
+    expected_dark_unlock = (
+        '$enableunittype("Gnome_hovel");\n'
+        '\t\t\t\t\t$EnableUnitType("Phantoms_Haunt");'
+    )
+    if dark_victory_start < 0 or expected_dark_unlock not in dark_victory:
         fail(
-            f"{gpl_path}: Dark Forest must restore Haunt construction with "
-            "the stock guild and temple unlock"
+            f"{gpl_path}: Dark Forest must place the Haunt directly in the "
+            "stock guild and temple unlock list"
+        )
+    if "$Phantom_Unlock_Haunt_For_Quest();" in dark_victory:
+        fail(
+            f"{gpl_path}: Dark Forest must not route its stock-shaped "
+            "unit-type unlock through the shared helper"
         )
 
     siege_start = gpl.find("function SIEGE")

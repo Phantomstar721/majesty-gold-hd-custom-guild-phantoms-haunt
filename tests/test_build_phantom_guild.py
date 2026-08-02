@@ -386,6 +386,28 @@ class GplSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             builder.extract_gpl_function(self.SOURCE, "NotThere")
 
+    def test_dark_forest_gate_is_spliced_into_stock_lists_directly(self):
+        entry = 'function DARK_FOREST()\nBegin\n\t$disableunittype("Gnome_hovel");\nEnd'
+        victory = (
+            'function dark_forest_victory()\nBegin\n'
+            '\t\t\t\t\t$enableunittype("Gnome_hovel");\nEnd'
+        )
+
+        entry = builder.patch_dark_forest_entry_for_haunt(entry)
+        victory = builder.patch_dark_forest_unlock_for_haunt(victory)
+
+        self.assertIn(
+            '$disableunittype("Gnome_hovel");\n\t$DisableUnitType("Phantoms_Haunt");',
+            entry,
+        )
+        self.assertIn(
+            '$enableunittype("Gnome_hovel");\n'
+            '\t\t\t\t\t$EnableUnitType("Phantoms_Haunt");',
+            victory,
+        )
+        self.assertNotIn("Phantom_Lock_Haunt_For_Quest", entry)
+        self.assertNotIn("Phantom_Unlock_Haunt_For_Quest", victory)
+
 
 class GplTemplateTests(unittest.TestCase):
     """The static GPL body lives in src/gpl/phantom.gpl rather than inside a
@@ -415,7 +437,6 @@ class GplTemplateTests(unittest.TestCase):
         text = builder.phantom_gpl_template()
         for name in (
             "Function Phantom_Lock_Haunt_For_Quest",
-            "Function Phantom_Unlock_Haunt_For_Quest",
             "Function Phantoms_Haunt_Birth",
             "function Priestess_tree",
             "Function Phantom_Priestess_Bazaar_Check",

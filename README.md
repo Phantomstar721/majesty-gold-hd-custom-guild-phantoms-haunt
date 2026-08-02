@@ -203,6 +203,10 @@ not a Palace watcher or construction callback. The package uses
 Expansion. See
 [Quest compatibility](docs/quest-compatibility.md).
 
+Dark Forest integrates the Haunt directly into the quest's stock guild lock and
+Fervus-discovery unlock lists. That progression is confirmed in game without a
+watcher or custom restoration path.
+
 ### Voice pipeline
 
 The public repository contains only the 13 final game-used voice WAVs. They are

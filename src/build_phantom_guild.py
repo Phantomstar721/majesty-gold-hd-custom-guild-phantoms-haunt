@@ -1426,6 +1426,30 @@ def replace_once(text: str, old: str, new: str, description: str) -> str:
     return text.replace(old, new, 1)
 
 
+def patch_dark_forest_entry_for_haunt(function: str) -> str:
+    return replace_once(
+        function,
+        '\t$disableunittype("Gnome_hovel");',
+        (
+            '\t$disableunittype("Gnome_hovel");\n'
+            '\t$DisableUnitType("Phantoms_Haunt");'
+        ),
+        "place the Haunt in Dark Forest's stock unit-type lock list",
+    )
+
+
+def patch_dark_forest_unlock_for_haunt(function: str) -> str:
+    return replace_once(
+        function,
+        '\t\t\t\t\t$enableunittype("Gnome_hovel");',
+        (
+            '\t\t\t\t\t$enableunittype("Gnome_hovel");\n'
+            '\t\t\t\t\t$EnableUnitType("Phantoms_Haunt");'
+        ),
+        "place the Haunt in Dark Forest's stock unit-type unlock list",
+    )
+
+
 def phantom_quest_rule_overrides(game_path: Path) -> str:
     sdk_rules = game_path / "SDK" / "OriginalQuests" / "GPLMx" / "Rules"
     epic_source = (sdk_rules / "mx_Epic_Quest_Scripts.gpl").read_text(
@@ -1447,12 +1471,15 @@ def phantom_quest_rule_overrides(game_path: Path) -> str:
     overrides: list[str] = []
     for function_name in disabled_quests:
         function = extract_gpl_function(epic_source, function_name)
-        function = substitute_once(
-            function,
-            r"(?im)^begin\s*$",
-            'begin\n\t$Phantom_Lock_Haunt_For_Quest();',
-            f"lock the Haunt at the start of {function_name}",
-        )
+        if function_name == "DARK_FOREST":
+            function = patch_dark_forest_entry_for_haunt(function)
+        else:
+            function = substitute_once(
+                function,
+                r"(?im)^begin\s*$",
+                'begin\n\t$Phantom_Lock_Haunt_For_Quest();',
+                f"lock the Haunt at the start of {function_name}",
+            )
         if function_name == "SLAY_DRAGON":
             function = replace_once(
                 function,
@@ -1470,14 +1497,8 @@ def phantom_quest_rule_overrides(game_path: Path) -> str:
         epic_source,
         "dark_forest_victory",
     )
-    dark_forest_victory = replace_once(
-        dark_forest_victory,
-        '\t\t\t\t\t$enableunittype("Gnome_hovel");',
-        (
-            '\t\t\t\t\t$enableunittype("Gnome_hovel");\n'
-            '\t\t\t\t\t$Phantom_Unlock_Haunt_For_Quest();'
-        ),
-        "unlock the Haunt on dark_forest_victory",
+    dark_forest_victory = patch_dark_forest_unlock_for_haunt(
+        dark_forest_victory
     )
     overrides.append(dark_forest_victory)
 

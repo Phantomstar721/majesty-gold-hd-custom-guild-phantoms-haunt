@@ -8,14 +8,6 @@ Begin
 	$DisableUnitType("Phantoms_Haunt");
 End
 
-Function Phantom_Unlock_Haunt_For_Quest()
-
-Declare
-
-Begin
-	$EnableUnitType("Phantoms_Haunt");
-End
-
 Function Phantom_Player_Has_Placed_Haunt(agent ThisAgent) is boolean
 
 Declare
@@ -3008,4 +3000,3 @@ begin
 			$spell_attack(thisagent, dude, 18 + $GetAttribute(thisagent, #ATTRIB_ExperienceLevel));
 		end
 end
-

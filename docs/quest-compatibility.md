@@ -27,6 +27,22 @@ level 1, exposes it immediately after the Palace reaches level 2, and peasants
 construct it normally. Rise of the Rat King exposes it from its starting
 level-2 Palace.
 
+## Dark Forest
+
+Dark Forest uses the quest's literal stock guild progression. Its `DARK_FOREST`
+entry point places `$DisableUnitType("Phantoms_Haunt")` directly beside the
+stock guild, temple, and non-human settlement locks. When the Temple to Fervus
+is discovered, `dark_forest_victory` places the matching
+`$EnableUnitType("Phantoms_Haunt")` directly in the same stock unlock list.
+There is no polling thread, helper indirection, registration replay, or
+construction interception.
+
+After the stock unlock, the ordinary BDEP Palace requirement still applies, so
+the Haunt appears only at Palace level 2 or 3. Confirmed in game on 2026-08-01:
+the Haunt remains unavailable before the Fervus event and becomes normally
+buildable afterward under the same quest transition that restores stock guilds,
+temples, and Elven availability.
+
 The Haunt is treated as a temple-tier arcane guild when matching stock quest
 restrictions. Restrictions aimed only at non-human settlements do not exclude
 it.
