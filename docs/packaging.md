@@ -102,12 +102,16 @@ supports.
 | Archive | Content |
 | --- | --- |
 | `phantom_maindata.cam` | Building, hero, spell, projectile, overlay, particle, icon, palette, and TILE data |
-| `phantom_interfacedata.cam` | Standard interface images and raw textures |
+| `phantom_interfacedata.cam` | Custom recruitment-panel raw texture |
 | `phantom_textdata.cam` | Menu and description strings |
 | `phantom_gpltext.cam` | GPL-facing names and help text |
 | `phantom_miscdata.cam` | Full stock BDEP table plus the Haunt's native level-2 Palace dependency |
 | `phantom_voices.cam` | Event-specific PCM WAVE payloads |
 | `phantom_sounddesc.cam` | Runtime DSND registrations |
+
+The package deliberately carries no Phantom spell or equipment UI-icon art.
+Majesty does not resolve those custom entries through a mod CAM, so retaining
+generated icons or unchanged stock icon sheets would add misleading dead data.
 
 XML descriptions provide units, actions, projectiles, overlays, particles, and
 sound metadata. GPL provides behavior, decision integration, progression,

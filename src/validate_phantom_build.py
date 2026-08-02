@@ -155,9 +155,6 @@ EXPECTED_CAM_ENTRIES: dict[str, dict[bytes, set[bytes]]] = {
     },
     "phantom_interfacedata.cam": {
         b"IMAG": {
-            b"INTnChar spell icon",
-            b"INBwicons weapons",
-            b"INBaarmor icons",
             b"PHTIraw textures",
         },
         b"TILE": set(),
@@ -1274,7 +1271,6 @@ def validate_no_redistributed_stock_art(
 
     allowed_unreferenced = {
         "phantom_maindata.cam": builder.maindata_engine_addressed_tile_indices(),
-        "phantom_interfacedata.cam": builder.interfacedata_engine_addressed_tile_indices(),
     }.get(path.name, set())
     offenders = [
         entry.index
@@ -1962,9 +1958,9 @@ def validate_phantoms_haunt_identity(output_root: Path) -> None:
     hero_data_path = output_root / "GPL" / "Phantom_Hero_Data.dat"
     hero_data = hero_data_path.read_text(encoding="utf-8")
     playtest_values = (
-        "(PercentageHPRetreat 30)",
+        "(PercentageHPRetreat 20)",
         "(enemy_estimation 1.0)",
-        "(self_estimation 1.2)",
+        "(self_estimation 1.4)",
         "(evaluationScript\teval_enemies_nearby)",
     )
     missing = [value for value in playtest_values if value not in hero_data]

@@ -170,15 +170,6 @@ class TileReductionTests(unittest.TestCase):
         ):
             self.assertIn(getattr(builder, name), keep, f"{name} missing from keep set")
 
-    def test_archive_specific_keep_sets_do_not_leak_into_each_other(self):
-        main = builder.maindata_engine_addressed_tile_indices()
-        interface = builder.interfacedata_engine_addressed_tile_indices()
-        self.assertTrue(interface)
-        self.assertTrue(main.isdisjoint(interface))
-        self.assertNotIn(builder.BUILDING_ICON_TILE, interface)
-        self.assertNotIn(builder.ICE_LANCE_SPELL_ICON_TILES[0], main)
-
-
 class PackageInvariantTests(unittest.TestCase):
     def test_one_unexpected_unreferenced_tile_byte_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -189,16 +180,6 @@ class PackageInvariantTests(unittest.TestCase):
             }
             with self.assertRaises(validator.ValidationError):
                 validator.validate_no_redistributed_stock_art(path, sections)
-
-    def test_exact_engine_addressed_tile_is_allowed_without_an_imag_reference(self):
-        with tempfile.TemporaryDirectory() as temp:
-            path = Path(temp) / "phantom_interfacedata.cam"
-            path.write_bytes(b"x")
-            tile_index = builder.ICE_LANCE_SPELL_ICON_TILES[0]
-            sections = {
-                b"TILE": [validator.Entry(b"TILE", b"spell", 0, 1, tile_index)],
-            }
-            validator.validate_no_redistributed_stock_art(path, sections)
 
     def test_bdep_append_preserves_every_stock_byte(self):
         stock = b"# stock\r\nABP1 : ABJ2 ABJ3 NOT NOT ||\r\n"
@@ -574,8 +555,7 @@ class CliContractTests(unittest.TestCase):
 
     An argument that is declared but never read is worse than useless: the
     build script keeps passing it, so it reads as wired up when nothing
-    consumes it. --recruitment-voice-wav and --dark-staff-mx-icon-rgb both
-    sat like that until they were removed.
+    consumes it.
     """
 
     @staticmethod

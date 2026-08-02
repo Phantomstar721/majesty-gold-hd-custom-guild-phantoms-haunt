@@ -295,14 +295,6 @@ $portraitRgb = Join-Path $tempDir "phantom_portrait_100.rgb"
 $buildingProfileRgb = Join-Path $tempDir "phantom_guild_profile_100.rgb"
 $heroIconRgb = Join-Path $tempDir "phantom_hero_icon_25.rgb"
 $buildingIconRgb = Join-Path $tempDir "phantom_guild_icon_25.rgb"
-$iceLanceIconRgb = Join-Path $tempDir "ice_lance_icon_29.rgb"
-$iceLanceSpellIconRgb = Join-Path $tempDir "ice_lance_spell_icon_24.rgb"
-$frostArmorSpellIconRgb = Join-Path $tempDir "frost_armor_spell_icon_24.rgb"
-$blizzardSpellIconRgb = Join-Path $tempDir "blizzard_spell_icon_24.rgb"
-$callToGraveSpellIconRgb = Join-Path $tempDir "call_to_grave_spell_icon_24.rgb"
-$phantomCowlIconRgb = Join-Path $tempDir "phantom_cowl_icon_23.rgb"
-$darkStaffSmallIconRgb = Join-Path $tempDir "dark_staff_icon_16.rgb"
-$darkStaffIconRgb = Join-Path $tempDir "dark_staff_icon_50x19.rgb"
 $interfacePanelRgb = Join-Path $tempDir "phantom_interface_panel_200x245.rgb"
 $buildingSpriteDir = Join-Path $tempDir "building_sprites"
 $buildingLevel2SpriteDir = Join-Path $tempDir "building_level_2_sprites"
@@ -382,7 +374,6 @@ if ($LASTEXITCODE -ne 0) {
     --hero-sprite-png-dir $heroSpriteDir `
     --interface-panel-rgb $interfacePanelRgb `
     --building-dialog-panel-rgb $interfacePanelRgb `
-    --ice-lance-icon-rgb $iceLanceIconRgb `
     --ice-lance-projectile-source-png (Resolve-RepoPath $IceLanceProjectileSource) `
     --icy-touch-impact-source-png (Resolve-RepoPath $IcyTouchImpactSource) `
     --frost-armor-crystal-source-png (Resolve-RepoPath $FrostArmorCrystalSource) `
@@ -392,13 +383,6 @@ if ($LASTEXITCODE -ne 0) {
     --endless-winter-vortex-source-png (Resolve-RepoPath $EndlessWinterVortexSource) `
     --endless-winter-hit-source-png (Resolve-RepoPath $EndlessWinterHitSource) `
     --endless-winter-missile-source-png (Resolve-RepoPath $EndlessWinterMissileSource) `
-    --ice-lance-spell-icon-rgb $iceLanceSpellIconRgb `
-    --frost-armor-spell-icon-rgb $frostArmorSpellIconRgb `
-    --blizzard-spell-icon-rgb $blizzardSpellIconRgb `
-    --call-to-grave-spell-icon-rgb $callToGraveSpellIconRgb `
-    --phantom-cowl-icon-rgb $phantomCowlIconRgb `
-    --dark-staff-small-icon-rgb $darkStaffSmallIconRgb `
-    --dark-staff-icon-rgb $darkStaffIconRgb `
     --voice-dir (Resolve-RepoPath $AudioRoot)
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom CAM builder failed with exit code $LASTEXITCODE"

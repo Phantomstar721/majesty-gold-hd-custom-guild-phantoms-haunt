@@ -21,8 +21,8 @@ at level 2. It recruits Phantoms for 700 gold with a 16-second recruitment
 time. A new Phantom begins with 1,600 level XP, 8 Vitality, 8
 Strength, 25 Magic Resistance, and 25 Dodge.
 
-Phantoms use Wizard-like spell decisions with a 30% retreat threshold, an
-enemy-estimation multiplier of 1.0, and a self-estimation multiplier of 1.2.
+Phantoms use Wizard-like spell decisions with a 20% retreat threshold, an
+enemy-estimation multiplier of 1.0, and a self-estimation multiplier of 1.4.
 Their spell-confidence weights are:
 
 | Spell | Confidence |

@@ -102,26 +102,11 @@ BUILDING_DESTRUCTION_ATTACHMENT_REMAPS = {
     0x03000066: (35, 25),  # Die-7 / destroyed alternate, fire layer 3
     0x03000067: (35, 25),  # Die-8 / destroyed alternate, fire layer 3
 }
-ICE_LANCE_ICON_TILE = 202
 ICE_LANCE_PROJECTILE_TILES = tuple(range(202, 214))
 ICE_LANCE_DIRECTIONAL_PROJECTILE_TILES = tuple(range(8368, 8496))
 ICE_LANCE_PROJECTILE_DIRECTIONS = 32
 ICE_LANCE_PROJECTILE_FRAMES_PER_DIRECTION = 4
 ICE_LANCE_PROJECTILE_PALETTE_INDEX = 161
-SPELL_LIST_ICON_IMAGE = b"INTnChar spell icon"
-WEAPON_ICON_IMAGE = b"INBwicons weapons"
-ARMOR_ICON_IMAGE = b"INBaarmor icons"
-ICE_LANCE_SPELL_ICON_TILES = (344,)
-FROST_ARMOR_SPELL_ICON_TILES = (345,)
-ICY_TOUCH_SPELL_ICON_TILES = (346,)
-FIRE_BLAST_SPELL_ICON_TILE = 357
-BLIZZARD_SPELL_ICON_TILES = (347,)
-CALL_TO_GRAVE_SPELL_ICON_TILES = (348,)
-ETERNAL_SOUL_SPELL_ICON_TILES = (349,)
-STAFF_ICON_TILES: tuple[int, ...] = ()
-STAFF_SMALL_ICON_TILES: tuple[int, ...] = ()
-MX_STAFF_ICON_TILES: tuple[int, ...] = ()
-LEATHER_ARMOR_ICON_TILES: tuple[int, ...] = ()
 
 PHANTOM_COWL_BASE_ITEM_ID = 80
 PHANTOM_ICEROD_BASE_ITEM_ID = 81
@@ -207,7 +192,6 @@ def main() -> int:
     parser.add_argument("--hero-sprite-png-dir", type=Path)
     parser.add_argument("--interface-panel-rgb", type=Path)
     parser.add_argument("--building-dialog-panel-rgb", type=Path)
-    parser.add_argument("--ice-lance-icon-rgb", type=Path)
     parser.add_argument("--ice-lance-projectile-source-png", type=Path)
     parser.add_argument("--icy-touch-impact-source-png", type=Path)
     parser.add_argument("--frost-armor-crystal-source-png", type=Path)
@@ -217,13 +201,6 @@ def main() -> int:
     parser.add_argument("--endless-winter-vortex-source-png", type=Path)
     parser.add_argument("--endless-winter-hit-source-png", type=Path)
     parser.add_argument("--endless-winter-missile-source-png", type=Path)
-    parser.add_argument("--ice-lance-spell-icon-rgb", type=Path)
-    parser.add_argument("--frost-armor-spell-icon-rgb", type=Path)
-    parser.add_argument("--blizzard-spell-icon-rgb", type=Path)
-    parser.add_argument("--call-to-grave-spell-icon-rgb", type=Path)
-    parser.add_argument("--phantom-cowl-icon-rgb", type=Path)
-    parser.add_argument("--dark-staff-small-icon-rgb", type=Path)
-    parser.add_argument("--dark-staff-icon-rgb", type=Path)
     # The Phantom recruitment bark ships through --voice-dir as
     # phantom-recruitment-game.wav (PHS1 / Phantom_Hired), not a separate
     # argument.
@@ -304,7 +281,6 @@ def main() -> int:
         args.building_level_3_sprite_rgb_dir,
         args.hero_sprite_png_dir,
         args.interface_panel_rgb,
-        args.ice_lance_icon_rgb,
         args.ice_lance_projectile_source_png,
         args.icy_touch_impact_source_png,
         args.frost_armor_crystal_source_png,
@@ -319,20 +295,12 @@ def main() -> int:
     write_interfacedata_cam(
         source_interfacedata,
         data_dir / "phantom_interfacedata.cam",
-        args.ice_lance_spell_icon_rgb,
-        args.frost_armor_spell_icon_rgb,
-        args.blizzard_spell_icon_rgb,
-        args.call_to_grave_spell_icon_rgb,
-        args.phantom_cowl_icon_rgb,
-        args.dark_staff_small_icon_rgb,
-        args.dark_staff_icon_rgb,
         args.building_dialog_panel_rgb,
     )
     # phantom_mx_interfacedata.cam is deliberately not generated. Its only
     # content was 753 stock tiles and one unchanged copy of the stock
     # INBwicons weapons record, so it added 25.7 MB and overrode a stock
-    # interface record for no benefit. MX_STAFF_ICON_TILES is empty, so the
-    # customisation it was built for never actually ran.
+    # interface record for no benefit.
     if args.voice_dir is None:
         raise ValueError("full build requires --voice-dir")
     write_voices_cam(
@@ -1268,9 +1236,9 @@ def phantom_hero_data() -> str:
 \t\t(Friend\txx)
 \t\t(attacktype 1)
 \t\t(castingrange 190)
-\t\t(PercentageHPRetreat 30)
+\t\t(PercentageHPRetreat 20)
 \t\t(enemy_estimation 1.0)
-\t\t(self_estimation 1.2)
+\t\t(self_estimation 1.4)
 \t\t(Loyalty 55)
 \t\t(Greed 12)
 \t\t(Luck 12)
@@ -1930,7 +1898,6 @@ def write_maindata_cam(
     building_level_3_sprite_rgb_dir: Path | None,
     hero_sprite_png_dir: Path | None,
     interface_panel_rgb: Path | None,
-    ice_lance_icon_rgb: Path | None,
     ice_lance_projectile_source_png: Path | None,
     icy_touch_impact_source_png: Path | None,
     frost_armor_crystal_source_png: Path | None,
@@ -2177,7 +2144,7 @@ def write_maindata_cam(
     tile_indices.update(endless_winter_missile_tile_indices)
     tile_indices.update(endless_winter_storm_particle_tile_indices)
     tile_indices.update(endless_winter_missile_particle_tile_indices)
-    tile_indices.update((HERO_PORTRAIT_TILE, HERO_ICON_TILE, BUILDING_PROFILE_TILE, BUILDING_ICON_TILE, ICE_LANCE_ICON_TILE))
+    tile_indices.update((HERO_PORTRAIT_TILE, HERO_ICON_TILE, BUILDING_PROFILE_TILE, BUILDING_ICON_TILE))
     max_tile_index = max(tile_indices)
 
     replacement_tiles = {
@@ -2201,7 +2168,6 @@ def write_maindata_cam(
         )
     ice_lance_icon = remap_imag_animation_sequence(ice_lance_icon, [204, 205, 206, 207, 208])
     extra_tiles: list[CamEntry] = []
-    _ = ice_lance_icon_rgb
 
     directional_projectile_tile_indices = sorted(
         index
@@ -3222,57 +3188,13 @@ def write_maindata_cam(
 def write_interfacedata_cam(
     source_interfacedata: Path,
     output_path: Path,
-    ice_lance_spell_icon_rgb: Path | None,
-    frost_armor_spell_icon_rgb: Path | None,
-    blizzard_spell_icon_rgb: Path | None,
-    call_to_grave_spell_icon_rgb: Path | None,
-    phantom_cowl_icon_rgb: Path | None,
-    dark_staff_small_icon_rgb: Path | None,
-    dark_staff_icon_rgb: Path | None,
     control_panel_rgb: Path | None,
 ) -> None:
-    icon_images = {
-        SPELL_LIST_ICON_IMAGE: read_cam_entry(source_interfacedata, b"IMAG", SPELL_LIST_ICON_IMAGE).data,
-        WEAPON_ICON_IMAGE: read_cam_entry(source_interfacedata, b"IMAG", WEAPON_ICON_IMAGE).data,
-        ARMOR_ICON_IMAGE: read_cam_entry(source_interfacedata, b"IMAG", ARMOR_ICON_IMAGE).data,
-    }
     raw_texture_image = read_cam_entry(source_interfacedata, b"IMAG", RAW_TEXTURES_IMAGE).data
     phantom_raw_texture_image = raw_texture_image
     tiles = read_cam_entries(source_interfacedata, b"TILE")
 
-    replacement_tiles: dict[int, bytes] = {}
-    for tile_index in ICE_LANCE_SPELL_ICON_TILES:
-        if ice_lance_spell_icon_rgb:
-            replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], ice_lance_spell_icon_rgb.read_bytes())
-    for tile_index in FROST_ARMOR_SPELL_ICON_TILES:
-        if frost_armor_spell_icon_rgb:
-            replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], frost_armor_spell_icon_rgb.read_bytes())
-    for tile_index in ICY_TOUCH_SPELL_ICON_TILES:
-        replacement_tiles[tile_index] = tiles[FIRE_BLAST_SPELL_ICON_TILE].data
-    for tile_index in BLIZZARD_SPELL_ICON_TILES:
-        if blizzard_spell_icon_rgb:
-            replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], blizzard_spell_icon_rgb.read_bytes())
-    for tile_index in CALL_TO_GRAVE_SPELL_ICON_TILES:
-        if call_to_grave_spell_icon_rgb:
-            replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], call_to_grave_spell_icon_rgb.read_bytes())
-    for tile_index in ETERNAL_SOUL_SPELL_ICON_TILES:
-        replacement_tiles[tile_index] = replacement_tiles.get(
-            FROST_ARMOR_SPELL_ICON_TILES[0],
-            tiles[FROST_ARMOR_SPELL_ICON_TILES[0]].data,
-        )
-    for tile_index in LEATHER_ARMOR_ICON_TILES:
-        if phantom_cowl_icon_rgb:
-            replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], phantom_cowl_icon_rgb.read_bytes())
-    for tile_index in STAFF_ICON_TILES:
-        if dark_staff_icon_rgb:
-            replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], dark_staff_icon_rgb.read_bytes())
-    for tile_index in STAFF_SMALL_ICON_TILES:
-        if dark_staff_small_icon_rgb:
-            replacement_tiles[tile_index] = tile_from_rgb(tiles[tile_index].data, [], dark_staff_small_icon_rgb.read_bytes())
-    base_tile_indices: set[int] = set(replacement_tiles)
-    for image in icon_images.values():
-        base_tile_indices.update(referenced_tile_indices(image, len(tiles)))
-    base_tile_indices.update(referenced_tile_indices(raw_texture_image, len(tiles)))
+    base_tile_indices = referenced_tile_indices(raw_texture_image, len(tiles))
     base_max_tile_index = max(base_tile_indices)
 
     extra_tiles: list[CamEntry] = []
@@ -3298,20 +3220,19 @@ def write_interfacedata_cam(
         )
 
     tile_entries = list(
-        CamEntry(name=tiles[tile_index].name, data=replacement_tiles.get(tile_index, tiles[tile_index].data))
+        CamEntry(name=tiles[tile_index].name, data=tiles[tile_index].data)
         for tile_index in range(base_max_tile_index + 1)
     )
     tile_entries.extend(extra_tiles)
 
     image_entries = (
-        *tuple(CamEntry(name=pad_name(name), data=data) for name, data in icon_images.items()),
         CamEntry(name=pad_name(PHANTOM_RAW_TEXTURES_IMAGE), data=phantom_raw_texture_image),
     )
     tile_entries = reduce_unreferenced_tiles(
         tile_entries,
         [entry.data for entry in image_entries],
-        set(replacement_tiles) | set(range(base_max_tile_index + 1, len(tile_entries))),
-        interfacedata_engine_addressed_tile_indices(),
+        set(range(base_max_tile_index + 1, len(tile_entries))),
+        set(),
     )
 
     write_cam(
@@ -4965,25 +4886,6 @@ def maindata_engine_addressed_tile_indices() -> set[int]:
         HERO_INTERFACE_PANEL_TILE,
         *ICE_LANCE_PROJECTILE_TILES,
     }
-
-
-def interfacedata_engine_addressed_tile_indices() -> set[int]:
-    """Interface slots Majesty associates with actions or inventory directly."""
-    indices: set[int] = set()
-    for group in (
-        ICE_LANCE_SPELL_ICON_TILES,
-        FROST_ARMOR_SPELL_ICON_TILES,
-        ICY_TOUCH_SPELL_ICON_TILES,
-        BLIZZARD_SPELL_ICON_TILES,
-        CALL_TO_GRAVE_SPELL_ICON_TILES,
-        ETERNAL_SOUL_SPELL_ICON_TILES,
-        STAFF_ICON_TILES,
-        STAFF_SMALL_ICON_TILES,
-        MX_STAFF_ICON_TILES,
-        LEATHER_ARMOR_ICON_TILES,
-    ):
-        indices.update(group)
-    return indices
 
 
 def imag_referenced_tile_indices(images: list[bytes], tile_count: int) -> set[int]:
