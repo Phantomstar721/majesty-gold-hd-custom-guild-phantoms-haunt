@@ -18,8 +18,7 @@ The Haunt requires a level 2 Palace. Its build-menu availability uses Majesty's
 native `BDEP` building dependency table—the same mechanism used by the stock
 Wizard and temple guilds—so it is hidden at Palace level 1 and appears normally
 at level 2. It recruits Phantoms for 700 gold with a 16-second recruitment
-time. This transition is confirmed in game in both A Deal with a Demon and Rise
-of the Rat King. A new Phantom begins with 1,600 level XP, 8 Vitality, 8
+time. A new Phantom begins with 1,600 level XP, 8 Vitality, 8
 Strength, 25 Magic Resistance, and 25 Dodge.
 
 Phantoms use Wizard-like spell decisions with a 30% retreat threshold, an
