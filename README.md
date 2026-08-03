@@ -95,7 +95,9 @@ enemy is within 240 units.
 
 ### Icy Touch — level 4, rank 3
 
-Icy Touch has a five-second cooldown and a fixed 24-unit melee gate. A
+Icy Touch has a five-second cooldown. It uses a 24-unit melee gate or Majesty's
+stock adjacency result, allowing engine-defined large and modded unit
+footprints to make contact without title-specific range exceptions. A
 successful cast performs one stock weapon attack, adds 30 spell damage,
 refreshes normal Chill for three seconds, and applies Gravechill for eight
 seconds.
@@ -114,14 +116,14 @@ The spell requires a completed level-2 Haunt.
 Call to Grave is a custom portal return modeled on the Wizard's teleport
 behavior. It has a 50,000-unit movement range, a five-second cooldown, and a
 500-unit minimum-use distance. It is eligible only when the Phantom's current
-task is `go_home` and its destination is its home Haunt. When fleeing, the
-Phantom always targets its Haunt and explicitly casts Call to Grave whenever
-the spell is ready and the Haunt is beyond the minimum-use distance. Its
-existing behavior watcher continues checking during the trip, so a Phantom
-that begins walking while Call to Grave is cooling down casts it as soon as it
-becomes available. The delayed portal movement is cancelled if the Phantom is
-invalid, dead, or has already reached zero HP, allowing the stock death and
-quest-item drop paths to finish normally.
+task is `go_home` and its destination is its home Haunt. The Phantom always
+targets its Haunt while fleeing. Its stock safe-travel
+action gives Call to Grave priority before both low-health healing and generic
+travel-spell selection, preventing a Speed Tonic from displacing the recall.
+If the spell is cooling down, the same normal travel action reevaluates it as
+the Phantom continues home. The delayed portal movement is cancelled if the
+Phantom is invalid, dead, or has already reached zero HP, allowing the stock
+death and quest-item drop paths to finish normally.
 
 ### Eternal Soul — level 6, rank 5
 

@@ -2847,7 +2847,8 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         "If ($IsDead(target))",
         'If (target\'s "Type" == "Building" || target\'s "Type" == "Lair")',
         "distance = $DistanceBetweenAgents(thisagent, target);",
-        "If (distance <= #Phantom_Icy_Touch_Range)",
+        "distance <= #Phantom_Icy_Touch_Range ||",
+        "$IsAdjacent(thisagent, target)",
         "return 1;",
         "return 0;",
         "function Icy_Touch_Cast(agent thisagent, agent action_target)",
@@ -2888,6 +2889,11 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: stock monster-style Icy Touch callback is "
             f"missing {missing_baseline}"
+        )
+    if "target_range" in icy_gpl or "Daemonwood" in icy_gpl:
+        fail(
+            f"{gpl_path}: Icy Touch contact handling must use stock adjacency "
+            "without target-specific reach rules"
         )
     if "$createmissile" in icy_gpl:
         fail(f"{gpl_path}: Icy Touch must not depend on a missile callback")
@@ -3102,9 +3108,6 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         "$AdjustAttribute(thisagent, #ATTRIB_Armor_Basic_Damage, 10);",
         "$Phantom_Grant_Frost_Armor_Bonus(thisagent);",
         "$Phantom_Frost_Armor_Recharge_Check(thisagent);",
-        '$isspellavailable(thisagent,"call_to_grave",1)',
-        "$Call_To_Grave_Check(thisagent) == 1",
-        '$castspell(thisagent,"call_to_grave",thisagent,"");',
         "If ($Phantom_Arm_Frost_Armor_In_Combat(thisagent))",
         'If (thisagent\'s "Reborn_Counter" != 1)',
         'If ($CheckEffector(thisagent, "frost_armor_effector") == False)',
@@ -3293,6 +3296,13 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         bonus_item_grant,
     )
     watcher = gpl.index("function Phantom_Frost_Armor_Watch(agent thisagent)")
+    watcher_end = gpl.index(
+        "\nfunction Phantom_Frost_Armor_Recharge_Check", watcher
+    )
+    if "$Phantom_Sync_Speed_Profile" in gpl[watcher:watcher_end]:
+        fail(
+            f"{gpl_path}: Frost Armor watcher still polls the Phantom speed profile"
+        )
     watcher_bonus_call = gpl.index(
         "$Phantom_Grant_Frost_Armor_Bonus(thisagent);",
         watcher,
@@ -4131,7 +4141,7 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         'destination = thisagent\'s "destination";',
         'if ($isvalidgamepiece(thisagent\'s "target"))',
         'destination = $locationof(thisagent\'s "target");',
-        "else\n\t\t\treturn 0;",
+        "else\n\t\t\t\treturn 0;",
         "if ($distancebetweencoords(destination,$locationof(thisagent)) > #Phantom_Call_To_Grave_Min_Distance)",
         "function Call_To_Grave_Effect(agent thisagent, agent target)",
         'theTimePeriod = $GetSpellAttribute("call_to_grave","effector_duration");',
@@ -4145,15 +4155,67 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         '$TeleportToPoint(thisagent,theRange,thisagent\'s "destination");',
         'if ($isvalidgamepiece(thisagent\'s "target"))',
         '$TeleportToUnit(thisagent,theRange,thisagent\'s "Target",thisagent\'s "castingrange");',
+        "function travel_to_safe(agent thisagent)",
+        'thisagent\'s "Title" == "Phantom"',
+        '$isspellavailable(thisagent,"call_to_grave",1)',
+        "$Call_To_Grave_Check(thisagent) == 1",
+        '$cast(thisagent,"call_to_grave",thisagent, "");',
+        "$hasLowHP(thisagent) == FALSE",
+        "$TryTravelSpell(thisagent);",
+        "$heal_self_fleeing(thisagent);",
+        '$clearlist(thisagent\'s "hostiles");',
     )
     missing_gpl = [value for value in gpl_contract if value not in gpl]
     if missing_gpl:
         fail(f"{gpl_path}: Call to Grave GPL is missing {missing_gpl}")
+    flee_start = gpl.index(
+        "function flee_part_II(agent thisagent, list places, integer intent)"
+    )
+    flee_end = gpl.index("\nfunction Phantom_tree", flee_start)
+    watcher_start = gpl.index("function Phantom_Frost_Armor_Watch(agent thisagent)")
+    watcher_end = gpl.index(
+        "\nfunction Phantom_Frost_Armor_Recharge_Check", watcher_start
+    )
+    if "call_to_grave" in gpl[flee_start:flee_end]:
+        fail(f"{gpl_path}: flee_part_II bypasses the stock travel-spell path")
+    if "call_to_grave" in gpl[watcher_start:watcher_end]:
+        fail(f"{gpl_path}: behavior watcher bypasses the stock travel-spell path")
     check_start = gpl.index("function Call_To_Grave_Check(agent thisagent) is integer")
     check_end = gpl.index("\nfunction Call_To_Grave_Effect", check_start)
     check_function = gpl[check_start:check_end]
     if 'thisagent\'s "taskname" = "go_home";' in check_function:
         fail(f"{gpl_path}: Call to Grave validation mutates the stock home task")
+    travel_start = gpl.index("function travel_to_safe(agent thisagent)")
+    travel_end = gpl.index("\nfunction Call_To_Grave_Check", travel_start)
+    travel_function = gpl[travel_start:travel_end]
+    travel_order = (
+        'thisagent\'s "Title" == "Phantom"',
+        '$isspellavailable(thisagent,"call_to_grave",1)',
+        "$Call_To_Grave_Check(thisagent) == 1",
+        '$cast(thisagent,"call_to_grave",thisagent, "");',
+        "$hasLowHP(thisagent) == FALSE",
+        "$TryTravelSpell(thisagent);",
+        "$heal_self_fleeing(thisagent);",
+        '$clearlist(thisagent\'s "hostiles");',
+    )
+    travel_positions = [travel_function.index(value) for value in travel_order]
+    if travel_positions != sorted(travel_positions):
+        fail(
+            f"{gpl_path}: Phantom Call to Grave must precede the unchanged "
+            "stock low-HP and generic travel-spell branches"
+        )
+    self_target = check_function.index('thisagent\'s "Target" == thisagent')
+    saved_destination = check_function.index(
+        'destination = thisagent\'s "destination";', self_target
+    )
+    home_target = check_function.index(
+        'thisagent\'s "target" != thisagent\'s "home"', saved_destination
+    )
+    if not self_target < saved_destination < home_target:
+        fail(
+            f"{gpl_path}: Call to Grave rejects stock self-target travel state "
+            "before reading its saved destination"
+        )
     forbidden_gpl = (
         "expression #Phantom_Call_To_Grave_Walk_Range",
         "function Phantom_Is_Returning_Home(",
@@ -4321,19 +4383,20 @@ def validate_phantom_flee_home_contract(output_root: Path) -> None:
         'thisagent\'s "destination" = $locationof(thisagent\'s "target");',
         '$createeffector(thisagent,"thought_bubble_danger",#danger_bubble_time);',
         '$say(thisagent,"VFX_FLEE_COMBAT");',
-        '$isspellavailable(thisagent,"call_to_grave",1)',
-        "$Call_To_Grave_Check(thisagent) == 1",
-        '$castspell(thisagent,"call_to_grave",thisagent,"");',
     )
     missing = [value for value in contract if value not in flee_function]
     if missing:
         fail(f"{gpl_path}: Phantom flee-home override is missing {missing}")
+    if "call_to_grave" in flee_function:
+        fail(
+            f"{gpl_path}: Phantom flee-home override must leave Call to Grave "
+            "to stock TryTravelSpell handling"
+        )
     forbidden = (
         "function flee(agent thisagent",
         "function flee_absolute(agent thisagent",
         "function wizard_eval_nearby(agent thisagent",
         "function use_building_safe(agent thisagent",
-        "function travel_to_safe(agent thisagent",
     )
     present_forbidden = [value for value in forbidden if value in gpl]
     if present_forbidden:
@@ -4391,6 +4454,13 @@ def validate_phantom_potion_purchase_contract(output_root: Path) -> None:
     phantom_tree = gpl[phantom_tree_start:phantom_tree_end]
     if "$Wizard_tree(thisagent);" in phantom_tree:
         fail(f"{gpl_path}: Phantom still delegates decisions to the stock Wizard tree")
+    speed_sync = phantom_tree.index("$Phantom_Sync_Speed_Profile(thisagent);")
+    first_decision = phantom_tree.index("$Phantom_Try_Frost_Armor(thisagent)")
+    if speed_sync > first_decision:
+        fail(
+            f"{gpl_path}: Phantom speed profile must synchronize before its "
+            "normal decision chain"
+        )
 
 
 def validate_phantom_equipment_upgrade_contract(output_root: Path) -> None:

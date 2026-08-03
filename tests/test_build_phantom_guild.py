@@ -460,6 +460,7 @@ class GplTemplateTests(unittest.TestCase):
         end = text.index("\nfunction Phantom_Hero_Birth", start)
         tree = text[start:end]
         expected_in_order = (
+            "$Phantom_Sync_Speed_Profile(thisagent)",
             "$Phantom_Try_Frost_Armor(thisagent)",
             "$check_nearby(thisagent)",
             "$Check_rewards(thisagent,FALSE)",
@@ -846,7 +847,61 @@ class RecruitmentVoiceTests(unittest.TestCase):
         self.assertEqual(builder.dsnd_head_size(b"Phantom_Voice"), 23)
 
 
+class IcyTouchTests(unittest.TestCase):
+    def test_validation_accepts_stock_adjacency_for_large_unit_footprints(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index("function Icy_Touch_Check(agent thisagent) is integer")
+        end = gpl.index("\nfunction Icy_Touch_Cast", start)
+        check = gpl[start:end]
+        distance = check.index("distance <= #Phantom_Icy_Touch_Range")
+        adjacent = check.index("$IsAdjacent(thisagent, target)", distance)
+        success = check.index("return 1;", adjacent)
+        self.assertLess(distance, adjacent)
+        self.assertLess(adjacent, success)
+        self.assertNotIn("target_range", check)
+        self.assertNotIn("Daemonwood", check)
+
+
 class CallToGraveTests(unittest.TestCase):
+    def test_safe_travel_prioritizes_recall_over_tonic_and_low_hp_branches(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index("function travel_to_safe(agent thisagent)")
+        end = gpl.index("\nfunction Call_To_Grave_Check", start)
+        travel = gpl[start:end]
+        expected = (
+            'thisagent\'s "Title" == "Phantom"',
+            '$isspellavailable(thisagent,"call_to_grave",1)',
+            "$Call_To_Grave_Check(thisagent) == 1",
+            '$cast(thisagent,"call_to_grave",thisagent, "");',
+            "$hasLowHP(thisagent) == FALSE",
+            "$TryTravelSpell(thisagent);",
+            "$heal_self_fleeing(thisagent);",
+            '$clearlist(thisagent\'s "hostiles");',
+        )
+        positions = [travel.index(value) for value in expected]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_validation_preserves_stock_self_target_travel_state(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index("function Call_To_Grave_Check(agent thisagent) is integer")
+        end = gpl.index("\nfunction Call_To_Grave_Effect", start)
+        check = gpl[start:end]
+        task = check.index('thisagent\'s "taskname" != "go_home"')
+        self_target = check.index('thisagent\'s "Target" == thisagent', task)
+        saved_destination = check.index(
+            'destination = thisagent\'s "destination";', self_target
+        )
+        home_target = check.index(
+            'thisagent\'s "target" != thisagent\'s "home"', saved_destination
+        )
+        real_target = check.index(
+            '$isvalidgamepiece(thisagent\'s "target")', home_target
+        )
+        self.assertLess(task, self_target)
+        self.assertLess(self_target, saved_destination)
+        self.assertLess(saved_destination, home_target)
+        self.assertLess(home_target, real_target)
+
     def test_delayed_teleport_rejects_zero_hp_death_window(self):
         gpl = builder.phantom_gpl_template()
         start = gpl.index(
@@ -862,31 +917,24 @@ class CallToGraveTests(unittest.TestCase):
         self.assertLess(dead, zero_hp)
         self.assertLess(zero_hp, teleport)
 
-    def test_fleeing_phantom_explicitly_casts_when_spell_is_ready(self):
+    def test_fleeing_phantom_uses_stock_travel_spell_path(self):
         gpl = builder.phantom_gpl_template()
         start = gpl.index(
             "function flee_part_II(agent thisagent, list places, integer intent)"
         )
         end = gpl.index("\nfunction Phantom_tree", start)
         flee = gpl[start:end]
-        self.assertIn('$isspellavailable(thisagent,"call_to_grave",1)', flee)
-        self.assertIn("$Call_To_Grave_Check(thisagent) == 1", flee)
-        self.assertIn('$castspell(thisagent,"call_to_grave",thisagent,"");', flee)
+        self.assertIn('thisagent\'s "Activescript" = $use_building_safe;', flee)
+        self.assertNotIn("call_to_grave", flee)
 
-    def test_homeward_watcher_retries_after_cooldown(self):
+    def test_behavior_watcher_does_not_cast_travel_spell(self):
         gpl = builder.phantom_gpl_template()
         start = gpl.index("function Phantom_Frost_Armor_Watch(agent thisagent)")
         end = gpl.index("\nfunction Phantom_Frost_Armor_Recharge_Check", start)
         watcher = gpl[start:end]
-        ready = watcher.index('$isspellavailable(thisagent,"call_to_grave",1)')
-        valid = watcher.index("$Call_To_Grave_Check(thisagent) == 1", ready)
-        cast = watcher.index(
-            '$castspell(thisagent,"call_to_grave",thisagent,"");', valid
-        )
-        armor = watcher.index("$Phantom_Grant_Frost_Armor_Bonus(thisagent);", cast)
-        self.assertLess(ready, valid)
-        self.assertLess(valid, cast)
-        self.assertLess(cast, armor)
+        self.assertNotIn("call_to_grave", watcher)
+        self.assertNotIn("Phantom_Sync_Speed_Profile", watcher)
+        self.assertIn("$Phantom_Grant_Frost_Armor_Bonus(thisagent);", watcher)
 
     def test_behavior_watcher_does_not_use_stock_questscript_field(self):
         gpl = builder.phantom_gpl_template()

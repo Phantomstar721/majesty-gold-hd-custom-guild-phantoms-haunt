@@ -1835,6 +1835,31 @@ begin
 	return arrivedist;
 end
 
+// Stock travel_to_safe with one Phantom-only priority rule. Call to Grave must
+// be considered before both the low-HP healing branch and generic travel-spell
+// selection, which may otherwise consume a Speed Tonic and skip the recall.
+function travel_to_safe(agent thisagent)
+
+declare
+
+begin
+	if ($has_arrived(thisagent,true) == FALSE)
+		if (
+			thisagent's "Title" == "Phantom" &&
+			$isspellavailable(thisagent,"call_to_grave",1) &&
+			$Call_To_Grave_Check(thisagent) == 1
+		)
+			$cast(thisagent,"call_to_grave",thisagent, "");
+		else if ($hasLowHP(thisagent) == FALSE)
+			$TryTravelSpell(thisagent);
+		else
+			begin
+				$heal_self_fleeing(thisagent);
+			end
+
+	$clearlist(thisagent's "hostiles");
+end
+
 function Call_To_Grave_Check(agent thisagent) is integer
 
 declare
@@ -1844,16 +1869,18 @@ begin
 	if (thisagent's "taskname" != "go_home")
 		return 0;
 
-	if (thisagent's "target" != thisagent's "home")
-		return 0;
-
 	if (thisagent's "Target" == thisagent)
 		destination = thisagent's "destination";
 	else
-		if ($isvalidgamepiece(thisagent's "target"))
-			destination = $locationof(thisagent's "target");
-		else
-			return 0;
+		begin
+			if (thisagent's "target" != thisagent's "home")
+				return 0;
+
+			if ($isvalidgamepiece(thisagent's "target"))
+				destination = $locationof(thisagent's "target");
+			else
+				return 0;
+		end
 
 	if ($distancebetweencoords(destination,$locationof(thisagent)) > #Phantom_Call_To_Grave_Min_Distance)
 		return 1;
@@ -1920,13 +1947,6 @@ begin
 
 	$createeffector(thisagent,"thought_bubble_danger",#danger_bubble_time);
 	$say(thisagent,"VFX_FLEE_COMBAT");
-
-	if (
-		thisagent's "Title" == "Phantom" &&
-		$isspellavailable(thisagent,"call_to_grave",1) &&
-		$Call_To_Grave_Check(thisagent) == 1
-	)
-		$castspell(thisagent,"call_to_grave",thisagent,"");
 end
 
 function Phantom_tree (agent thisagent)
@@ -1934,6 +1954,7 @@ function Phantom_tree (agent thisagent)
 declare
 
 begin
+	$Phantom_Sync_Speed_Profile(thisagent);
 	$DebugOut("Phantom deciding");
 
 	If ($Phantom_Try_Frost_Armor(thisagent) == False)
@@ -2649,15 +2670,6 @@ begin
 			return;
 		end
 
-	$Phantom_Sync_Speed_Profile(thisagent);
-	if (
-		$isspellavailable(thisagent,"call_to_grave",1) &&
-		$Call_To_Grave_Check(thisagent) == 1
-	)
-		begin
-			$castspell(thisagent,"call_to_grave",thisagent,"");
-			return;
-		end
 	$Phantom_Grant_Frost_Armor_Bonus(thisagent);
 	$Phantom_Frost_Armor_Recharge_Check(thisagent);
 
@@ -2816,7 +2828,10 @@ begin
 
 	distance = $DistanceBetweenAgents(thisagent, target);
 
-	If (distance <= #Phantom_Icy_Touch_Range)
+	If (
+		distance <= #Phantom_Icy_Touch_Range ||
+		$IsAdjacent(thisagent, target)
+	)
 		return 1;
 
 	return 0;
