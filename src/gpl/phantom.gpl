@@ -2810,6 +2810,7 @@ function Icy_Touch_Check(agent thisagent) is integer
 declare
 	agent target;
 	integer distance;
+	integer target_range;
 
 begin
 	If ($Phantom_Player_Max_Completed_Haunt_Level(thisagent) < 2)
@@ -2827,9 +2828,17 @@ begin
 		return 0;
 
 	distance = $DistanceBetweenAgents(thisagent, target);
+	target_range = #Phantom_Icy_Touch_Range;
+
+	// Stock attacktype 1 identifies melee attackers. Use their real attack
+	// range so long-reach melee units can be touched while they are in striking
+	// distance, without naming individual monster types.
+	If (target's "attacktype" == 1)
+		If ($GetAttribute(target, #ATTRIB_MaxAttackRange) > target_range)
+			target_range = $GetAttribute(target, #ATTRIB_MaxAttackRange);
 
 	If (
-		distance <= #Phantom_Icy_Touch_Range ||
+		distance <= target_range ||
 		$IsAdjacent(thisagent, target)
 	)
 		return 1;

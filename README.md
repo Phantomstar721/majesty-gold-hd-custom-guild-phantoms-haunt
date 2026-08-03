@@ -95,10 +95,11 @@ enemy is within 240 units.
 
 ### Icy Touch — level 4, rank 3
 
-Icy Touch has a five-second cooldown. It uses a 24-unit melee gate or Majesty's
-stock adjacency result, allowing engine-defined large and modded unit
-footprints to make contact without title-specific range exceptions. A
-successful cast performs one stock weapon attack, adds 30 spell damage,
+Icy Touch has a five-second cooldown. It uses a 24-unit melee gate, Majesty's
+stock adjacency result, or the target's actual attack range when stock classifies
+that target as melee (`attacktype 1`). This supports long-reach and modded melee
+units without title-specific exceptions. A successful cast performs one stock
+weapon attack, adds 30 spell damage,
 refreshes normal Chill for three seconds, and applies Gravechill for eight
 seconds.
 

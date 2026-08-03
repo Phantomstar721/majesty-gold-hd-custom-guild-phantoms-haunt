@@ -848,17 +848,24 @@ class RecruitmentVoiceTests(unittest.TestCase):
 
 
 class IcyTouchTests(unittest.TestCase):
-    def test_validation_accepts_stock_adjacency_for_large_unit_footprints(self):
+    def test_validation_accepts_stock_melee_reach_and_adjacency(self):
         gpl = builder.phantom_gpl_template()
         start = gpl.index("function Icy_Touch_Check(agent thisagent) is integer")
         end = gpl.index("\nfunction Icy_Touch_Cast", start)
         check = gpl[start:end]
-        distance = check.index("distance <= #Phantom_Icy_Touch_Range")
+        baseline = check.index("target_range = #Phantom_Icy_Touch_Range;")
+        melee = check.index('If (target\'s "attacktype" == 1)', baseline)
+        stock_range = check.index(
+            "$GetAttribute(target, #ATTRIB_MaxAttackRange)", melee
+        )
+        distance = check.index("distance <= target_range", stock_range)
         adjacent = check.index("$IsAdjacent(thisagent, target)", distance)
         success = check.index("return 1;", adjacent)
+        self.assertLess(baseline, melee)
+        self.assertLess(melee, stock_range)
+        self.assertLess(stock_range, distance)
         self.assertLess(distance, adjacent)
         self.assertLess(adjacent, success)
-        self.assertNotIn("target_range", check)
         self.assertNotIn("Daemonwood", check)
 
 

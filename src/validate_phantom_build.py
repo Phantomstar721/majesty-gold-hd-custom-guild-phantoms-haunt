@@ -2847,7 +2847,10 @@ def validate_icy_touch_contract(output_root: Path) -> None:
         "If ($IsDead(target))",
         'If (target\'s "Type" == "Building" || target\'s "Type" == "Lair")',
         "distance = $DistanceBetweenAgents(thisagent, target);",
-        "distance <= #Phantom_Icy_Touch_Range ||",
+        "target_range = #Phantom_Icy_Touch_Range;",
+        'If (target\'s "attacktype" == 1)',
+        "$GetAttribute(target, #ATTRIB_MaxAttackRange)",
+        "distance <= target_range ||",
         "$IsAdjacent(thisagent, target)",
         "return 1;",
         "return 0;",
@@ -2890,10 +2893,10 @@ def validate_icy_touch_contract(output_root: Path) -> None:
             f"{gpl_path}: stock monster-style Icy Touch callback is "
             f"missing {missing_baseline}"
         )
-    if "target_range" in icy_gpl or "Daemonwood" in icy_gpl:
+    if "Daemonwood" in icy_gpl:
         fail(
-            f"{gpl_path}: Icy Touch contact handling must use stock adjacency "
-            "without target-specific reach rules"
+            f"{gpl_path}: Icy Touch contact handling must use stock melee "
+            "classification without target-specific reach rules"
         )
     if "$createmissile" in icy_gpl:
         fail(f"{gpl_path}: Icy Touch must not depend on a missile callback")
