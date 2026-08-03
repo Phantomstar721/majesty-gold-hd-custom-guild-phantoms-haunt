@@ -2168,6 +2168,11 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         "$Phantom_Rush_Unto_Death_Begin(Priestess);",
         "$Phantom_Rush_Unto_Death_End(Priestess);",
         "Function Phantom_Sync_Speed_Profile(agent ThisAgent)",
+        "Function Phantom_Ensure_Behavior_Watch(agent ThisAgent)",
+        '"PhantomFrostArmorWatch",',
+        "$Phantom_Frost_Armor_Watch",
+        '$IsRunning(ThisAgent\'s "PhantomFrostArmorWatch") == False',
+        '$NewThread(ThisAgent\'s "PhantomFrostArmorWatch", 100, ThisAgent);',
         '$HasAttribute("PhantomBaseMovementApplied", ThisAgent)',
         'ThisAgent\'s "PhantomBaseMovementApplied" = True;',
         "#ATTRIB_MovementRateModifier,\n\t\t\t\t#Phantom_Base_Movement_Bonus",
@@ -2175,6 +2180,7 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         "$SetAttribute(ThisAgent, #ATTRIB_Speed, 5);",
         "$SetAttribute(ThisAgent, #ATTRIB_Speed, 1);",
         "$Phantom_Sync_Speed_Profile(Phantom);",
+        "$Phantom_Ensure_Behavior_Watch(Phantom);",
         "$Phantom_Sync_Speed_Profile(thisagent);",
         'Priestess\'s "PhantomRushUntoDeathActive" = True;',
         'Priestess\'s "PhantomRushUntoDeathActive" = False;',
@@ -2416,8 +2422,9 @@ def validate_phantom_item_cleanup(output_root: Path) -> None:
         "$DeleteInventoryItem(#Phantom_Item_FrostArmorBonus, thisagent);",
         "Function Hero_Drop_Quest_Items (agent ThisAgent)",
         'If (ThisAgent\'s "Title" == "Phantom")',
-        'If ($isdead(ThisAgent) == False)',
-        '$KillThread(ThisAgent\'s "QuestScript");',
+        'If ($HasAttribute("PhantomFrostArmorWatch", ThisAgent))',
+        'If ($IsRunning(ThisAgent\'s "PhantomFrostArmorWatch"))',
+        '$KillThread(ThisAgent\'s "PhantomFrostArmorWatch");',
         "$Phantom_remove_starter_items(ThisAgent);",
         "While ($AgentHasInventoryItem(WhatItem, ThisAgent))",
         "$DeleteInventoryItem(WhatItem, ThisAgent);",
@@ -2441,7 +2448,9 @@ def validate_phantom_item_cleanup(output_root: Path) -> None:
     cleanup_helper = gpl.index("function Phantom_remove_starter_items(agent thisagent)")
     drop_function = gpl.index("Function Hero_Drop_Quest_Items (agent ThisAgent)")
     phantom_guard = gpl.index('If (ThisAgent\'s "Title" == "Phantom")', drop_function)
-    watcher_stop = gpl.index('$KillThread(ThisAgent\'s "QuestScript");', phantom_guard)
+    watcher_stop = gpl.index(
+        '$KillThread(ThisAgent\'s "PhantomFrostArmorWatch");', phantom_guard
+    )
     class_cleanup = gpl.index(
         "$Phantom_remove_starter_items(ThisAgent);",
         watcher_stop,
@@ -3102,6 +3111,9 @@ def validate_frost_armor_contract(output_root: Path) -> None:
         'Foreach hostile in thisagent\'s "Hostiles" do',
         'If (hostile\'s "Target" == thisagent)',
         'attack_range = $GetAttribute(hostile, #ATTRIB_MaxAttackRange);',
+        'hostile\'s "Type" == "Hero" || hostile\'s "Type" == "Monster"',
+        'If (hostile\'s "castingrange" > attack_range)',
+        'attack_range = hostile\'s "castingrange";',
         '$DistanceBetweenAgents(hostile, thisagent) <= attack_range + 24',
         '$ClearList(thisagent\'s "Hostiles");',
         'thisagent\'s "Reborn_Counter" = 2;',
@@ -3180,6 +3192,16 @@ def validate_frost_armor_contract(output_root: Path) -> None:
 
     consume = gpl.index('thisagent\'s "Reborn_Counter" = 2;')
     incoming_filter = gpl.index('If (hostile\'s "Target" == thisagent)')
+    weapon_range = gpl.index(
+        "attack_range = $GetAttribute(hostile, #ATTRIB_MaxAttackRange);",
+        incoming_filter,
+    )
+    casting_range = gpl.index(
+        'If (hostile\'s "castingrange" > attack_range)', weapon_range
+    )
+    effective_range = gpl.index(
+        'attack_range = hostile\'s "castingrange";', casting_range
+    )
     range_filter = gpl.index(
         '$DistanceBetweenAgents(hostile, thisagent) <= attack_range + 24'
     )
@@ -3197,6 +3219,9 @@ def validate_frost_armor_contract(output_root: Path) -> None:
     )
     if not (
         incoming_filter
+        < weapon_range
+        < casting_range
+        < effective_range
         < range_filter
         < consume
         < consume_basic_cleanup
@@ -4114,7 +4139,8 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         'thisagent\'s "teleportScript" = $Call_To_Grave_DoMove;',
         '$RunThread(thisagent\'s "teleportScript",theTimePeriod/2,thisagent,#Phantom_Call_To_Grave_Range);',
         "function Call_To_Grave_DoMove(agent thisagent, integer theRange)",
-        "If ($IsDead(ThisAgent))",
+        "If ($IsValidGamePiece(ThisAgent) == False)",
+        "If ($IsDead(ThisAgent) || $GetAttribute(ThisAgent, #ATTRIB_HP) <= 0)",
         'if (thisagent\'s "Target" == thisagent)',
         '$TeleportToPoint(thisagent,theRange,thisagent\'s "destination");',
         'if ($isvalidgamepiece(thisagent\'s "target"))',

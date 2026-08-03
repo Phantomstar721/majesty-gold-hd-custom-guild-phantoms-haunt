@@ -15,8 +15,7 @@ It is recommended to leverage an AI coding agent to ingest the content in this r
 ## Phantom and Haunt
 
 The Haunt requires a level 2 Palace. Its build-menu availability uses Majesty's
-native `BDEP` building dependency table—the same mechanism used by the stock
-Wizard and temple guilds—so it is hidden at Palace level 1 and appears normally
+native dependency table so it is hidden at Palace level 1 and appears normally
 at level 2. It recruits Phantoms for 700 gold with a 16-second recruitment
 time. Like the Temple to Krypta, every Haunt level uses a `2.0` repeat-build
 multiplier, so constructing another Haunt increases its price normally. A new
@@ -86,6 +85,7 @@ a one-hit ward. The ward:
 
 - reduces the first qualifying normal physical or magical hit to zero;
 - is consumed on the attack attempt;
+- recognizes the attacker's effective weapon or spellcasting range;
 - Freezes a unit attacker for three seconds;
 - recharges only after the Phantom completes a full rest at the Haunt, an Inn,
   or a Gazebo.
@@ -119,7 +119,9 @@ Phantom always targets its Haunt and explicitly casts Call to Grave whenever
 the spell is ready and the Haunt is beyond the minimum-use distance. Its
 existing behavior watcher continues checking during the trip, so a Phantom
 that begins walking while Call to Grave is cooling down casts it as soon as it
-becomes available.
+becomes available. The delayed portal movement is cancelled if the Phantom is
+invalid, dead, or has already reached zero HP, allowing the stock death and
+quest-item drop paths to finish normally.
 
 ### Eternal Soul — level 6, rank 5
 

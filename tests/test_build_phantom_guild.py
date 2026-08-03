@@ -847,6 +847,21 @@ class RecruitmentVoiceTests(unittest.TestCase):
 
 
 class CallToGraveTests(unittest.TestCase):
+    def test_delayed_teleport_rejects_zero_hp_death_window(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index(
+            "function Call_To_Grave_DoMove(agent thisagent, integer theRange)"
+        )
+        end = gpl.index("\nfunction flee_part_II", start)
+        move = gpl[start:end]
+        valid = move.index("$IsValidGamePiece(ThisAgent) == False")
+        dead = move.index("$IsDead(ThisAgent)", valid)
+        zero_hp = move.index("#ATTRIB_HP) <= 0", dead)
+        teleport = move.index("$TeleportToPoint", zero_hp)
+        self.assertLess(valid, dead)
+        self.assertLess(dead, zero_hp)
+        self.assertLess(zero_hp, teleport)
+
     def test_fleeing_phantom_explicitly_casts_when_spell_is_ready(self):
         gpl = builder.phantom_gpl_template()
         start = gpl.index(
@@ -872,6 +887,47 @@ class CallToGraveTests(unittest.TestCase):
         self.assertLess(ready, valid)
         self.assertLess(valid, cast)
         self.assertLess(cast, armor)
+
+    def test_behavior_watcher_does_not_use_stock_questscript_field(self):
+        gpl = builder.phantom_gpl_template()
+        self.assertNotIn(
+            'thisagent\'s "QuestScript" = $Phantom_Frost_Armor_Watch;', gpl
+        )
+        self.assertIn(
+            '"PhantomFrostArmorWatch",\n\t\t\t"function",\n\t\t\t$Phantom_Frost_Armor_Watch',
+            gpl,
+        )
+        self.assertIn("$Phantom_Ensure_Behavior_Watch(thisagent);", gpl)
+        self.assertIn("$Phantom_Ensure_Behavior_Watch(Phantom);", gpl)
+
+
+class FrostArmorAttackerRangeTests(unittest.TestCase):
+    def test_spellcaster_range_can_consume_the_ward(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index("function Phantom_Frost_Armor_Watch(agent thisagent)")
+        end = gpl.index("\nfunction Phantom_Frost_Armor_Recharge_Check", start)
+        watcher = gpl[start:end]
+        weapon_range = watcher.index(
+            "attack_range = $GetAttribute(hostile, #ATTRIB_MaxAttackRange);"
+        )
+        caster_type = watcher.index(
+            'hostile\'s "Type" == "Hero" || hostile\'s "Type" == "Monster"',
+            weapon_range,
+        )
+        cast_range = watcher.index(
+            'If (hostile\'s "castingrange" > attack_range)', caster_type
+        )
+        promote_range = watcher.index(
+            'attack_range = hostile\'s "castingrange";', cast_range
+        )
+        distance = watcher.index(
+            "$DistanceBetweenAgents(hostile, thisagent) <= attack_range + 24",
+            promote_range,
+        )
+        self.assertLess(weapon_range, caster_type)
+        self.assertLess(caster_type, cast_range)
+        self.assertLess(cast_range, promote_range)
+        self.assertLess(promote_range, distance)
 
 
 class PriestessPhantomSupportTests(unittest.TestCase):
