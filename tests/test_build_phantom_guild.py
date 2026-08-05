@@ -1162,6 +1162,65 @@ class PriestessPhantomSupportTests(unittest.TestCase):
         self.assertIn(
             'ThisAgent\'s "castingrange" -= #Phantom_Rush_Range_Bonus;', end
         )
+        self.assertNotIn("#ATTRIB_HasEffectWingedFeet", begin)
+        self.assertNotIn("#ATTRIB_HasEffectWingedFeet", end)
+
+    def test_rush_uses_private_state_and_only_repairs_legacy_native_flag(self):
+        gpl = builder.phantom_gpl_template()
+        watcher_start = gpl.index(
+            "Function Phantom_Haunt_Player_Perk_Watch(agent Palace)"
+        )
+        watcher_end = gpl.index(
+            "Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)",
+            watcher_start,
+        )
+        watcher = gpl[watcher_start:watcher_end]
+
+        active_init = watcher.index(
+            'If ($HasAttribute("PhantomRushUntoDeathActive", Priestess) == False)'
+        )
+        legacy_active = watcher.index(
+            'Priestess\'s "PhantomRushUntoDeathActive" == True', active_init
+        )
+        legacy_flag = watcher.index("#ATTRIB_HasEffectWingedFeet", legacy_active)
+        winged_icon = watcher.index(
+            '$CheckEffector(Priestess, "winged_feet_icon") == False', legacy_flag
+        )
+        tonic_icon = watcher.index(
+            '$CheckEffector(Priestess, "speed_tonic_icon") == False', winged_icon
+        )
+        legacy_clear = watcher.index(
+            "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);",
+            tonic_icon,
+        )
+        level_branch = watcher.index("If (Haunt_Level >= 3)", legacy_clear)
+        private_gate = watcher.index(
+            'Priestess\'s "PhantomRushUntoDeathActive" == False', level_branch
+        )
+        rush_begin = watcher.index(
+            "$Phantom_Rush_Unto_Death_Begin(Priestess);", private_gate
+        )
+        active_assignment = watcher.index(
+            'Priestess\'s "PhantomRushUntoDeathActive" = True;', rush_begin
+        )
+
+        self.assertLess(active_init, legacy_active)
+        self.assertLess(legacy_active, legacy_flag)
+        self.assertLess(legacy_flag, winged_icon)
+        self.assertLess(winged_icon, tonic_icon)
+        self.assertLess(tonic_icon, legacy_clear)
+        self.assertLess(legacy_clear, level_branch)
+        self.assertLess(level_branch, private_gate)
+        self.assertLess(private_gate, rush_begin)
+        self.assertLess(rush_begin, active_assignment)
+        self.assertNotIn("#ATTRIB_HasEffectWingedFeet", watcher[level_branch:])
+        self.assertEqual(
+            watcher.count(
+                "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);"
+            ),
+            1,
+        )
+        self.assertNotIn("PhantomRushWingedFeetMigration", watcher)
 
     def test_supporter_inherits_followed_phantoms_building_target(self):
         gpl = builder.phantom_gpl_template()

@@ -2165,13 +2165,15 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         "#ATTRIB_ActionRateModifier,\n\t\t#Phantom_Rush_Action_Bonus",
         "#ATTRIB_MaxAttackRange,\n\t\t#Phantom_Rush_Range_Bonus",
         'ThisAgent\'s "castingrange" += #Phantom_Rush_Range_Bonus;',
-        "$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 1);",
         "Function Phantom_Rush_Unto_Death_End(agent ThisAgent)",
         "#ATTRIB_MovementRateModifier,\n\t\t- #Phantom_Rush_Movement_Bonus",
         "#ATTRIB_ActionRateModifier,\n\t\t- #Phantom_Rush_Action_Bonus",
         "#ATTRIB_MaxAttackRange,\n\t\t- #Phantom_Rush_Range_Bonus",
         'ThisAgent\'s "castingrange" -= #Phantom_Rush_Range_Bonus;',
-        "$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 0);",
+        'Priestess\'s "PhantomRushUntoDeathActive" == False',
+        '$CheckEffector(Priestess, "winged_feet_icon") == False',
+        '$CheckEffector(Priestess, "speed_tonic_icon") == False',
+        "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);",
         "$Phantom_Rush_Unto_Death_Begin(Priestess);",
         "$Phantom_Rush_Unto_Death_End(Priestess);",
         "Function Phantom_Sync_Speed_Profile(agent ThisAgent)",
@@ -2270,6 +2272,81 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
             f"{gpl_path}: Rush unto Death still contains the rejected "
             f"unit-type transformation path {present_rush_transform}"
         )
+    active_init = perk_watcher.index(
+        'If ($HasAttribute("PhantomRushUntoDeathActive", Priestess) == False)'
+    )
+    legacy_active = perk_watcher.index(
+        'Priestess\'s "PhantomRushUntoDeathActive" == True', active_init
+    )
+    legacy_flag = perk_watcher.index(
+        "#ATTRIB_HasEffectWingedFeet", legacy_active
+    )
+    winged_icon = perk_watcher.index(
+        '$CheckEffector(Priestess, "winged_feet_icon") == False', legacy_flag
+    )
+    tonic_icon = perk_watcher.index(
+        '$CheckEffector(Priestess, "speed_tonic_icon") == False', winged_icon
+    )
+    legacy_clear = perk_watcher.index(
+        "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);",
+        tonic_icon,
+    )
+    level_branch = perk_watcher.index("If (Haunt_Level >= 3)", legacy_clear)
+    active_inactive = perk_watcher.index(
+        'Priestess\'s "PhantomRushUntoDeathActive" == False', level_branch
+    )
+    rush_begin_call = perk_watcher.index(
+        "$Phantom_Rush_Unto_Death_Begin(Priestess);", active_inactive
+    )
+    active_assignment = perk_watcher.index(
+        'Priestess\'s "PhantomRushUntoDeathActive" = True;', rush_begin_call
+    )
+    rush_end_gate = perk_watcher.index(
+        'Else If (Priestess\'s "PhantomRushUntoDeathActive" == True)',
+        active_assignment,
+    )
+    rush_end_call = perk_watcher.index(
+        "$Phantom_Rush_Unto_Death_End(Priestess);", rush_end_gate
+    )
+    inactive_assignment = perk_watcher.index(
+        'Priestess\'s "PhantomRushUntoDeathActive" = False;', rush_end_call
+    )
+    if not (
+        active_init
+        < legacy_active
+        < legacy_flag
+        < winged_icon
+        < tonic_icon
+        < legacy_clear
+        < level_branch
+        < active_inactive
+        < rush_begin_call
+        < active_assignment
+        < rush_end_gate
+        < rush_end_call
+        < inactive_assignment
+    ):
+        fail(
+            f"{gpl_path}: Rush unto Death private-state application or "
+            "legacy Winged Feet cleanup is out of order"
+        )
+    if perk_watcher.count(
+        "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);"
+    ) != 1:
+        fail(
+            f"{gpl_path}: Rush unto Death must contain exactly one guarded "
+            "legacy Winged Feet flag repair"
+        )
+    if "#ATTRIB_HasEffectWingedFeet" in perk_watcher[level_branch:]:
+        fail(
+            f"{gpl_path}: Rush unto Death application still depends on the "
+            "shared native Winged Feet flag"
+        )
+    if "PhantomRushWingedFeetMigration" in perk_watcher:
+        fail(
+            f"{gpl_path}: Rush unto Death legacy cleanup should remain "
+            "idempotent instead of adding permanent migration state"
+        )
     rush_begin_start = gpl.index(
         "Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)"
     )
@@ -2278,6 +2355,11 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         rush_begin_start,
     )
     rush_functions = gpl[rush_begin_start:rush_end]
+    if "#ATTRIB_HasEffectWingedFeet" in rush_functions:
+        fail(
+            f"{gpl_path}: Rush unto Death Begin/End must not claim or clear "
+            "the shared native Winged Feet state"
+        )
     if rush_functions.count("#ATTRIB_MaxAttackRange") != 2:
         fail(
             f"{gpl_path}: Rush unto Death must apply and remove exactly one "

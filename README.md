@@ -170,7 +170,9 @@ The spell requires a completed level-3 Haunt.
   movement and action boost using `MovementRateModifier −22` and
   `ActionRateModifier −10`. It also raises their casting and maximum attack
   ranges from 160 to 220 so they can support a Phantom without advancing ahead
-  of its firing line.
+  of its firing line. Rush tracks its own state instead of claiming the native
+  Winged Feet state, so actual Winged Feet and Speed Tonics remain available
+  and can coexist with the perk.
 - With a level 3 Haunt, Priestess support selects the nearest Phantom and uses a
   local follower threshold that allows one established follower. A supporting
   Priestess inherits a followed Phantom's building or lair target only after

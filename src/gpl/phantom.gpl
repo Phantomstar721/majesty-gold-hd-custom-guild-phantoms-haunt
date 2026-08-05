@@ -54,9 +54,9 @@ Begin
 	return Best_Level;
 End
 
-// Stock-shaped, persistent Winged Feet clone for Rush unto Death. It retains
-// the proven paired movement/action mechanism at mild custom values while
-// deliberately omitting the stock visible effectors and speed trail.
+// Persistent additive modifiers for Rush unto Death. The perk retains the
+// proven paired movement/action mechanism at mild custom values, but owns no
+// native Winged Feet state, visible effectors, or speed trail.
 Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)
 
 Declare
@@ -78,7 +78,6 @@ Begin
 		#Phantom_Rush_Range_Bonus
 	);
 	ThisAgent's "castingrange" += #Phantom_Rush_Range_Bonus;
-	$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 1);
 End
 
 Function Phantom_Rush_Unto_Death_End(agent ThisAgent)
@@ -102,7 +101,6 @@ Begin
 		- #Phantom_Rush_Range_Bonus
 	);
 	ThisAgent's "castingrange" -= #Phantom_Rush_Range_Bonus;
-	$SetAttribute(ThisAgent, #ATTRIB_HasEffectWingedFeet, 0);
 End
 
 Function Phantom_Sync_Speed_Profile(agent ThisAgent)
@@ -221,14 +219,23 @@ Begin
 						False
 					);
 
+				// Older builds claimed the shared native Winged Feet flag for
+				// Rush. Repair only that stale state: a genuine Winged Feet or
+				// Speed Tonic effect owns a timed icon and must remain untouched.
+				If (
+					Priestess's "PhantomRushUntoDeathActive" == True &&
+					$GetAttribute(
+						Priestess,
+						#ATTRIB_HasEffectWingedFeet
+					) != 0 &&
+					$CheckEffector(Priestess, "winged_feet_icon") == False &&
+					$CheckEffector(Priestess, "speed_tonic_icon") == False
+				)
+					$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);
+
 				If (Haunt_Level >= 3)
 					begin
-						If (
-							$GetAttribute(
-								Priestess,
-								#ATTRIB_HasEffectWingedFeet
-							) == 0
-						)
+						If (Priestess's "PhantomRushUntoDeathActive" == False)
 							begin
 								$Phantom_Rush_Unto_Death_Begin(Priestess);
 								Priestess's "PhantomRushUntoDeathActive" = True;
