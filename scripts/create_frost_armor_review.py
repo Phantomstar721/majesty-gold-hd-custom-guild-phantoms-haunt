@@ -52,7 +52,7 @@ def main() -> int:
 
     tiles = builder.read_cam_entries(args.cam, b"TILE")
     palettes = builder.read_cam_entries(args.cam, b"SPLT")
-    selected_frames = (0, 4, 8, 12, 16, 20, 24, 28)
+    selected_frames = (0, 1, 2, 3, 4, 5, 12, 28)
     cell_width = 150
     cell_height = 178
     label_width = 190

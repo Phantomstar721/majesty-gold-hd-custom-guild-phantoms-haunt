@@ -31,7 +31,7 @@ param(
     [string]$IceLanceProjectileSource = ".\assets\source\spells\ice-lance\projectile.png",
     [string]$IcyTouchImpactSource = ".\assets\source\spells\icy-touch\impact-skull.png",
     [string]$FrostArmorCrystalSource = ".\assets\source\spells\frost-armor\crystal.png",
-    [string]$FrostArmorFrozenCasingSource = ".\assets\source\spells\frost-armor\frozen-casing.png",
+    [string]$FrostArmorFrozenCasingSource = ".\assets\source\spells\frost-armor\frozen-cage-v2.png",
     [string]$CallToGravePortalSource = ".\assets\source\spells\call-to-grave\portal.png",
     [string]$EternalSoulFlameSource = ".\assets\source\spells\eternal-soul\flame.png",
     [string]$EndlessWinterVortexSource = ".\assets\source\spells\endless-winter\vortex-sheet.png",

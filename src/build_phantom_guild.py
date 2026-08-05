@@ -5812,8 +5812,8 @@ def generated_frost_armor_casing_tile(
     frame_count: int,
     canvas_size: tuple[int, int],
 ) -> bytes:
-    """Render one size-aware ice casing frame around a frozen unit."""
-    from PIL import Image, ImageEnhance
+    """Render one size-aware ice cage frame around a frozen unit."""
+    from PIL import Image
 
     width, height = canvas_size
     with Image.open(source_png) as loaded:
@@ -5822,13 +5822,20 @@ def generated_frost_armor_casing_tile(
     if bbox:
         source = source.crop(bbox)
 
-    phase = frame_index / max(1, frame_count)
-    turn = phase * math.tau
-    pulse = 0.965 + 0.035 * (0.5 + 0.5 * math.sin(turn * 2.0))
-    target_width = max(8, round(width * 0.96 * pulse))
-    target_height = max(8, round(height * 0.96 * pulse))
+    target_width = max(8, round(width * 0.96))
+    target_height = max(8, round(height * 0.96))
     source.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
-    source = ImageEnhance.Brightness(source).enhance(0.94 + 0.08 * (0.5 + 0.5 * math.sin(turn)))
+
+    # Grow the complete cage upward from fixed roots, then hold the exact final
+    # bitmap.  Keeping every pillar present in the first frame avoids late
+    # pop-in, and using a single final source prevents shrinking or pulsing.
+    growth_scales = (0.22, 0.42, 0.68, 0.86, 1.0)
+    growth_scale = growth_scales[min(frame_index, len(growth_scales) - 1)]
+    if growth_scale < 1.0:
+        source = source.resize(
+            (source.width, max(1, round(source.height * growth_scale))),
+            Image.Resampling.BICUBIC,
+        )
 
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     left = (width - source.width) // 2
