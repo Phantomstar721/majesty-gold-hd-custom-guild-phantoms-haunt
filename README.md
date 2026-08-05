@@ -145,9 +145,14 @@ extend its duration.
 
 Endless Winter has a 55-second cooldown and a 21-second lifetime. It selects
 the closest eligible enemy, retaining the current combat target when distances
-tie. The storm follows that original target visually every 25 milliseconds,
-deals damage every 1,600 milliseconds, never retargets, and affects a
-175-unit radius:
+tie. The storm follows that original target's ordinary movement every 25
+milliseconds, deals damage every 1,600 milliseconds, never retargets, and
+affects a 175-unit radius. Tracking permanently detaches if the target dies,
+enters a building, gains a native speed trail such as Winged Feet or Speed
+Tonic, or moves farther than the entire 175-unit storm radius in one tracking
+sample. The detached storm remains at its last valid location for the rest of
+its normal lifetime. Rush unto Death deliberately has no speed trail, so its
+mild movement bonus does not detach the storm.
 
 | Distance from center | Damage | Control |
 | ---: | ---: | --- |

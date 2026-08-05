@@ -3067,20 +3067,50 @@ declare
 	agent tracked_target;
 	coordinate anchor_location;
 	coordinate target_location;
+	integer travel_distance;
 
 begin
 	If ($isvalidgamepiece(thisagent) == False)
 		return;
 
 	tracked_target = $Parent(thisagent);
-	If ($isvalidgamepiece(tracked_target))
-		If ($IsDead(tracked_target) == False)
-			begin
-				anchor_location = $LocationOf(thisagent);
-				target_location = $LocationOf(tracked_target);
-				If (($GetX(anchor_location) != $GetX(target_location)) || ($GetY(anchor_location) != $GetY(target_location)))
-					$TeleportToUnit(thisagent, 50000, tracked_target, 0);
-			end
+	If ($isvalidgamepiece(tracked_target) == False)
+		begin
+			$KillThread(thisagent's "EndlessWinterTracking");
+			return;
+		end
+
+	// Native speed trails mark every stock and Northern Expansion travel-speed
+	// boost. Rush unto Death deliberately has no trail, so its mild bonus keeps
+	// ordinary tracking intact.
+	If (
+		$IsDead(tracked_target) ||
+		$IsEnteringBuilding(tracked_target) ||
+		$InsideBuilding(tracked_target) ||
+		$HasSpeedTrail(tracked_target)
+	)
+		begin
+			$KillThread(thisagent's "EndlessWinterTracking");
+			return;
+		end
+
+	anchor_location = $LocationOf(thisagent);
+	target_location = $LocationOf(tracked_target);
+	travel_distance = $DistanceBetweenCoords(
+		anchor_location,
+		target_location
+	);
+
+	// The anchor is the previous 25-ms target sample. A jump beyond the storm's
+	// own footprint is discontinuous travel, not ordinary movement.
+	If (travel_distance > #Phantom_Endless_Winter_Radius)
+		begin
+			$KillThread(thisagent's "EndlessWinterTracking");
+			return;
+		end
+
+	If (($GetX(anchor_location) != $GetX(target_location)) || ($GetY(anchor_location) != $GetY(target_location)))
+		$TeleportToUnit(thisagent, 50000, tracked_target, 0);
 end
 
 function Endless_Winter_Active(agent thisagent)
@@ -3094,7 +3124,7 @@ begin
 	If ($isvalidgamepiece(thisagent) == False)
 		return;
 
-	targets = $compile_enemies(thisagent, 175);
+	targets = $compile_enemies(thisagent, #Phantom_Endless_Winter_Radius);
 
 	foreach target in targets do
 		begin

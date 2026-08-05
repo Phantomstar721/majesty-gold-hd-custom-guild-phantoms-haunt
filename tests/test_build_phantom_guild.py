@@ -916,6 +916,114 @@ class IcyTouchTests(unittest.TestCase):
         self.assertIn('<AttackRange min="1" max="240"/>', units)
 
 
+class EndlessWinterTrackingTests(unittest.TestCase):
+    def test_exceptional_travel_permanently_detaches_before_relocation(self):
+        gpl = builder.phantom_gpl_template()
+        tracking_start = gpl.index("function Endless_Winter_Track(agent thisagent)")
+        active_start = gpl.index(
+            "function Endless_Winter_Active(agent thisagent)", tracking_start
+        )
+        tracking = gpl[tracking_start:active_start]
+
+        parent_read = tracking.index("tracked_target = $Parent(thisagent);")
+        invalid = tracking.index(
+            "If ($isvalidgamepiece(tracked_target) == False)", parent_read
+        )
+        invalid_kill = tracking.index(
+            '$KillThread(thisagent\'s "EndlessWinterTracking");', invalid
+        )
+        invalid_return = tracking.index("return;", invalid_kill)
+        dead = tracking.index("$IsDead(tracked_target)", invalid_return)
+        entering = tracking.index("$IsEnteringBuilding(tracked_target)", dead)
+        inside = tracking.index("$InsideBuilding(tracked_target)", entering)
+        speed_trail = tracking.index("$HasSpeedTrail(tracked_target)", inside)
+        exceptional_kill = tracking.index(
+            '$KillThread(thisagent\'s "EndlessWinterTracking");', speed_trail
+        )
+        exceptional_return = tracking.index("return;", exceptional_kill)
+        anchor_location = tracking.index(
+            "anchor_location = $LocationOf(thisagent);", exceptional_return
+        )
+        target_location = tracking.index(
+            "target_location = $LocationOf(tracked_target);", anchor_location
+        )
+        travel_distance = tracking.index(
+            "travel_distance = $DistanceBetweenCoords(", target_location
+        )
+        jump_gate = tracking.index(
+            "If (travel_distance > #Phantom_Endless_Winter_Radius)",
+            travel_distance,
+        )
+        jump_kill = tracking.index(
+            '$KillThread(thisagent\'s "EndlessWinterTracking");', jump_gate
+        )
+        jump_return = tracking.index("return;", jump_kill)
+        x_guard = tracking.index(
+            "$GetX(anchor_location) != $GetX(target_location)", jump_return
+        )
+        y_guard = tracking.index(
+            "$GetY(anchor_location) != $GetY(target_location)", x_guard
+        )
+        relocation = tracking.index(
+            "$TeleportToUnit(thisagent, 50000, tracked_target, 0);", y_guard
+        )
+
+        self.assertLess(parent_read, invalid)
+        self.assertLess(invalid, invalid_kill)
+        self.assertLess(invalid_kill, invalid_return)
+        self.assertLess(invalid_return, dead)
+        self.assertLess(dead, entering)
+        self.assertLess(entering, inside)
+        self.assertLess(inside, speed_trail)
+        self.assertLess(speed_trail, exceptional_kill)
+        self.assertLess(exceptional_kill, exceptional_return)
+        self.assertLess(exceptional_return, anchor_location)
+        self.assertLess(anchor_location, target_location)
+        self.assertLess(target_location, travel_distance)
+        self.assertLess(travel_distance, jump_gate)
+        self.assertLess(jump_gate, jump_kill)
+        self.assertLess(jump_kill, jump_return)
+        self.assertLess(jump_return, x_guard)
+        self.assertLess(x_guard, y_guard)
+        self.assertLess(y_guard, relocation)
+
+        self.assertEqual(
+            tracking.count('$KillThread(thisagent\'s "EndlessWinterTracking");'),
+            3,
+        )
+        for forbidden in (
+            '$KillThread(thisagent\'s "activeScript");',
+            "$DeleteGamePiece(thisagent);",
+            "#ATTRIB_HasEffectWingedFeet",
+            "#ATTRIB_MovementRateModifier",
+            "$CheckEffector(",
+            '"Speed_Tonic"',
+        ):
+            self.assertNotIn(forbidden, tracking)
+
+    def test_named_radius_drives_jump_guard_and_damage_scan(self):
+        gpl = builder.phantom_gpl_template()
+        tracking_start = gpl.index("function Endless_Winter_Track(agent thisagent)")
+        active_start = gpl.index(
+            "function Endless_Winter_Active(agent thisagent)", tracking_start
+        )
+        next_function = gpl.index(
+            "function Endless_Winter_Inner_Missile_Hit", active_start
+        )
+        tracking = gpl[tracking_start:active_start]
+        active = gpl[active_start:next_function]
+
+        self.assertIn(
+            "If (travel_distance > #Phantom_Endless_Winter_Radius)", tracking
+        )
+        self.assertIn(
+            "targets = $compile_enemies(thisagent, #Phantom_Endless_Winter_Radius);",
+            active,
+        )
+        self.assertNotIn("$compile_enemies(thisagent, 175);", active)
+        self.assertEqual(gpl.count("#Phantom_Endless_Winter_Radius"), 2)
+
+
 class CallToGraveTests(unittest.TestCase):
     def test_safe_travel_prioritizes_recall_over_tonic_and_low_hp_branches(self):
         gpl = builder.phantom_gpl_template()

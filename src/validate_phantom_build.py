@@ -3794,6 +3794,7 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
     if '$PlaySound(thisagent, "Phantom_Voice", "VFX_SPECIAL1");' in gpl:
         fail(f"{gpl_path}: recruitment audio must not use the stock idle phase")
     runtime_contract = (
+        "expression #Phantom_Endless_Winter_Radius 175",
         "function Endless_Winter_Hit(agent thisagent, agent target)",
         "function Endless_Winter_Check(agent thisagent) is integer",
         "cast_range = $Phantom_effective_casting_range(thisagent);",
@@ -3830,13 +3831,21 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
         "$DeleteGamePiece(thisagent);",
         "function Endless_Winter_Track(agent thisagent)",
         "function Endless_Winter_Active(agent thisagent)",
+        "integer travel_distance;",
         "tracked_target = $Parent(thisagent);",
+        "If ($isvalidgamepiece(tracked_target) == False)",
+        "$IsDead(tracked_target)",
+        "$IsEnteringBuilding(tracked_target)",
+        "$InsideBuilding(tracked_target)",
+        "$HasSpeedTrail(tracked_target)",
         "anchor_location = $LocationOf(thisagent);",
         "target_location = $LocationOf(tracked_target);",
+        "travel_distance = $DistanceBetweenCoords(",
+        "If (travel_distance > #Phantom_Endless_Winter_Radius)",
         "$GetX(anchor_location) != $GetX(target_location)",
         "$GetY(anchor_location) != $GetY(target_location)",
         "$TeleportToUnit(thisagent, 50000, tracked_target, 0);",
-        "targets = $compile_enemies(thisagent, 175);",
+        "targets = $compile_enemies(thisagent, #Phantom_Endless_Winter_Radius);",
         "distance = $DistanceBetweenCoords(",
         "$LocationOf(thisagent),",
         "$LocationOf(target)",
@@ -4045,9 +4054,9 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
             "to its fixed damage/Chill callback, then apply Chill after damage"
         )
     if (
-        runtime.count("$DistanceBetweenCoords(") != 1
-        or runtime.count("$LocationOf(thisagent),") != 1
-        or runtime.count("$LocationOf(target)") != 1
+        active_block.count("$DistanceBetweenCoords(") != 1
+        or active_block.count("$LocationOf(thisagent),") != 1
+        or active_block.count("$LocationOf(target)") != 1
         or runtime.count(
             '$CreateMissile("endless_winter_missile", thisagent, target);'
         )
@@ -4110,17 +4119,58 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
         "tracked_target = $Parent(thisagent);",
         tracking_start,
     )
+    invalid_target_guard = runtime.index(
+        "If ($isvalidgamepiece(tracked_target) == False)",
+        tracking_read,
+    )
+    invalid_target_kill = runtime.index(
+        '$KillThread(thisagent\'s "EndlessWinterTracking");',
+        invalid_target_guard,
+    )
+    invalid_target_return = runtime.index("return;", invalid_target_kill)
+    dead_target_guard = runtime.index(
+        "$IsDead(tracked_target)", invalid_target_return
+    )
+    entering_building_guard = runtime.index(
+        "$IsEnteringBuilding(tracked_target)", dead_target_guard
+    )
+    inside_building_guard = runtime.index(
+        "$InsideBuilding(tracked_target)", entering_building_guard
+    )
+    speed_trail_guard = runtime.index(
+        "$HasSpeedTrail(tracked_target)", inside_building_guard
+    )
+    exceptional_travel_kill = runtime.index(
+        '$KillThread(thisagent\'s "EndlessWinterTracking");',
+        speed_trail_guard,
+    )
+    exceptional_travel_return = runtime.index(
+        "return;", exceptional_travel_kill
+    )
     anchor_location_read = runtime.index(
         "anchor_location = $LocationOf(thisagent);",
-        tracking_read,
+        exceptional_travel_return,
     )
     target_location_read = runtime.index(
         "target_location = $LocationOf(tracked_target);",
         anchor_location_read,
     )
+    travel_distance_read = runtime.index(
+        "travel_distance = $DistanceBetweenCoords(",
+        target_location_read,
+    )
+    jump_guard = runtime.index(
+        "If (travel_distance > #Phantom_Endless_Winter_Radius)",
+        travel_distance_read,
+    )
+    jump_kill = runtime.index(
+        '$KillThread(thisagent\'s "EndlessWinterTracking");',
+        jump_guard,
+    )
+    jump_return = runtime.index("return;", jump_kill)
     x_guard = runtime.index(
         "$GetX(anchor_location) != $GetX(target_location)",
-        target_location_read,
+        jump_return,
     )
     y_guard = runtime.index(
         "$GetY(anchor_location) != $GetY(target_location)",
@@ -4135,9 +4185,44 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
         relocation,
     )
     pulse_scan = runtime.index(
-        "targets = $compile_enemies(thisagent, 175);",
+        "targets = $compile_enemies(thisagent, #Phantom_Endless_Winter_Radius);",
         active_start,
     )
+    tracking_block = runtime[tracking_start:active_start]
+    forbidden_tracking = (
+        '$KillThread(thisagent\'s "activeScript");',
+        "$DeleteGamePiece(thisagent);",
+        "#ATTRIB_HasEffectWingedFeet",
+        "#ATTRIB_MovementRateModifier",
+        "$CheckEffector(",
+        '"Speed_Tonic"',
+    )
+    present_forbidden_tracking = [
+        value for value in forbidden_tracking if value in tracking_block
+    ]
+    if present_forbidden_tracking:
+        fail(
+            f"{gpl_path}: Endless Winter tracking contains a brittle or "
+            f"overbroad travel-detach signal {present_forbidden_tracking}"
+        )
+    if (
+        tracking_block.count(
+            '$KillThread(thisagent\'s "EndlessWinterTracking");'
+        )
+        != 3
+    ):
+        fail(
+            f"{gpl_path}: Endless Winter must permanently detach its tracker "
+            "for invalid targets, exceptional travel, and discontinuous jumps"
+        )
+    if (
+        gpl.count("expression #Phantom_Endless_Winter_Radius 175") != 1
+        or runtime.count("#Phantom_Endless_Winter_Radius") != 2
+    ):
+        fail(
+            f"{gpl_path}: Endless Winter must define one 175-unit radius and "
+            "reuse it for both travel discontinuity and damage scanning"
+        )
     if not (
         cleanup_schedule
         < tracking_schedule
@@ -4150,8 +4235,21 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
         < cleanup_delete
         < tracking_start
         < tracking_read
+        < invalid_target_guard
+        < invalid_target_kill
+        < invalid_target_return
+        < dead_target_guard
+        < entering_building_guard
+        < inside_building_guard
+        < speed_trail_guard
+        < exceptional_travel_kill
+        < exceptional_travel_return
         < anchor_location_read
         < target_location_read
+        < travel_distance_read
+        < jump_guard
+        < jump_kill
+        < jump_return
         < x_guard
         < y_guard
         < relocation
@@ -4161,10 +4259,10 @@ def validate_phantom_spell_confidence_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: Endless Winter must recover its engine-managed parent "
             "target, explicitly terminate its periodic thread and host at the "
-            "visual lifetime boundary, track exact world-coordinate movement "
-            "independently from damage, skip Majesty's unsafe zero-distance "
-            "teleport, relocate when needed, then scan the impact radius on "
-            "the stock pulse cadence"
+            "visual lifetime boundary, permanently detach before following "
+            "invalid, dead, building-bound, speed-boosted, or discontinuously "
+            "relocated targets, skip Majesty's unsafe zero-distance teleport, "
+            "then scan the fixed impact radius on the stock pulse cadence"
         )
 
 
