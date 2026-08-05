@@ -848,25 +848,72 @@ class RecruitmentVoiceTests(unittest.TestCase):
 
 
 class IcyTouchTests(unittest.TestCase):
-    def test_validation_accepts_stock_melee_reach_and_adjacency(self):
+    def test_basic_attack_reach_is_shared_by_validation_and_cast(self):
         gpl = builder.phantom_gpl_template()
-        start = gpl.index("function Icy_Touch_Check(agent thisagent) is integer")
-        end = gpl.index("\nfunction Icy_Touch_Cast", start)
-        check = gpl[start:end]
-        baseline = check.index("target_range = #Phantom_Icy_Touch_Range;")
-        melee = check.index('If (target\'s "attacktype" == 1)', baseline)
-        stock_range = check.index(
-            "$GetAttribute(target, #ATTRIB_MaxAttackRange)", melee
+        helper_start = gpl.index(
+            "function Phantom_Icy_Touch_In_Range(agent thisagent, agent target) is boolean"
         )
-        distance = check.index("distance <= target_range", stock_range)
-        adjacent = check.index("$IsAdjacent(thisagent, target)", distance)
-        success = check.index("return 1;", adjacent)
-        self.assertLess(baseline, melee)
-        self.assertLess(melee, stock_range)
-        self.assertLess(stock_range, distance)
+        check_start = gpl.index(
+            "function Icy_Touch_Check(agent thisagent) is integer", helper_start
+        )
+        cast_start = gpl.index("\nfunction Icy_Touch_Cast", check_start)
+        gravechill_start = gpl.index(
+            "\nfunction Phantom_Apply_Gravechill", cast_start
+        )
+        helper = gpl[helper_start:check_start]
+        check = gpl[check_start:cast_start]
+        cast = gpl[cast_start:gravechill_start]
+
+        baseline = helper.index("target_range = #Phantom_Icy_Touch_Range;")
+        attack_type = helper.index('target\'s "attacktype" == 1', baseline)
+        basic_attack = helper.index(
+            'target\'s "attack_action" == "basic_attack"', attack_type
+        )
+        range_compare = helper.index(
+            "If ($GetAttribute(target, #ATTRIB_MaxAttackRange) > target_range)",
+            basic_attack,
+        )
+        range_assignment = helper.index(
+            "target_range = $GetAttribute(target, #ATTRIB_MaxAttackRange);",
+            range_compare,
+        )
+        distance = helper.index("distance <= target_range", range_assignment)
+        adjacent = helper.index("$IsAdjacent(thisagent, target)", distance)
+        self.assertLess(baseline, attack_type)
+        self.assertLess(attack_type, basic_attack)
+        self.assertLess(basic_attack, range_compare)
+        self.assertLess(range_compare, range_assignment)
+        self.assertLess(range_assignment, distance)
         self.assertLess(distance, adjacent)
-        self.assertLess(adjacent, success)
-        self.assertNotIn("Daemonwood", check)
+        for forbidden in (
+            "Daemonwood",
+            '"basic_attack_with_stand"',
+            '"do_nothing"',
+            '"castingrange"',
+        ):
+            self.assertNotIn(forbidden, helper)
+
+        range_call = "$Phantom_Icy_Touch_In_Range(thisagent, target)"
+        self.assertEqual(
+            gpl[helper_start:gravechill_start].count(range_call),
+            2,
+        )
+        check_gate = check.index(f"If ({range_call})")
+        self.assertLess(check_gate, check.index("return 1;", check_gate))
+        cast_gate = cast.index(f"If ({range_call} == False)")
+        cast_return = cast.index("return;", cast_gate)
+        weapon_attack = cast.index("$make_attack(thisagent, target);", cast_return)
+        self.assertLess(cast_gate, cast_return)
+        self.assertLess(cast_return, weapon_attack)
+
+    def test_phantom_target_uses_only_close_contact_range(self):
+        hero_data = builder.phantom_hero_data()
+        units = builder.phantom_units_xml()
+
+        self.assertIn("(attacktype 1)", hero_data)
+        self.assertIn("(attack_action do_nothing)", hero_data)
+        self.assertNotIn("(attack_action basic_attack)", hero_data)
+        self.assertIn('<AttackRange min="1" max="240"/>', units)
 
 
 class CallToGraveTests(unittest.TestCase):

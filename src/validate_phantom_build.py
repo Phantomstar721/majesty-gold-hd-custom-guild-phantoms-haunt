@@ -2841,24 +2841,29 @@ def validate_icy_touch_contract(output_root: Path) -> None:
             f"{present_obsolete}"
         )
 
-    icy_start = gpl.index("function Icy_Touch_Check(agent thisagent) is integer")
+    icy_start = gpl.index(
+        "function Phantom_Icy_Touch_In_Range(agent thisagent, agent target) is boolean"
+    )
     icy_end = gpl.index(
         "function Endless_Winter_Hit(agent thisagent, agent target)",
         icy_start,
     )
     icy_gpl = gpl[icy_start:icy_end]
     baseline_contract = (
+        "function Phantom_Icy_Touch_In_Range(agent thisagent, agent target) is boolean",
+        "distance = $DistanceBetweenAgents(thisagent, target);",
+        "target_range = #Phantom_Icy_Touch_Range;",
+        'target\'s "attacktype" == 1',
+        'target\'s "attack_action" == "basic_attack"',
+        "$GetAttribute(target, #ATTRIB_MaxAttackRange)",
+        "distance <= target_range ||",
+        "$IsAdjacent(thisagent, target)",
         "function Icy_Touch_Check(agent thisagent) is integer",
         'target = thisagent\'s "Target";',
         "If ($NotValid(target))",
         "If ($IsDead(target))",
         'If (target\'s "Type" == "Building" || target\'s "Type" == "Lair")',
-        "distance = $DistanceBetweenAgents(thisagent, target);",
-        "target_range = #Phantom_Icy_Touch_Range;",
-        'If (target\'s "attacktype" == 1)',
-        "$GetAttribute(target, #ATTRIB_MaxAttackRange)",
-        "distance <= target_range ||",
-        "$IsAdjacent(thisagent, target)",
+        "$Phantom_Icy_Touch_In_Range(thisagent, target)",
         "return 1;",
         "return 0;",
         "function Icy_Touch_Cast(agent thisagent, agent action_target)",
@@ -2900,10 +2905,91 @@ def validate_icy_touch_contract(output_root: Path) -> None:
             f"{gpl_path}: stock monster-style Icy Touch callback is "
             f"missing {missing_baseline}"
         )
+    helper_start = icy_gpl.index(
+        "function Phantom_Icy_Touch_In_Range(agent thisagent, agent target) is boolean"
+    )
+    check_start = icy_gpl.index(
+        "function Icy_Touch_Check(agent thisagent) is integer", helper_start
+    )
+    cast_start = icy_gpl.index(
+        "function Icy_Touch_Cast(agent thisagent, agent action_target)", check_start
+    )
+    gravechill_start = icy_gpl.index(
+        "function Phantom_Apply_Gravechill(agent target, integer duration)",
+        cast_start,
+    )
+    range_helper = icy_gpl[helper_start:check_start]
+    icy_check = icy_gpl[check_start:cast_start]
+    icy_cast = icy_gpl[cast_start:gravechill_start]
+
+    range_baseline = range_helper.index(
+        "target_range = #Phantom_Icy_Touch_Range;"
+    )
+    attack_type = range_helper.index('target\'s "attacktype" == 1', range_baseline)
+    basic_attack = range_helper.index(
+        'target\'s "attack_action" == "basic_attack"', attack_type
+    )
+    range_compare = range_helper.index(
+        "If ($GetAttribute(target, #ATTRIB_MaxAttackRange) > target_range)",
+        basic_attack,
+    )
+    range_assignment = range_helper.index(
+        "target_range = $GetAttribute(target, #ATTRIB_MaxAttackRange);",
+        range_compare,
+    )
+    distance_gate = range_helper.index("distance <= target_range ||", range_assignment)
+    adjacency_gate = range_helper.index(
+        "$IsAdjacent(thisagent, target)", distance_gate
+    )
+    if not (
+        range_baseline
+        < attack_type
+        < basic_attack
+        < range_compare
+        < range_assignment
+        < distance_gate
+        < adjacency_gate
+    ):
+        fail(
+            f"{gpl_path}: Icy Touch range classification is not applied in "
+            "the required order"
+        )
+    forbidden_range_classification = (
+        '"basic_attack_with_stand"',
+        '"do_nothing"',
+        '"castingrange"',
+    )
+    present_forbidden_range = [
+        value for value in forbidden_range_classification if value in range_helper
+    ]
+    if present_forbidden_range:
+        fail(
+            f"{gpl_path}: Icy Touch range helper admits a non-basic attack "
+            f"classification {present_forbidden_range}"
+        )
+    range_call = "$Phantom_Icy_Touch_In_Range(thisagent, target)"
+    if icy_gpl.count(range_call) != 2:
+        fail(
+            f"{gpl_path}: Icy Touch range helper must be called exactly once "
+            "during validation and once during resolution"
+        )
+    check_gate = icy_check.index(f"If ({range_call})")
+    check_success = icy_check.index("return 1;", check_gate)
+    check_failure = icy_check.index("return 0;", check_success)
+    if not check_gate < check_success < check_failure:
+        fail(f"{gpl_path}: Icy Touch validation does not use the shared range gate")
+    cast_gate = icy_cast.index(f"If ({range_call} == False)")
+    cast_return = icy_cast.index("return;", cast_gate)
+    weapon_attack = icy_cast.index("$make_attack(thisagent, target);", cast_return)
+    if not cast_gate < cast_return < weapon_attack:
+        fail(
+            f"{gpl_path}: Icy Touch must recheck contact before resolving its "
+            "weapon attack"
+        )
     if "Daemonwood" in icy_gpl:
         fail(
-            f"{gpl_path}: Icy Touch contact handling must use stock melee "
-            "classification without target-specific reach rules"
+            f"{gpl_path}: Icy Touch contact handling must use the stock basic "
+            "attack action without target-specific reach rules"
         )
     if "$createmissile" in icy_gpl:
         fail(f"{gpl_path}: Icy Touch must not depend on a missile callback")

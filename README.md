@@ -96,12 +96,13 @@ enemy is within 240 units.
 ### Icy Touch — level 4, rank 3
 
 Icy Touch has a five-second cooldown. It uses a 24-unit melee gate, Majesty's
-stock adjacency result, or the target's actual attack range when stock classifies
-that target as melee (`attacktype 1`). This supports long-reach and modded melee
-units without title-specific exceptions. A successful cast performs one stock
-weapon attack, adds 30 spell damage,
-refreshes normal Chill for three seconds, and applies Gravechill for eight
-seconds.
+stock adjacency result, or the target's actual attack range when that target
+uses Majesty's direct `basic_attack` action. This supports long-reach and modded
+melee units that use the stock action without admitting spell or projectile
+ranges or requiring title-specific exceptions. Contact is rechecked when the
+attack resolves. A successful cast performs one stock weapon attack, adds 30
+spell damage, refreshes normal Chill for three seconds, and applies Gravechill
+for eight seconds.
 
 Gravechill is refreshable but non-stacking:
 
@@ -219,6 +220,8 @@ identifiers and behavior should coexist normally. There is no speculative
 universal compatibility patch: if a specific mod conflict is reported, its CAM
 records, identifiers, and effective load order can be examined and a focused
 compatibility package made for that pairing.
+
+Tested with the only other CAM mod available currently: MK CAM Content Patch from TheOverloard and they appeared to both work together without issue.
 
 ## Technical Architecture
 
