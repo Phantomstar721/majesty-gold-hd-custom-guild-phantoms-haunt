@@ -1829,11 +1829,18 @@ def validate_interface_panel_reference(
     path: Path,
     sections: dict[bytes, list[Entry]],
     captured: dict[tuple[bytes, bytes], bytes],
+    stock_tile_count: int,
 ) -> None:
     tiles = sections.get(b"TILE", [])
     panel_entries = [entry for entry in tiles if entry.name == b"PHTIPanel0001"]
     if len(panel_entries) != 1:
         fail(f"{path}: expected exactly one PHTIPanel0001 TILE, found {len(panel_entries)}")
+    if panel_entries[0].index < stock_tile_count:
+        fail(
+            f"{path}: PHTIPanel0001 occupies stock TILE slot "
+            f"{panel_entries[0].index}; custom interface TILEs must begin at "
+            f"or after {stock_tile_count}"
+        )
     image = captured.get((b"IMAG", b"PHTIraw textures"))
     if image is None:
         fail(f"{path}: IMAG/PHTIraw textures was not found")
@@ -5607,7 +5614,15 @@ def validate(output_root: Path, game_path: Path) -> None:
 
     interface_path = output_root / "Data" / "phantom_interfacedata.cam"
     sections, captured = archive_results["phantom_interfacedata.cam"]
-    validate_interface_panel_reference(interface_path, sections, captured)
+    stock_interface_path = game_path / "Data" / "interfacedata.cam"
+    stock_interface_sections, _ = validate_archive(stock_interface_path)
+    stock_tile_count = len(stock_interface_sections.get(b"TILE", []))
+    validate_interface_panel_reference(
+        interface_path,
+        sections,
+        captured,
+        stock_tile_count,
+    )
 
 
 def main() -> int:

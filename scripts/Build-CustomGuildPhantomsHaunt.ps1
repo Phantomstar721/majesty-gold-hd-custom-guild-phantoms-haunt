@@ -43,6 +43,7 @@ param(
     [switch]$GplOnly,
     [switch]$GameplayOnly,
     [switch]$TextOnly,
+    [switch]$InterfaceOnly,
     [string]$GplCompiler = ""
 )
 
@@ -147,13 +148,13 @@ $buildOutputHelpers = Join-Path $repoRoot "scripts\HauntBuildOutput.ps1"
 . $buildOutputHelpers
 $outputRootPath = Get-SafeHauntBuildOutputPath -RepoRoot $repoRoot -OutputRoot $OutputRoot
 
-$partialModeCount = (@($AudioOnly, $GplOnly, $GameplayOnly, $TextOnly) | Where-Object { $_ }).Count
+$partialModeCount = (@($AudioOnly, $GplOnly, $GameplayOnly, $TextOnly, $InterfaceOnly) | Where-Object { $_ }).Count
 $isCombinedAudioGplBuild = $AudioOnly -and $GplOnly -and $partialModeCount -eq 2
 if ($partialModeCount -gt 1 -and -not $isCombinedAudioGplBuild) {
     throw "Partial modes are mutually exclusive except for the supported -AudioOnly -GplOnly combination."
 }
 
-$isPartialBuild = $AudioOnly -or $GplOnly -or $GameplayOnly -or $TextOnly
+$isPartialBuild = $AudioOnly -or $GplOnly -or $GameplayOnly -or $TextOnly -or $InterfaceOnly
 $finalOutputRootPath = $outputRootPath
 if ($isPartialBuild -and -not (Test-Path -LiteralPath $finalOutputRootPath -PathType Container)) {
     throw "Partial build requires an existing validated package: $finalOutputRootPath. Run a full build first."
@@ -284,6 +285,43 @@ if ($TextOnly) {
         -BackupRoot $backupRootPath
 
     Write-Host "Updated text CAMs in existing validated mod package:"
+    Write-Host $finalOutputRootPath
+    return
+}
+
+if ($InterfaceOnly) {
+    if (-not (Test-Path $toolsPython)) {
+        throw "Shared tools Python does not exist: $toolsPython"
+    }
+
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+    $interfacePanelRgb = Join-Path $tempDir "phantom_interface_panel_200x245.rgb"
+    Convert-ImageToRawRgb `
+        -InputPath (Resolve-RepoPath $InterfacePanelImage) `
+        -OutputPath $interfacePanelRgb `
+        -Width 200 `
+        -Height 245
+
+    & $toolsPython $builder `
+        --game-path $GamePath `
+        --output-root $outputRootPath `
+        --interface-only `
+        --building-dialog-panel-rgb $interfacePanelRgb
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phantom interface CAM builder failed with exit code $LASTEXITCODE"
+    }
+
+    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Phantom package verification failed with exit code $LASTEXITCODE"
+    }
+
+    Publish-ValidatedHauntBuild `
+        -StagedRoot $stagingRootPath `
+        -FinalRoot $finalOutputRootPath `
+        -BackupRoot $backupRootPath
+
+    Write-Host "Updated interface CAM in existing validated mod package:"
     Write-Host $finalOutputRootPath
     return
 }

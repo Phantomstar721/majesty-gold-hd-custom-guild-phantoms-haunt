@@ -179,6 +179,47 @@ The spell requires a completed level-3 Haunt.
   does not recall dismissed Paladins.
 - Embassies and Outposts offer Phantoms and omit Paladins while a Haunt exists.
 
+## Mod Compatibility
+
+Custom Guild: Phantoms Haunt should work alongside most other mods that do not
+include custom CAM archives. Its custom units, artwork, sounds, and most other
+resources use dedicated `PH` identifiers, and the package does not replace a
+standard guild.
+
+### Freestyle limitation
+
+The mod supports normal Original Majesty and Northern Expansion quests, but it
+does not support Freestyle. Majesty crashes while starting a Freestyle game
+when this mod loads a custom CAM provider. Because the Haunt depends on CAM resources for its art, interface, text, dependency data, and audio, the mod cannot provide a functional Freestyle edition.
+
+### Other CAM Mods
+
+Mods that do include custom CAM files are not automatically incompatible, but
+they require more caution. Majesty loads CAM contents into shared global
+registries; putting records in differently named CAM files does not isolate
+them from records supplied by another mod. Potential conflicts include:
+
+- `DATA/BDEP`: Majesty accepts one complete building-dependency table rather
+  than merging multiple tables. Another mod that supplies BDEP requires a
+  pair-specific compatibility provider containing the stock table and both
+  mods' rules.
+- `TILE` and `SPLT`: custom artwork and palettes are addressed by global numeric
+  slots. Two mods that independently append art can select overlapping slots,
+  causing missing, incorrect, recolored, or corrupted graphics.
+- shared text resources such as `UNTN`, `ACTN`, `QITM`, `AITX`, and `HPTX`:
+  these are whole tables, so load order can cause one mod's names, item text,
+  advisor text, or help text to replace another's additions.
+- `SMNU/AP07`: the Haunt uses this executable-supported recruitment-dialog
+  slot. Another custom guild using the same slot would directly conflict with
+  the Haunt's recruitment panel.
+
+Non-CAM mods can still conflict if they deliberately reuse the same XML IDs or
+replace the same stock GPL functions, but ordinary patches with unrelated
+identifiers and behavior should coexist normally. There is no speculative
+universal compatibility patch: if a specific mod conflict is reported, its CAM
+records, identifiers, and effective load order can be examined and a focused
+compatibility package made for that pairing.
+
 ## Technical Architecture
 
 The mod preserves stock data and appends namespaced records wherever Majesty's
@@ -197,10 +238,8 @@ runtime permits it.
 Technical package names use `CustomGuildPhantomsHaunt`; player-facing text uses
 `Custom Guild: Phantoms Haunt`.
 
-Compatibility note: Majesty treats `DATA/BDEP` as one whole resource rather
-than merging rules from multiple mods. Another mod that supplies its own BDEP
-table needs a small compatibility patch containing the stock table plus both
-mods' custom rules. See [Packaging architecture](docs/packaging.md#bdep-mod-compatibility).
+For the detailed BDEP merge procedure, see
+[Packaging architecture](docs/packaging.md#bdep-mod-compatibility).
 
 ### CAM and sprite work
 
@@ -298,12 +337,14 @@ the faster incremental paths:
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GplOnly
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GameplayOnly
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -TextOnly
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -InterfaceOnly
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly -GplOnly
 ```
 
 `-GplOnly` recompiles behavior, `-GameplayOnly` regenerates unit XML and GPL,
-and `-TextOnly` refreshes text CAMs. `-AudioOnly` packages the checked-in,
+`-TextOnly` refreshes text CAMs, and `-InterfaceOnly` rebuilds only the custom
+recruitment-panel CAM. `-AudioOnly` packages the checked-in,
 game-ready WAVs without requiring private recording projects or clean masters.
 Combine `-AudioOnly -GplOnly` for an atomic runtime update that spans sound
 registration and GPL without rebuilding art.

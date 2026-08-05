@@ -193,6 +193,7 @@ def main() -> int:
     parser.add_argument("--gpl-only", action="store_true")
     parser.add_argument("--units-only", action="store_true")
     parser.add_argument("--text-only", action="store_true")
+    parser.add_argument("--interface-only", action="store_true")
     parser.add_argument("--portrait-rgb", type=Path)
     parser.add_argument("--hero-icon-rgb", type=Path)
     parser.add_argument("--building-profile-rgb", type=Path)
@@ -256,6 +257,19 @@ def main() -> int:
         (data_dir / "phantom_units.xml").write_text(
             phantom_units_xml(),
             encoding="utf-8",
+        )
+        return 0
+
+    if args.interface_only:
+        if args.building_dialog_panel_rgb is None:
+            raise ValueError("--interface-only requires --building-dialog-panel-rgb")
+        source_interfacedata = args.game_path / "Data" / "interfacedata.cam"
+        if not source_interfacedata.exists():
+            raise FileNotFoundError(source_interfacedata)
+        write_interfacedata_cam(
+            source_interfacedata,
+            data_dir / "phantom_interfacedata.cam",
+            args.building_dialog_panel_rgb,
         )
         return 0
 
@@ -3216,12 +3230,15 @@ def write_interfacedata_cam(
     phantom_raw_texture_image = raw_texture_image
     tiles = read_cam_entries(source_interfacedata, b"TILE")
 
-    base_tile_indices = referenced_tile_indices(raw_texture_image, len(tiles))
-    base_max_tile_index = max(base_tile_indices)
+    # TILE records are positionally overlaid across CAMs. Even slots not used by
+    # INTI remain owned by stock records (notably the Majestica 12 font tiles at
+    # the end of interfacedata.cam), so custom data must begin after the complete
+    # stock TILE table rather than after INTI's highest referenced slot.
+    first_custom_tile_index = len(tiles)
 
     extra_tiles: list[CamEntry] = []
     if control_panel_rgb:
-        custom_tile_index = base_max_tile_index + len(extra_tiles) + 1
+        custom_tile_index = first_custom_tile_index + len(extra_tiles)
         # The recruit panel backing is an INTI raw-textures tile, not the
         # tempting INBgbuilding dialog image record.
         phantom_raw_texture_image = remap_imag_tile_indices(
@@ -3243,7 +3260,7 @@ def write_interfacedata_cam(
 
     tile_entries = list(
         CamEntry(name=tiles[tile_index].name, data=tiles[tile_index].data)
-        for tile_index in range(base_max_tile_index + 1)
+        for tile_index in range(first_custom_tile_index)
     )
     tile_entries.extend(extra_tiles)
 
@@ -3253,7 +3270,7 @@ def write_interfacedata_cam(
     tile_entries = reduce_unreferenced_tiles(
         tile_entries,
         [entry.data for entry in image_entries],
-        set(range(base_max_tile_index + 1, len(tile_entries))),
+        set(range(first_custom_tile_index, len(tile_entries))),
         set(),
     )
 

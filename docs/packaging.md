@@ -125,6 +125,7 @@ After a complete validated package exists:
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GplOnly
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -GameplayOnly
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -TextOnly
+.\scripts\Build-CustomGuildPhantomsHaunt.ps1 -InterfaceOnly
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly
 .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -AudioOnly -GplOnly
 ```
@@ -132,6 +133,8 @@ After a complete validated package exists:
 `-GplOnly` regenerates and compiles gameplay source without rebuilding art.
 `-GameplayOnly` regenerates unit-description XML and compiles GPL without
 rebuilding art; use it when a change spans data values and decision logic.
+`-TextOnly` rebuilds only the text CAMs. `-InterfaceOnly` rebuilds only the
+custom recruitment-panel CAM.
 `-AudioOnly` consumes the final `assets/audio/phantom-*-game.wav` files and
 rebuilds the voice, sound, unit, and manifest components required by the audio
 contract. Raw recording projects and clean intermediate masters are not
