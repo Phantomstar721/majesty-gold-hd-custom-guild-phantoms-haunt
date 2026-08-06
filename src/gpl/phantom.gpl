@@ -2086,13 +2086,17 @@ begin
 	If ($IsValidGamePiece(commerce_target) == False)
 		return;
 
-	If ($IsDead(commerce_target) || thisagent's "Target" != commerce_target)
-		return;
-
-	If ($Phantom_Call_To_Grave_Commerce_Check(thisagent) == 0)
+	If (
+		$IsDead(commerce_target) ||
+		commerce_target's "Type" != "Building" ||
+		thisagent's "Target" != commerce_target
+	)
 		return;
 
 	home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);
+	If ($IsValidGamePiece(home) == False)
+		return;
+
 	$TeleportToUnit(
 		thisagent,
 		#Phantom_Call_To_Grave_Range,
@@ -2200,7 +2204,7 @@ begin
 				$AddAttribute(
 					thisagent,
 					"PhantomCallToGraveHaunt",
-					"agent",
+					"agentref",
 					Home
 				);
 

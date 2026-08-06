@@ -4433,7 +4433,7 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         "function Call_To_Grave_DoCommerceMove(agent thisagent, agent commerce_target)",
         "If ($IsValidGamePiece(commerce_target) == False)",
         'thisagent\'s "Target" != commerce_target',
-        "If ($Phantom_Call_To_Grave_Commerce_Check(thisagent) == 0)",
+        "If ($IsValidGamePiece(home) == False)",
         "function Phantom_Hero_Birth (agent thisagent)",
         'Home = thisagent\'s "home";',
         "$isvalidgamepiece(Home)",
@@ -4443,7 +4443,7 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         "$GetUnitPlayerNumber(thisagent) == $GetUnitPlayerNumber(Home)",
         '$HasAttribute("PhantomCallToGraveHaunt", thisagent) == False',
         '"PhantomCallToGraveHaunt",',
-        '"agent",',
+        '"agentref",',
         'thisagent\'s "Title" == "Phantom"',
         '$isspellavailable(thisagent,"call_to_grave")',
         "$Call_To_Grave_Check(thisagent) == 1",
@@ -4533,7 +4533,7 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         r".*?If \(\$HasAttribute\(\"PhantomCallToGraveHaunt\", "
         r"thisagent\) == False\)\s*"
         r"\$AddAttribute\(\s*thisagent,\s*"
-        r"\"PhantomCallToGraveHaunt\",\s*\"agent\",\s*Home\s*\);",
+        r"\"PhantomCallToGraveHaunt\",\s*\"agentref\",\s*Home\s*\);",
         re.DOTALL,
     )
     birth_capture_matches = birth_capture_pattern.findall(hero_birth_function)
@@ -4677,6 +4677,28 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
             f"{gpl_path}: TryTravelSpell no longer keeps HasWayPoints as its "
             "first executable gate"
         )
+    for label, cast_site in {
+        "normal travel": try_function,
+        "safe travel": travel_function,
+    }.items():
+        if cast_site.count(
+            '$cast(thisagent,"call_to_grave",thisagent, "");'
+        ) != 1:
+            fail(
+                f"{gpl_path}: Call to Grave {label} must use exactly one "
+                "direct cast"
+            )
+        if "PhantomCallToGraveCommerceTarget" in cast_site:
+            fail(
+                f"{gpl_path}: Call to Grave {label} stores pre-cast pending "
+                "state that interferes with travel casting"
+            )
+        if "function Phantom_Call_To_Grave_Cast" in cast_site:
+            fail(
+                f"{gpl_path}: Call to Grave {label} routes casting through "
+                "an unreliable GPL wrapper"
+            )
+
     try_order = (
         "if ($HasWayPoints(thisagent) == FALSE)",
         'thisagent\'s "Title" == "Phantom"',
@@ -4859,6 +4881,11 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
             f"{gpl_path}: Call to Grave does not snapshot commerce before its "
             "separately validated home fallback"
         )
+    if "PhantomCallToGraveCommerceTarget" in effect_function:
+        fail(
+            f"{gpl_path}: Call to Grave effect consumes unsafe pre-cast "
+            "pending commerce state"
+        )
 
     direct_order = (
         "$IsValidGamePiece(ThisAgent) == False",
@@ -4897,9 +4924,10 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         "#ATTRIB_HP) <= 0",
         "$IsValidGamePiece(commerce_target) == False",
         "$IsDead(commerce_target)",
+        'commerce_target\'s "Type" != "Building"',
         'thisagent\'s "Target" != commerce_target',
-        "$Phantom_Call_To_Grave_Commerce_Check(thisagent) == 0",
         "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);",
+        "$IsValidGamePiece(home) == False",
         "$TeleportToUnit(",
         "#Phantom_Call_To_Grave_Range",
         "home,",
@@ -4911,10 +4939,27 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
     if commerce_move_positions != sorted(commerce_move_positions):
         fail(
             f"{gpl_path}: delayed commerce relay does not reject an invalid, "
-            "dead, stale, or no-longer-beneficial target before teleporting"
+            "dead, stale, or non-building target before teleporting"
+        )
+    forbidden_delayed_rechecks = (
+        "$Phantom_Call_To_Grave_Commerce_Check",
+        "#Phantom_Call_To_Grave_Min_Relay_Savings",
+        'thisagent\'s "ActiveScript"',
+        'thisagent\'s "BackScript"',
+    )
+    present_delayed_rechecks = [
+        value
+        for value in forbidden_delayed_rechecks
+        if value in commerce_move_function
+    ]
+    if present_delayed_rechecks:
+        fail(
+            f"{gpl_path}: delayed commerce relay rechecks transient pre-cast "
+            f"state {present_delayed_rechecks}"
         )
     state_preserving_functions = (
-        commerce_function + effect_function + commerce_move_function
+        commerce_function + try_function + travel_function + effect_function
+        + commerce_move_function
     )
     relay_mutations = {
         "target assignment": r'thisagent\'s\s+"Target"\s*=(?!=)',

@@ -1043,7 +1043,7 @@ class CallToGraveTests(unittest.TestCase):
             r".*?If \(\$HasAttribute\(\"PhantomCallToGraveHaunt\", "
             r"thisagent\) == False\)\s*"
             r"\$AddAttribute\(\s*thisagent,\s*"
-            r"\"PhantomCallToGraveHaunt\",\s*\"agent\",\s*Home\s*\);",
+            r"\"PhantomCallToGraveHaunt\",\s*\"agentref\",\s*Home\s*\);",
             re.DOTALL,
         )
         self.assertRegex(birth, capture)
@@ -1244,7 +1244,32 @@ class CallToGraveTests(unittest.TestCase):
             ):
                 self.assertNotIn(enumeration, body)
 
-    def test_effect_snapshots_commerce_target_before_delayed_callback(self):
+    def test_cast_sites_remain_direct_and_free_of_pending_state(self):
+        gpl = builder.phantom_gpl_template()
+        signatures = (
+            (
+                "function TryTravelSpell(agent thisagent) is boolean",
+                "\nfunction travel_to_safe",
+            ),
+            (
+                "function travel_to_safe(agent thisagent)",
+                "\nfunction Phantom_Call_To_Grave_Home_Check",
+            ),
+        )
+        for signature, next_signature in signatures:
+            start = gpl.index(signature)
+            end = gpl.index(next_signature, start)
+            cast_site = gpl[start:end]
+            self.assertEqual(
+                cast_site.count('$cast(thisagent,"call_to_grave",thisagent, "");'),
+                1,
+            )
+            self.assertNotIn("PhantomCallToGraveCommerceTarget", cast_site)
+            self.assertNotIn("function Phantom_Call_To_Grave_Cast", cast_site)
+            self.assertNotIn('thisagent\'s "Target" =', cast_site)
+            self.assertNotIn('thisagent\'s "TaskName" =', cast_site)
+
+    def test_effect_snapshots_current_commerce_target_before_callback(self):
         gpl = builder.phantom_gpl_template()
         start = gpl.index("function Call_To_Grave_Effect(agent thisagent, agent target)")
         end = gpl.index("\nfunction Call_To_Grave_DoMove", start)
@@ -1271,6 +1296,7 @@ class CallToGraveTests(unittest.TestCase):
         self.assertLess(run_thread, target_snapshot)
         self.assertLess(target_snapshot, home_check)
         self.assertLess(home_check, home_callback)
+        self.assertNotIn("PhantomCallToGraveCommerceTarget", effect)
 
     def test_delayed_teleport_rejects_zero_hp_death_window(self):
         gpl = builder.phantom_gpl_template()
@@ -1314,24 +1340,28 @@ class CallToGraveTests(unittest.TestCase):
         stale_target = move.index(
             'thisagent\'s "Target" != commerce_target', valid_target
         )
-        relay_check = move.index(
-            "$Phantom_Call_To_Grave_Commerce_Check(thisagent) == 0", stale_target
-        )
         home = move.index(
-            "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);", relay_check
+            "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);", stale_target
         )
-        teleport = move.index("$TeleportToUnit(", home)
+        valid_home = move.index(
+            "$IsValidGamePiece(home) == False", home
+        )
+        teleport = move.index("$TeleportToUnit(", valid_home)
         positions = (
             valid_caster,
             dead_caster,
             zero_hp,
             valid_target,
             stale_target,
-            relay_check,
             home,
+            valid_home,
             teleport,
         )
         self.assertEqual(list(positions), sorted(positions))
+        self.assertNotIn("$Phantom_Call_To_Grave_Commerce_Check", move)
+        self.assertNotIn("#Phantom_Call_To_Grave_Min_Relay_Savings", move)
+        self.assertNotIn('thisagent\'s "ActiveScript"', move)
+        self.assertNotIn('thisagent\'s "BackScript"', move)
         for mutation in (
             'thisagent\'s "Target" =',
             'thisagent\'s "TaskName" =',

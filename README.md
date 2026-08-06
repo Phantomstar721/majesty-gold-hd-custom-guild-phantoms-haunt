@@ -122,18 +122,22 @@ behavior. It has a 50,000-unit movement range, a five-second cooldown, and a
 building travel through that Haunt when doing so removes at least 500 units
 from the remaining walk. The original commerce target, task, and travel state
 remain intact, so the Phantom resumes toward the same building after arriving
-beside the Haunt; target-building ownership is irrelevant. The teleport anchor
-is captured once from the Phantom's same-player birth Haunt and never follows
-stock rehoming. A Phantom born into an Embassy or Outpost therefore cannot use
-Call to Grave, and destroying its recorded Haunt disables the spell even if the
-hero is later adopted elsewhere. While that Haunt remains its home, the Phantom
-targets it while fleeing. Stock-shaped normal and safe travel hooks give Call
-to Grave priority over other travel spells, including Speed Tonics. If the
-spell is cooling down, travel reevaluates it while the Phantom continues walking.
-Delayed portal movement is cancelled if the Phantom, its recorded Haunt, or its
-preserved commerce target becomes invalid, dies, or changes before the midpoint.
-Phantoms already alive in a save from before this anchor was introduced fail
-closed and must be newly recruited to receive a recorded Haunt.
+beside the Haunt; target-building ownership is irrelevant. Commerce eligibility,
+including the 500-unit savings test, is decided before casting. The effect
+preserves the selected building, and the delayed portal does not repeat the
+transient travel-script or savings checks after the Phantom has committed to the
+cast. The teleport anchor is captured once from the Phantom's same-player birth
+Haunt and never follows stock rehoming. A Phantom born into an Embassy or Outpost
+therefore cannot use Call to Grave, and destroying its recorded Haunt disables
+the spell even if the hero is later adopted elsewhere. While that Haunt remains
+its home, the Phantom targets it while fleeing. Stock-shaped normal and safe
+travel hooks give Call to Grave priority over other travel spells, including
+Speed Tonics. If the spell is cooling down, travel reevaluates it while the
+Phantom continues walking. Delayed portal movement is cancelled if the Phantom,
+its recorded Haunt, or its preserved commerce target becomes invalid, dies, or
+genuinely changes before the midpoint. Phantoms already alive in a save from
+before this anchor was introduced fail closed and must be newly recruited to
+receive a recorded Haunt.
 
 ### Eternal Soul — level 6, rank 5
 
