@@ -1546,6 +1546,7 @@ def phantom_gpl(game_path: Path) -> str:
     item_expressions += "expression #Phantom_Endless_Winter_Radius 175\n"
     item_expressions += "\nexpression #Phantom_Call_To_Grave_Range 50000\n"
     item_expressions += "\nexpression #Phantom_Call_To_Grave_Min_Distance 500\n"
+    item_expressions += "expression #Phantom_Call_To_Grave_Min_Relay_Savings 500\n"
     item_expressions += "\nexpression #Phantom_Ice_Lance_Confidence 10\n"
     item_expressions += "expression #Phantom_Frost_Armor_Confidence 10\n"
     item_expressions += "expression #Phantom_Icy_Touch_Confidence 25\n"

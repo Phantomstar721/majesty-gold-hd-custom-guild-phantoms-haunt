@@ -1025,14 +1025,111 @@ class EndlessWinterTrackingTests(unittest.TestCase):
 
 
 class CallToGraveTests(unittest.TestCase):
+    def test_birth_captures_only_a_live_same_player_haunt_once(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index("function Phantom_Hero_Birth (agent thisagent)")
+        end = gpl.index("\nfunction Phantom_Recruitment_Voice", start)
+        birth = gpl[start:end]
+
+        capture = re.compile(
+            r"If \(\s*"
+            r"\$isvalidgamepiece\(Home\) &&\s*"
+            r"\$IsDead\(Home\) == False &&\s*"
+            r"Home's \"Type\" == \"Building\" &&\s*"
+            r"Home's \"title\" == \"Phantoms_Haunt\" &&\s*"
+            r"\$GetUnitPlayerNumber\(thisagent\) == "
+            r"\$GetUnitPlayerNumber\(Home\)\s*"
+            r"\)\s*begin\s*"
+            r".*?If \(\$HasAttribute\(\"PhantomCallToGraveHaunt\", "
+            r"thisagent\) == False\)\s*"
+            r"\$AddAttribute\(\s*thisagent,\s*"
+            r"\"PhantomCallToGraveHaunt\",\s*\"agent\",\s*Home\s*\);",
+            re.DOTALL,
+        )
+        self.assertRegex(birth, capture)
+        self.assertLess(
+            birth.index("$hero_birth(thisagent);"),
+            birth.index('Home = thisagent\'s "home";'),
+        )
+        self.assertEqual(birth.count('"PhantomCallToGraveHaunt"'), 2)
+        self.assertEqual(len(capture.findall(birth)), 1)
+        self.assertNotRegex(
+            birth,
+            r'thisagent\'s\s+"PhantomCallToGraveHaunt"\s*=(?!=)',
+        )
+
+    def test_own_haunt_helper_fails_closed_on_an_unusable_anchor(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index(
+            "function Phantom_Call_To_Grave_Own_Haunt(agent thisagent) is agent"
+        )
+        end = gpl.index("\nfunction Phantom_Call_To_Grave_Commerce_Check", start)
+        helper = gpl[start:end]
+
+        expected = (
+            'thisagent\'s "Title" != "Phantom"',
+            '$HasAttribute("PhantomCallToGraveHaunt", thisagent) == False',
+            'haunt = thisagent\'s "PhantomCallToGraveHaunt";',
+            "$IsValidGamePiece(haunt) == False",
+            "$IsDead(haunt)",
+            'haunt\'s "Type" != "Building"',
+            'haunt\'s "Title" != "Phantoms_Haunt"',
+            'thisagent\'s "home" != haunt',
+            "$GetUnitPlayerNumber(thisagent) !=",
+            "$GetUnitPlayerNumber(haunt)",
+            "return haunt;",
+        )
+        positions = [helper.index(value) for value in expected]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(helper.count("return $NullAgent();"), 6)
+        self.assertEqual(
+            helper.count('thisagent\'s "PhantomCallToGraveHaunt"'), 1
+        )
+        self.assertNotIn("$AddAttribute(", helper)
+        for fallback in (
+            "$ListObjects(",
+            "$ListCompletedTitles(",
+            "$ListTitles(",
+            "$Pick_Closest(",
+            "$Loyalty_Mod_Pick_Closest(",
+            "$RetrieveAgent(",
+            "$Find_New_Home(",
+        ):
+            self.assertNotIn(fallback, helper)
+
+    def test_normal_travel_keeps_waypoint_gate_and_stock_spell_fallback(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index("function TryTravelSpell(agent thisagent) is boolean")
+        end = gpl.index("\nfunction travel_to_safe", start)
+        travel = gpl[start:end]
+
+        body = travel[travel.index("\nbegin\n") + len("\nbegin\n") :].lstrip()
+        self.assertTrue(body.startswith("if ($HasWayPoints(thisagent) == FALSE)"))
+
+        expected = (
+            "if ($HasWayPoints(thisagent) == FALSE)",
+            'thisagent\'s "Title" == "Phantom"',
+            '$isspellavailable(thisagent,"call_to_grave")',
+            "$Call_To_Grave_Check(thisagent) == 1",
+            '$cast(thisagent,"call_to_grave",thisagent, "");',
+            "spellname = $getbestspell(thisagent,#list_travel);",
+            'if (spellname != "nothing")',
+            '$cast(thisagent,spellname,thisagent, "");',
+            "return False;",
+        )
+        positions = [travel.index(value) for value in expected]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(travel.count("$getbestspell(thisagent,#list_travel)"), 1)
+        self.assertNotIn('$isspellavailable(thisagent,"call_to_grave",1)', travel)
+
     def test_safe_travel_prioritizes_recall_over_tonic_and_low_hp_branches(self):
         gpl = builder.phantom_gpl_template()
         start = gpl.index("function travel_to_safe(agent thisagent)")
-        end = gpl.index("\nfunction Call_To_Grave_Check", start)
+        end = gpl.index("\nfunction Phantom_Call_To_Grave_Home_Check", start)
         travel = gpl[start:end]
         expected = (
             'thisagent\'s "Title" == "Phantom"',
-            '$isspellavailable(thisagent,"call_to_grave",1)',
+            '$isspellavailable(thisagent,"call_to_grave")',
             "$Call_To_Grave_Check(thisagent) == 1",
             '$cast(thisagent,"call_to_grave",thisagent, "");',
             "$hasLowHP(thisagent) == FALSE",
@@ -1042,42 +1139,216 @@ class CallToGraveTests(unittest.TestCase):
         )
         positions = [travel.index(value) for value in expected]
         self.assertEqual(positions, sorted(positions))
+        self.assertNotIn('$isspellavailable(thisagent,"call_to_grave",1)', travel)
 
-    def test_validation_preserves_stock_self_target_travel_state(self):
+    def test_commerce_relay_requires_stock_building_travel_and_real_savings(self):
         gpl = builder.phantom_gpl_template()
-        start = gpl.index("function Call_To_Grave_Check(agent thisagent) is integer")
-        end = gpl.index("\nfunction Call_To_Grave_Effect", start)
+        start = gpl.index(
+            "function Phantom_Call_To_Grave_Commerce_Check(agent thisagent) is integer"
+        )
+        end = gpl.index("\nfunction TryTravelSpell", start)
         check = gpl[start:end]
-        task = check.index('thisagent\'s "taskname" != "go_home"')
-        self_target = check.index('thisagent\'s "Target" == thisagent', task)
-        saved_destination = check.index(
-            'destination = thisagent\'s "destination";', self_target
+
+        expected = (
+            'thisagent\'s "Title" != "Phantom"',
+            "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);",
+            'target = thisagent\'s "target";',
+            "$IsValidGamePiece(home) == False",
+            "$IsValidGamePiece(target) == False",
+            '$IsDead(target) || target\'s "Type" != "Building"',
+            'target == home || thisagent\'s "TaskName" == "go_home"',
+            'thisagent\'s "ActiveScript" != $travel_to',
+            'thisagent\'s "BackScript" != $use_building',
+            "$InsideBuilding(thisagent)",
+            "direct_distance = $DistanceBetweenAgents(thisagent,target);",
+            "relay_distance = $DistanceBetweenAgents(home,target);",
+            "direct_distance >=",
+            "relay_distance + #Phantom_Call_To_Grave_Min_Relay_Savings",
         )
-        home_target = check.index(
-            'thisagent\'s "target" != thisagent\'s "home"', saved_destination
+        positions = [check.index(value) for value in expected]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn("$IsEnteringBuilding", check)
+
+        for ownership_gate in (
+            "$GetUnitPlayerNumber",
+            "$GetPlayerTeamNumber",
+            "$UnitsAreSamePlayer",
+            "#MyPlayer",
+            "#MyTeam",
+        ):
+            self.assertNotIn(ownership_gate, check)
+        self.assertNotIn('target\'s "Title"', check)
+        self.assertNotIn('target\'s "SubType"', check)
+
+    def test_home_validation_accepts_stock_target_forms_but_uses_anchor_distance(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index(
+            "function Phantom_Call_To_Grave_Home_Check(agent thisagent) is integer"
         )
-        real_target = check.index(
-            '$isvalidgamepiece(thisagent\'s "target")', home_target
+        end = gpl.index("\nfunction Call_To_Grave_Check", start)
+        check = gpl[start:end]
+        expected = (
+            'thisagent\'s "taskname" != "go_home"',
+            "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);",
+            "$IsValidGamePiece(home) == False",
+            'thisagent\'s "Target" != thisagent && thisagent\'s "target" != home',
+            "$DistanceBetweenAgents(thisagent,home) > "
+            "#Phantom_Call_To_Grave_Min_Distance",
         )
-        self.assertLess(task, self_target)
-        self.assertLess(self_target, saved_destination)
-        self.assertLess(saved_destination, home_target)
-        self.assertLess(home_target, real_target)
+        positions = [check.index(value) for value in expected]
+        self.assertEqual(positions, sorted(positions))
+        for mutable_coordinate in (
+            'thisagent\'s "destination"',
+            "$DistanceBetweenCoords(",
+            "$LocationOf(",
+            "$TeleportToPoint(",
+        ):
+            self.assertNotIn(mutable_coordinate, check)
+
+    def test_relay_consumers_use_anchor_helper_without_haunt_enumeration(self):
+        gpl = builder.phantom_gpl_template()
+        signatures = (
+            (
+                "function Phantom_Call_To_Grave_Commerce_Check(agent thisagent) is integer",
+                "\nfunction TryTravelSpell",
+            ),
+            (
+                "function Phantom_Call_To_Grave_Home_Check(agent thisagent) is integer",
+                "\nfunction Call_To_Grave_Check",
+            ),
+            (
+                "function Call_To_Grave_DoMove(agent thisagent, integer theRange)",
+                "\nfunction Call_To_Grave_DoCommerceMove",
+            ),
+            (
+                "function Call_To_Grave_DoCommerceMove(agent thisagent, agent commerce_target)",
+                "\nfunction flee_part_II",
+            ),
+        )
+        for signature, next_signature in signatures:
+            start = gpl.index(signature)
+            end = gpl.index(next_signature, start)
+            body = gpl[start:end]
+            self.assertIn(
+                "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);", body
+            )
+            self.assertNotIn('home = thisagent\'s "home";', body)
+            for enumeration in (
+                "$ListObjects(",
+                "$ListCompletedTitles(",
+                "$ListTitles(",
+                "$Pick_Closest(",
+                "$Loyalty_Mod_Pick_Closest(",
+                "#MyPlayer",
+                "#MyTeam",
+            ):
+                self.assertNotIn(enumeration, body)
+
+    def test_effect_snapshots_commerce_target_before_delayed_callback(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index("function Call_To_Grave_Effect(agent thisagent, agent target)")
+        end = gpl.index("\nfunction Call_To_Grave_DoMove", start)
+        effect = gpl[start:end]
+
+        commerce_check = effect.index(
+            "$Phantom_Call_To_Grave_Commerce_Check(thisagent) == 1"
+        )
+        commerce_callback = effect.index(
+            'thisagent\'s "teleportScript" = $Call_To_Grave_DoCommerceMove;',
+            commerce_check,
+        )
+        run_thread = effect.index("$RunThread(", commerce_callback)
+        target_snapshot = effect.index('thisagent\'s "Target"', run_thread)
+        home_check = effect.index(
+            "else if ($Phantom_Call_To_Grave_Home_Check(thisagent) == 1)",
+            target_snapshot,
+        )
+        home_callback = effect.index(
+            'thisagent\'s "teleportScript" = $Call_To_Grave_DoMove;', home_check
+        )
+        self.assertLess(commerce_check, commerce_callback)
+        self.assertLess(commerce_callback, run_thread)
+        self.assertLess(run_thread, target_snapshot)
+        self.assertLess(target_snapshot, home_check)
+        self.assertLess(home_check, home_callback)
 
     def test_delayed_teleport_rejects_zero_hp_death_window(self):
         gpl = builder.phantom_gpl_template()
         start = gpl.index(
             "function Call_To_Grave_DoMove(agent thisagent, integer theRange)"
         )
-        end = gpl.index("\nfunction flee_part_II", start)
+        end = gpl.index("\nfunction Call_To_Grave_DoCommerceMove", start)
         move = gpl[start:end]
         valid = move.index("$IsValidGamePiece(ThisAgent) == False")
         dead = move.index("$IsDead(ThisAgent)", valid)
         zero_hp = move.index("#ATTRIB_HP) <= 0", dead)
-        teleport = move.index("$TeleportToPoint", zero_hp)
+        home_check = move.index(
+            "$Phantom_Call_To_Grave_Home_Check(thisagent) == 0", zero_hp
+        )
+        home = move.index(
+            "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);", home_check
+        )
+        teleport = move.index("$TeleportToUnit(", home)
         self.assertLess(valid, dead)
         self.assertLess(dead, zero_hp)
-        self.assertLess(zero_hp, teleport)
+        self.assertLess(zero_hp, home_check)
+        self.assertLess(home_check, home)
+        self.assertLess(home, teleport)
+        self.assertNotIn("$TeleportToPoint", move)
+        self.assertNotIn('thisagent\'s "destination"', move)
+
+    def test_delayed_commerce_relay_aborts_stale_target_before_teleport(self):
+        gpl = builder.phantom_gpl_template()
+        start = gpl.index(
+            "function Call_To_Grave_DoCommerceMove(agent thisagent, agent commerce_target)"
+        )
+        end = gpl.index("\nfunction flee_part_II", start)
+        move = gpl[start:end]
+
+        valid_caster = move.index("$IsValidGamePiece(thisagent) == False")
+        dead_caster = move.index("$IsDead(thisagent)", valid_caster)
+        zero_hp = move.index("#ATTRIB_HP) <= 0", dead_caster)
+        valid_target = move.index(
+            "$IsValidGamePiece(commerce_target) == False", zero_hp
+        )
+        stale_target = move.index(
+            'thisagent\'s "Target" != commerce_target', valid_target
+        )
+        relay_check = move.index(
+            "$Phantom_Call_To_Grave_Commerce_Check(thisagent) == 0", stale_target
+        )
+        home = move.index(
+            "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);", relay_check
+        )
+        teleport = move.index("$TeleportToUnit(", home)
+        positions = (
+            valid_caster,
+            dead_caster,
+            zero_hp,
+            valid_target,
+            stale_target,
+            relay_check,
+            home,
+            teleport,
+        )
+        self.assertEqual(list(positions), sorted(positions))
+        for mutation in (
+            'thisagent\'s "Target" =',
+            'thisagent\'s "TaskName" =',
+            "$Reset_Tasks(",
+            "$StopMoving(",
+        ):
+            self.assertNotIn(mutation, move)
+
+    def test_commerce_relay_does_not_override_stock_building_or_normal_travel(self):
+        gpl = builder.phantom_gpl_template()
+        for signature in (
+            "function travel_to(agent thisagent)",
+            "function use_building(agent thisagent)",
+            "function use_building_safe(agent thisagent)",
+        ):
+            self.assertNotIn(signature, gpl)
+        self.assertIn("function travel_to_safe(agent thisagent)", gpl)
 
     def test_fleeing_phantom_uses_stock_travel_spell_path(self):
         gpl = builder.phantom_gpl_template()
@@ -1165,62 +1436,28 @@ class PriestessPhantomSupportTests(unittest.TestCase):
         self.assertNotIn("#ATTRIB_HasEffectWingedFeet", begin)
         self.assertNotIn("#ATTRIB_HasEffectWingedFeet", end)
 
-    def test_rush_uses_private_state_and_only_repairs_legacy_native_flag(self):
+    def test_rush_watcher_uses_only_private_state(self):
         gpl = builder.phantom_gpl_template()
-        watcher_start = gpl.index(
+        start = gpl.index(
             "Function Phantom_Haunt_Player_Perk_Watch(agent Palace)"
         )
-        watcher_end = gpl.index(
-            "Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)",
-            watcher_start,
+        end = gpl.index(
+            "Function Phantoms_Haunt_Construction_Birth(agent ThisAgent)", start
         )
-        watcher = gpl[watcher_start:watcher_end]
+        watcher = gpl[start:end]
 
-        active_init = watcher.index(
-            'If ($HasAttribute("PhantomRushUntoDeathActive", Priestess) == False)'
-        )
-        legacy_active = watcher.index(
-            'Priestess\'s "PhantomRushUntoDeathActive" == True', active_init
-        )
-        legacy_flag = watcher.index("#ATTRIB_HasEffectWingedFeet", legacy_active)
-        winged_icon = watcher.index(
-            '$CheckEffector(Priestess, "winged_feet_icon") == False', legacy_flag
-        )
-        tonic_icon = watcher.index(
-            '$CheckEffector(Priestess, "speed_tonic_icon") == False', winged_icon
-        )
-        legacy_clear = watcher.index(
-            "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);",
-            tonic_icon,
-        )
-        level_branch = watcher.index("If (Haunt_Level >= 3)", legacy_clear)
+        level_branch = watcher.index("If (Haunt_Level >= 3)")
         private_gate = watcher.index(
             'Priestess\'s "PhantomRushUntoDeathActive" == False', level_branch
         )
         rush_begin = watcher.index(
             "$Phantom_Rush_Unto_Death_Begin(Priestess);", private_gate
         )
-        active_assignment = watcher.index(
-            'Priestess\'s "PhantomRushUntoDeathActive" = True;', rush_begin
-        )
-
-        self.assertLess(active_init, legacy_active)
-        self.assertLess(legacy_active, legacy_flag)
-        self.assertLess(legacy_flag, winged_icon)
-        self.assertLess(winged_icon, tonic_icon)
-        self.assertLess(tonic_icon, legacy_clear)
-        self.assertLess(legacy_clear, level_branch)
         self.assertLess(level_branch, private_gate)
         self.assertLess(private_gate, rush_begin)
-        self.assertLess(rush_begin, active_assignment)
-        self.assertNotIn("#ATTRIB_HasEffectWingedFeet", watcher[level_branch:])
-        self.assertEqual(
-            watcher.count(
-                "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);"
-            ),
-            1,
-        )
-        self.assertNotIn("PhantomRushWingedFeetMigration", watcher)
+        self.assertNotIn("#ATTRIB_HasEffectWingedFeet", watcher)
+        self.assertNotIn("$CheckEffector(", watcher)
+        self.assertNotIn("Phantom_Rush_Migrate_Legacy_Winged_Feet", gpl)
 
     def test_supporter_inherits_followed_phantoms_building_target(self):
         gpl = builder.phantom_gpl_template()

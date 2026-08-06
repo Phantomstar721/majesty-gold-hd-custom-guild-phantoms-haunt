@@ -219,20 +219,6 @@ Begin
 						False
 					);
 
-				// Older builds claimed the shared native Winged Feet flag for
-				// Rush. Repair only that stale state: a genuine Winged Feet or
-				// Speed Tonic effect owns a timed icon and must remain untouched.
-				If (
-					Priestess's "PhantomRushUntoDeathActive" == True &&
-					$GetAttribute(
-						Priestess,
-						#ATTRIB_HasEffectWingedFeet
-					) != 0 &&
-					$CheckEffector(Priestess, "winged_feet_icon") == False &&
-					$CheckEffector(Priestess, "speed_tonic_icon") == False
-				)
-					$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);
-
 				If (Haunt_Level >= 3)
 					begin
 						If (Priestess's "PhantomRushUntoDeathActive" == False)
@@ -1842,6 +1828,129 @@ begin
 	return arrivedist;
 end
 
+// Return only the Haunt that originally recruited this Phantom. The stock
+// Find_New_Home path can adopt a displaced hero into another local, allied, or
+// Embassy building, so the mutable home field alone is not a safe identity.
+// Embassy-born and otherwise unanchored Phantoms deliberately return null.
+function Phantom_Call_To_Grave_Own_Haunt(agent thisagent) is agent
+
+declare
+	agent haunt;
+
+begin
+	if (thisagent's "Title" != "Phantom")
+		return $NullAgent();
+
+	if ($HasAttribute("PhantomCallToGraveHaunt", thisagent) == False)
+		return $NullAgent();
+
+	haunt = thisagent's "PhantomCallToGraveHaunt";
+
+	if ($IsValidGamePiece(haunt) == False)
+		return $NullAgent();
+
+	if (
+		$IsDead(haunt) ||
+		haunt's "Type" != "Building" ||
+		haunt's "Title" != "Phantoms_Haunt"
+	)
+		return $NullAgent();
+
+	if (thisagent's "home" != haunt)
+		return $NullAgent();
+
+	if (
+		$GetUnitPlayerNumber(thisagent) !=
+		$GetUnitPlayerNumber(haunt)
+	)
+		return $NullAgent();
+
+	return haunt;
+end
+
+// A building-visit relay never retargets the Phantom. It is eligible only when
+// stock building-travel state is intact and recalling to the birth-captured
+// Haunt would remove at least one full minimum-use distance from the walk.
+// Target-building ownership is deliberately irrelevant: stock visits may
+// select another player's shop, and the geometry test remains valid.
+function Phantom_Call_To_Grave_Commerce_Check(agent thisagent) is integer
+
+declare
+	agent home,target;
+	integer direct_distance,relay_distance;
+
+begin
+	if (thisagent's "Title" != "Phantom")
+		return 0;
+
+	home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);
+	target = thisagent's "target";
+
+	if ($IsValidGamePiece(home) == False)
+		return 0;
+
+	if ($IsValidGamePiece(target) == False)
+		return 0;
+
+	if ($IsDead(target) || target's "Type" != "Building")
+		return 0;
+
+	if (target == home || thisagent's "TaskName" == "go_home")
+		return 0;
+
+	if (thisagent's "ActiveScript" != $travel_to)
+		return 0;
+
+	if (thisagent's "BackScript" != $use_building)
+		return 0;
+
+	if ($InsideBuilding(thisagent))
+		return 0;
+
+	direct_distance = $DistanceBetweenAgents(thisagent,target);
+	relay_distance = $DistanceBetweenAgents(home,target);
+
+	if (
+		direct_distance >=
+		relay_distance + #Phantom_Call_To_Grave_Min_Relay_Savings
+	)
+		return 1;
+
+	return 0;
+end
+
+// Stock TryTravelSpell with one Phantom-only priority rule. This keeps the
+// waypoint guard and every non-Phantom fallback unchanged while ensuring a
+// valid Call to Grave relay cannot lose to another carried travel spell.
+function TryTravelSpell(agent thisagent) is boolean
+
+declare
+	string spellname;
+
+begin
+	if ($HasWayPoints(thisagent) == FALSE)
+		begin
+			if (
+				thisagent's "Title" == "Phantom" &&
+				$isspellavailable(thisagent,"call_to_grave") &&
+				$Call_To_Grave_Check(thisagent) == 1
+			)
+				begin
+					$cast(thisagent,"call_to_grave",thisagent, "");
+					return True;
+				end
+
+			spellname = $getbestspell(thisagent,#list_travel);
+			if (spellname != "nothing")
+				begin
+					$cast(thisagent,spellname,thisagent, "");
+					return True;
+				end
+
+			return False;
+		end
+end
+
 // Stock travel_to_safe with one Phantom-only priority rule. Call to Grave must
 // be considered before both the low-HP healing branch and generic travel-spell
 // selection, which may otherwise consume a Speed Tonic and skip the recall.
@@ -1853,7 +1962,7 @@ begin
 	if ($has_arrived(thisagent,true) == FALSE)
 		if (
 			thisagent's "Title" == "Phantom" &&
-			$isspellavailable(thisagent,"call_to_grave",1) &&
+			$isspellavailable(thisagent,"call_to_grave") &&
 			$Call_To_Grave_Check(thisagent) == 1
 		)
 			$cast(thisagent,"call_to_grave",thisagent, "");
@@ -1867,29 +1976,41 @@ begin
 	$clearlist(thisagent's "hostiles");
 end
 
-function Call_To_Grave_Check(agent thisagent) is integer
+function Phantom_Call_To_Grave_Home_Check(agent thisagent) is integer
 
 declare
-	coordinate destination;
+	agent home;
 
 begin
 	if (thisagent's "taskname" != "go_home")
 		return 0;
 
-	if (thisagent's "Target" == thisagent)
-		destination = thisagent's "destination";
-	else
-		begin
-			if (thisagent's "target" != thisagent's "home")
-				return 0;
+	home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);
 
-			if ($isvalidgamepiece(thisagent's "target"))
-				destination = $locationof(thisagent's "target");
-			else
-				return 0;
-		end
+	if ($IsValidGamePiece(home) == False)
+		return 0;
 
-	if ($distancebetweencoords(destination,$locationof(thisagent)) > #Phantom_Call_To_Grave_Min_Distance)
+	// Preserve stock coordinate-travel state without trusting its mutable
+	// destination: either target form still validates and teleports only to the
+	// immutable birth Haunt.
+	if (thisagent's "Target" != thisagent && thisagent's "target" != home)
+		return 0;
+
+	if ($DistanceBetweenAgents(thisagent,home) > #Phantom_Call_To_Grave_Min_Distance)
+		return 1;
+
+	return 0;
+end
+
+function Call_To_Grave_Check(agent thisagent) is integer
+
+declare
+
+begin
+	if ($Phantom_Call_To_Grave_Home_Check(thisagent) == 1)
+		return 1;
+
+	if ($Phantom_Call_To_Grave_Commerce_Check(thisagent) == 1)
 		return 1;
 
 	return 0;
@@ -1903,13 +2024,33 @@ declare
 begin
 	theTimePeriod = $GetSpellAttribute("call_to_grave","effector_duration");
 	$createeffector(thisagent,"call_to_grave_effector",theTimePeriod);
-	thisagent's "teleportScript" = $Call_To_Grave_DoMove;
-	$RunThread(thisagent's "teleportScript",theTimePeriod/2,thisagent,#Phantom_Call_To_Grave_Range);
+
+	if ($Phantom_Call_To_Grave_Commerce_Check(thisagent) == 1)
+		begin
+			thisagent's "teleportScript" = $Call_To_Grave_DoCommerceMove;
+			$RunThread(
+				thisagent's "teleportScript",
+				theTimePeriod/2,
+				thisagent,
+				thisagent's "Target"
+			);
+		end
+	else if ($Phantom_Call_To_Grave_Home_Check(thisagent) == 1)
+		begin
+			thisagent's "teleportScript" = $Call_To_Grave_DoMove;
+			$RunThread(
+				thisagent's "teleportScript",
+				theTimePeriod/2,
+				thisagent,
+				#Phantom_Call_To_Grave_Range
+			);
+		end
 end
 
 function Call_To_Grave_DoMove(agent thisagent, integer theRange)
 
 declare
+	agent home;
 
 begin
 	If ($IsValidGamePiece(ThisAgent) == False)
@@ -1918,11 +2059,46 @@ begin
 	If ($IsDead(ThisAgent) || $GetAttribute(ThisAgent, #ATTRIB_HP) <= 0)
 		return;
 
-	if (thisagent's "Target" == thisagent)
-		$TeleportToPoint(thisagent,theRange,thisagent's "destination");
-	else
-		if ($isvalidgamepiece(thisagent's "target"))
-			$TeleportToUnit(thisagent,theRange,thisagent's "Target",thisagent's "castingrange");
+	If ($Phantom_Call_To_Grave_Home_Check(thisagent) == 0)
+		return;
+
+	home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);
+	$TeleportToUnit(
+		thisagent,
+		theRange,
+		home,
+		thisagent's "castingrange"
+	);
+end
+
+function Call_To_Grave_DoCommerceMove(agent thisagent, agent commerce_target)
+
+declare
+	agent home;
+
+begin
+	If ($IsValidGamePiece(thisagent) == False)
+		return;
+
+	If ($IsDead(thisagent) || $GetAttribute(thisagent, #ATTRIB_HP) <= 0)
+		return;
+
+	If ($IsValidGamePiece(commerce_target) == False)
+		return;
+
+	If ($IsDead(commerce_target) || thisagent's "Target" != commerce_target)
+		return;
+
+	If ($Phantom_Call_To_Grave_Commerce_Check(thisagent) == 0)
+		return;
+
+	home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);
+	$TeleportToUnit(
+		thisagent,
+		#Phantom_Call_To_Grave_Range,
+		home,
+		thisagent's "castingrange"
+	);
 end
 
 function flee_part_II(agent thisagent, list places, integer intent)
@@ -2009,8 +2185,25 @@ declare
 begin
 	$hero_birth(thisagent);
 	Home = thisagent's "home";
-	If ($isvalidgamepiece(Home))
-		If (Home's "title" == "Phantoms_Haunt")
+	If (
+		$isvalidgamepiece(Home) &&
+		$IsDead(Home) == False &&
+		Home's "Type" == "Building" &&
+		Home's "title" == "Phantoms_Haunt" &&
+		$GetUnitPlayerNumber(thisagent) == $GetUnitPlayerNumber(Home)
+	)
+		begin
+			// Capture the recruiting Haunt once. Never infer this later from the
+			// mutable stock home field: Embassy recruits and rehomed survivors
+			// must not gain a Call to Grave destination retroactively.
+			If ($HasAttribute("PhantomCallToGraveHaunt", thisagent) == False)
+				$AddAttribute(
+					thisagent,
+					"PhantomCallToGraveHaunt",
+					"agent",
+					Home
+				);
+
 			If ($HasAttribute("PhantomRecruitmentVoice", thisagent) == False)
 				begin
 					$AddAttribute(
@@ -2026,6 +2219,7 @@ begin
 							thisagent
 						);
 				end
+		end
 	$Phantom_grant_starter_items(thisagent);
 	$Phantom_Sync_Speed_Profile(thisagent);
 	$LearnSpell(thisagent, "ice_lance");

@@ -117,15 +117,23 @@ The spell requires a completed level-2 Haunt.
 
 Call to Grave is a custom portal return modeled on the Wizard's teleport
 behavior. It has a 50,000-unit movement range, a five-second cooldown, and a
-500-unit minimum-use distance. It is eligible only when the Phantom's current
-task is `go_home` and its destination is its home Haunt. The Phantom always
-targets its Haunt while fleeing. Its stock safe-travel
-action gives Call to Grave priority before both low-health healing and generic
-travel-spell selection, preventing a Speed Tonic from displacing the recall.
-If the spell is cooling down, the same normal travel action reevaluates it as
-the Phantom continues home. The delayed portal movement is cancelled if the
-Phantom is invalid, dead, or has already reached zero HP, allowing the stock
-death and quest-item drop paths to finish normally.
+500-unit minimum-use distance. It recalls a Phantom whose current task is
+`go_home` and whose destination is its home Haunt. It can also relay ordinary
+building travel through that Haunt when doing so removes at least 500 units
+from the remaining walk. The original commerce target, task, and travel state
+remain intact, so the Phantom resumes toward the same building after arriving
+beside the Haunt; target-building ownership is irrelevant. The teleport anchor
+is captured once from the Phantom's same-player birth Haunt and never follows
+stock rehoming. A Phantom born into an Embassy or Outpost therefore cannot use
+Call to Grave, and destroying its recorded Haunt disables the spell even if the
+hero is later adopted elsewhere. While that Haunt remains its home, the Phantom
+targets it while fleeing. Stock-shaped normal and safe travel hooks give Call
+to Grave priority over other travel spells, including Speed Tonics. If the
+spell is cooling down, travel reevaluates it while the Phantom continues walking.
+Delayed portal movement is cancelled if the Phantom, its recorded Haunt, or its
+preserved commerce target becomes invalid, dies, or changes before the midpoint.
+Phantoms already alive in a save from before this anchor was introduced fail
+closed and must be newly recruited to receive a recorded Haunt.
 
 ### Eternal Soul — level 6, rank 5
 

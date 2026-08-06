@@ -2171,9 +2171,6 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         "#ATTRIB_MaxAttackRange,\n\t\t- #Phantom_Rush_Range_Bonus",
         'ThisAgent\'s "castingrange" -= #Phantom_Rush_Range_Bonus;',
         'Priestess\'s "PhantomRushUntoDeathActive" == False',
-        '$CheckEffector(Priestess, "winged_feet_icon") == False',
-        '$CheckEffector(Priestess, "speed_tonic_icon") == False',
-        "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);",
         "$Phantom_Rush_Unto_Death_Begin(Priestess);",
         "$Phantom_Rush_Unto_Death_End(Priestess);",
         "Function Phantom_Sync_Speed_Profile(agent ThisAgent)",
@@ -2272,31 +2269,25 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
             f"{gpl_path}: Rush unto Death still contains the rejected "
             f"unit-type transformation path {present_rush_transform}"
         )
+    if "#ATTRIB_HasEffectWingedFeet" in perk_watcher:
+        fail(
+            f"{gpl_path}: the recurring perk watcher must not read, claim, "
+            "or repair the shared native Winged Feet state"
+        )
+    if "$CheckEffector(" in perk_watcher:
+        fail(
+            f"{gpl_path}: legacy effect migration must remain outside the "
+            "compiled body of the recurring Palace foreach watcher"
+        )
     active_init = perk_watcher.index(
         'If ($HasAttribute("PhantomRushUntoDeathActive", Priestess) == False)'
     )
-    legacy_active = perk_watcher.index(
-        'Priestess\'s "PhantomRushUntoDeathActive" == True', active_init
-    )
-    legacy_flag = perk_watcher.index(
-        "#ATTRIB_HasEffectWingedFeet", legacy_active
-    )
-    winged_icon = perk_watcher.index(
-        '$CheckEffector(Priestess, "winged_feet_icon") == False', legacy_flag
-    )
-    tonic_icon = perk_watcher.index(
-        '$CheckEffector(Priestess, "speed_tonic_icon") == False', winged_icon
-    )
-    legacy_clear = perk_watcher.index(
-        "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);",
-        tonic_icon,
-    )
-    level_branch = perk_watcher.index("If (Haunt_Level >= 3)", legacy_clear)
-    active_inactive = perk_watcher.index(
+    level_branch = perk_watcher.index("If (Haunt_Level >= 3)", active_init)
+    private_gate = perk_watcher.index(
         'Priestess\'s "PhantomRushUntoDeathActive" == False', level_branch
     )
     rush_begin_call = perk_watcher.index(
-        "$Phantom_Rush_Unto_Death_Begin(Priestess);", active_inactive
+        "$Phantom_Rush_Unto_Death_Begin(Priestess);", private_gate
     )
     active_assignment = perk_watcher.index(
         'Priestess\'s "PhantomRushUntoDeathActive" = True;', rush_begin_call
@@ -2313,13 +2304,8 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
     )
     if not (
         active_init
-        < legacy_active
-        < legacy_flag
-        < winged_icon
-        < tonic_icon
-        < legacy_clear
         < level_branch
-        < active_inactive
+        < private_gate
         < rush_begin_call
         < active_assignment
         < rush_end_gate
@@ -2327,25 +2313,8 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         < inactive_assignment
     ):
         fail(
-            f"{gpl_path}: Rush unto Death private-state application or "
-            "legacy Winged Feet cleanup is out of order"
-        )
-    if perk_watcher.count(
-        "$SetAttribute(Priestess, #ATTRIB_HasEffectWingedFeet, 0);"
-    ) != 1:
-        fail(
-            f"{gpl_path}: Rush unto Death must contain exactly one guarded "
-            "legacy Winged Feet flag repair"
-        )
-    if "#ATTRIB_HasEffectWingedFeet" in perk_watcher[level_branch:]:
-        fail(
-            f"{gpl_path}: Rush unto Death application still depends on the "
-            "shared native Winged Feet flag"
-        )
-    if "PhantomRushWingedFeetMigration" in perk_watcher:
-        fail(
-            f"{gpl_path}: Rush unto Death legacy cleanup should remain "
-            "idempotent instead of adding permanent migration state"
+            f"{gpl_path}: Rush unto Death private-state application is out "
+            "of order"
         )
     rush_begin_start = gpl.index(
         "Function Phantom_Rush_Unto_Death_Begin(agent ThisAgent)"
@@ -2373,6 +2342,12 @@ def validate_phantoms_haunt_upgrade_contract(output_root: Path) -> None:
         fail(
             f"{gpl_path}: Rush unto Death casting-range bonus is not paired "
             "and reversible"
+        )
+
+    if "Phantom_Rush_Migrate_Legacy_Winged_Feet" in gpl:
+        fail(
+            f"{gpl_path}: unsupported saved-game Rush migration logic must "
+            "not be present"
         )
     forbidden_rush_visuals = (
         "$TurnOnSpeedTrail",
@@ -4410,30 +4385,67 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
     gpl_contract = (
         "expression #Phantom_Call_To_Grave_Range 50000",
         "expression #Phantom_Call_To_Grave_Min_Distance 500",
+        "expression #Phantom_Call_To_Grave_Min_Relay_Savings 500",
+        "function Phantom_Call_To_Grave_Own_Haunt(agent thisagent) is agent",
+        '$HasAttribute("PhantomCallToGraveHaunt", thisagent) == False',
+        'haunt = thisagent\'s "PhantomCallToGraveHaunt";',
+        "$IsValidGamePiece(haunt) == False",
+        '$IsDead(haunt)',
+        'haunt\'s "Type" != "Building"',
+        'haunt\'s "Title" != "Phantoms_Haunt"',
+        'thisagent\'s "home" != haunt',
+        "$GetUnitPlayerNumber(thisagent) !=",
+        "$GetUnitPlayerNumber(haunt)",
+        "return haunt;",
+        "function Phantom_Call_To_Grave_Commerce_Check(agent thisagent) is integer",
+        "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);",
+        'if (thisagent\'s "ActiveScript" != $travel_to)',
+        'if (thisagent\'s "BackScript" != $use_building)',
+        "direct_distance = $DistanceBetweenAgents(thisagent,target);",
+        "relay_distance = $DistanceBetweenAgents(home,target);",
+        "relay_distance + #Phantom_Call_To_Grave_Min_Relay_Savings",
+        "function TryTravelSpell(agent thisagent) is boolean",
+        "if ($HasWayPoints(thisagent) == FALSE)",
+        'spellname = $getbestspell(thisagent,#list_travel);',
+        'if (spellname != "nothing")',
+        '$cast(thisagent,spellname,thisagent, "");',
+        "function travel_to_safe(agent thisagent)",
+        "function Phantom_Call_To_Grave_Home_Check(agent thisagent) is integer",
         "function Call_To_Grave_Check(agent thisagent) is integer",
         'if (thisagent\'s "taskname" != "go_home")',
-        'if (thisagent\'s "target" != thisagent\'s "home")',
-        'if (thisagent\'s "Target" == thisagent)',
-        'destination = thisagent\'s "destination";',
-        'if ($isvalidgamepiece(thisagent\'s "target"))',
-        'destination = $locationof(thisagent\'s "target");',
-        "else\n\t\t\t\treturn 0;",
-        "if ($distancebetweencoords(destination,$locationof(thisagent)) > #Phantom_Call_To_Grave_Min_Distance)",
+        'if (thisagent\'s "Target" != thisagent && thisagent\'s "target" != home)',
+        "if ($DistanceBetweenAgents(thisagent,home) > #Phantom_Call_To_Grave_Min_Distance)",
+        "$Phantom_Call_To_Grave_Home_Check(thisagent) == 1",
+        "$Phantom_Call_To_Grave_Commerce_Check(thisagent) == 1",
         "function Call_To_Grave_Effect(agent thisagent, agent target)",
         'theTimePeriod = $GetSpellAttribute("call_to_grave","effector_duration");',
         '$createeffector(thisagent,"call_to_grave_effector",theTimePeriod);',
+        'thisagent\'s "teleportScript" = $Call_To_Grave_DoCommerceMove;',
+        'thisagent\'s "Target"',
         'thisagent\'s "teleportScript" = $Call_To_Grave_DoMove;',
-        '$RunThread(thisagent\'s "teleportScript",theTimePeriod/2,thisagent,#Phantom_Call_To_Grave_Range);',
         "function Call_To_Grave_DoMove(agent thisagent, integer theRange)",
         "If ($IsValidGamePiece(ThisAgent) == False)",
         "If ($IsDead(ThisAgent) || $GetAttribute(ThisAgent, #ATTRIB_HP) <= 0)",
-        'if (thisagent\'s "Target" == thisagent)',
-        '$TeleportToPoint(thisagent,theRange,thisagent\'s "destination");',
-        'if ($isvalidgamepiece(thisagent\'s "target"))',
-        '$TeleportToUnit(thisagent,theRange,thisagent\'s "Target",thisagent\'s "castingrange");',
-        "function travel_to_safe(agent thisagent)",
+        "If ($Phantom_Call_To_Grave_Home_Check(thisagent) == 0)",
+        "$TeleportToUnit(",
+        "theRange,",
+        "home,",
+        "function Call_To_Grave_DoCommerceMove(agent thisagent, agent commerce_target)",
+        "If ($IsValidGamePiece(commerce_target) == False)",
+        'thisagent\'s "Target" != commerce_target',
+        "If ($Phantom_Call_To_Grave_Commerce_Check(thisagent) == 0)",
+        "function Phantom_Hero_Birth (agent thisagent)",
+        'Home = thisagent\'s "home";',
+        "$isvalidgamepiece(Home)",
+        "$IsDead(Home) == False",
+        'Home\'s "Type" == "Building"',
+        'Home\'s "title" == "Phantoms_Haunt"',
+        "$GetUnitPlayerNumber(thisagent) == $GetUnitPlayerNumber(Home)",
+        '$HasAttribute("PhantomCallToGraveHaunt", thisagent) == False',
+        '"PhantomCallToGraveHaunt",',
+        '"agent",',
         'thisagent\'s "Title" == "Phantom"',
-        '$isspellavailable(thisagent,"call_to_grave",1)',
+        '$isspellavailable(thisagent,"call_to_grave")',
         "$Call_To_Grave_Check(thisagent) == 1",
         '$cast(thisagent,"call_to_grave",thisagent, "");',
         "$hasLowHP(thisagent) == FALSE",
@@ -4444,6 +4456,54 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
     missing_gpl = [value for value in gpl_contract if value not in gpl]
     if missing_gpl:
         fail(f"{gpl_path}: Call to Grave GPL is missing {missing_gpl}")
+
+    own_start = gpl.index(
+        "function Phantom_Call_To_Grave_Own_Haunt(agent thisagent) is agent"
+    )
+    own_end = gpl.index(
+        "\nfunction Phantom_Call_To_Grave_Commerce_Check", own_start
+    )
+    own_function = gpl[own_start:own_end]
+    commerce_start = gpl.index(
+        "function Phantom_Call_To_Grave_Commerce_Check(agent thisagent) is integer"
+    )
+    commerce_end = gpl.index("\nfunction TryTravelSpell", commerce_start)
+    commerce_function = gpl[commerce_start:commerce_end]
+    try_start = gpl.index("function TryTravelSpell(agent thisagent) is boolean")
+    try_end = gpl.index("\nfunction travel_to_safe", try_start)
+    try_function = gpl[try_start:try_end]
+    travel_start = gpl.index("function travel_to_safe(agent thisagent)")
+    travel_end = gpl.index(
+        "\nfunction Phantom_Call_To_Grave_Home_Check", travel_start
+    )
+    travel_function = gpl[travel_start:travel_end]
+    home_start = gpl.index(
+        "function Phantom_Call_To_Grave_Home_Check(agent thisagent) is integer"
+    )
+    home_end = gpl.index("\nfunction Call_To_Grave_Check", home_start)
+    home_function = gpl[home_start:home_end]
+    check_start = gpl.index("function Call_To_Grave_Check(agent thisagent) is integer")
+    check_end = gpl.index("\nfunction Call_To_Grave_Effect", check_start)
+    check_function = gpl[check_start:check_end]
+    effect_start = gpl.index("function Call_To_Grave_Effect(agent thisagent, agent target)")
+    effect_end = gpl.index("\nfunction Call_To_Grave_DoMove", effect_start)
+    effect_function = gpl[effect_start:effect_end]
+    move_start = gpl.index(
+        "function Call_To_Grave_DoMove(agent thisagent, integer theRange)"
+    )
+    move_end = gpl.index("\nfunction Call_To_Grave_DoCommerceMove", move_start)
+    move_function = gpl[move_start:move_end]
+    commerce_move_start = gpl.index(
+        "function Call_To_Grave_DoCommerceMove(agent thisagent, agent commerce_target)"
+    )
+    commerce_move_end = gpl.index("\nfunction flee_part_II", commerce_move_start)
+    commerce_move_function = gpl[commerce_move_start:commerce_move_end]
+    hero_birth_start = gpl.index("function Phantom_Hero_Birth (agent thisagent)")
+    hero_birth_end = gpl.index(
+        "\nfunction Phantom_Recruitment_Voice", hero_birth_start
+    )
+    hero_birth_function = gpl[hero_birth_start:hero_birth_end]
+
     flee_start = gpl.index(
         "function flee_part_II(agent thisagent, list places, integer intent)"
     )
@@ -4456,17 +4516,208 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         fail(f"{gpl_path}: flee_part_II bypasses the stock travel-spell path")
     if "call_to_grave" in gpl[watcher_start:watcher_end]:
         fail(f"{gpl_path}: behavior watcher bypasses the stock travel-spell path")
-    check_start = gpl.index("function Call_To_Grave_Check(agent thisagent) is integer")
-    check_end = gpl.index("\nfunction Call_To_Grave_Effect", check_start)
-    check_function = gpl[check_start:check_end]
-    if 'thisagent\'s "taskname" = "go_home";' in check_function:
+
+    validation_functions = commerce_function + home_function + check_function
+    if 'thisagent\'s "taskname" = "go_home";' in validation_functions:
         fail(f"{gpl_path}: Call to Grave validation mutates the stock home task")
-    travel_start = gpl.index("function travel_to_safe(agent thisagent)")
-    travel_end = gpl.index("\nfunction Call_To_Grave_Check", travel_start)
-    travel_function = gpl[travel_start:travel_end]
+
+    birth_capture_pattern = re.compile(
+        r"If \(\s*"
+        r"\$isvalidgamepiece\(Home\) &&\s*"
+        r"\$IsDead\(Home\) == False &&\s*"
+        r"Home's \"Type\" == \"Building\" &&\s*"
+        r"Home's \"title\" == \"Phantoms_Haunt\" &&\s*"
+        r"\$GetUnitPlayerNumber\(thisagent\) == "
+        r"\$GetUnitPlayerNumber\(Home\)\s*"
+        r"\)\s*begin\s*"
+        r".*?If \(\$HasAttribute\(\"PhantomCallToGraveHaunt\", "
+        r"thisagent\) == False\)\s*"
+        r"\$AddAttribute\(\s*thisagent,\s*"
+        r"\"PhantomCallToGraveHaunt\",\s*\"agent\",\s*Home\s*\);",
+        re.DOTALL,
+    )
+    birth_capture_matches = birth_capture_pattern.findall(hero_birth_function)
+    if len(birth_capture_matches) != 1:
+        fail(
+            f"{gpl_path}: Phantom birth must capture exactly one valid, live, "
+            "same-player Phantoms Haunt home for Call to Grave"
+        )
+    if hero_birth_function.count('"PhantomCallToGraveHaunt"') != 2:
+        fail(
+            f"{gpl_path}: Phantom birth must mention the Call to Grave anchor "
+            "only in its one-time guard and AddAttribute call"
+        )
+    if re.search(
+        r'thisagent\'s\s+"PhantomCallToGraveHaunt"\s*=(?!=)',
+        hero_birth_function,
+    ):
+        fail(f"{gpl_path}: Phantom birth overwrites its immutable Haunt anchor")
+    if not (
+        hero_birth_function.index("$hero_birth(thisagent);")
+        < hero_birth_function.index('Home = thisagent\'s "home";')
+        < birth_capture_pattern.search(hero_birth_function).start()
+    ):
+        fail(
+            f"{gpl_path}: Phantom birth must run stock hero_birth before "
+            "capturing its recruiting Haunt"
+        )
+
+    own_order = (
+        'thisagent\'s "Title" != "Phantom"',
+        '$HasAttribute("PhantomCallToGraveHaunt", thisagent) == False',
+        'haunt = thisagent\'s "PhantomCallToGraveHaunt";',
+        "$IsValidGamePiece(haunt) == False",
+        "$IsDead(haunt)",
+        'haunt\'s "Type" != "Building"',
+        'haunt\'s "Title" != "Phantoms_Haunt"',
+        'thisagent\'s "home" != haunt',
+        "$GetUnitPlayerNumber(thisagent) !=",
+        "$GetUnitPlayerNumber(haunt)",
+        "return haunt;",
+    )
+    own_positions = [own_function.index(value) for value in own_order]
+    if own_positions != sorted(own_positions):
+        fail(
+            f"{gpl_path}: birth-captured Call to Grave Haunt validation is "
+            "out of order"
+        )
+    own_fail_closed_patterns = {
+        "non-Phantom caster": (
+            r'if \(thisagent\'s "Title" != "Phantom"\)\s*'
+            r"return \$NullAgent\(\);"
+        ),
+        "unanchored or Embassy-born Phantom": (
+            r'if \(\$HasAttribute\("PhantomCallToGraveHaunt", thisagent\) '
+            r"== False\)\s*return \$NullAgent\(\);"
+        ),
+        "invalid or destroyed anchor": (
+            r"if \(\$IsValidGamePiece\(haunt\) == False\)\s*"
+            r"return \$NullAgent\(\);.*?"
+            r"if \(\s*\$IsDead\(haunt\) \|\|\s*"
+            r"haunt's \"Type\" != \"Building\" \|\|\s*"
+            r"haunt's \"Title\" != \"Phantoms_Haunt\"\s*\)\s*"
+            r"return \$NullAgent\(\);"
+        ),
+        "reassigned home": (
+            r'if \(thisagent\'s "home" != haunt\)\s*'
+            r"return \$NullAgent\(\);"
+        ),
+        "cross-player anchor": (
+            r"if \(\s*\$GetUnitPlayerNumber\(thisagent\) !=\s*"
+            r"\$GetUnitPlayerNumber\(haunt\)\s*\)\s*"
+            r"return \$NullAgent\(\);"
+        ),
+    }
+    missing_fail_closed = [
+        label
+        for label, pattern in own_fail_closed_patterns.items()
+        if re.search(pattern, own_function, re.DOTALL) is None
+    ]
+    if missing_fail_closed:
+        fail(
+            f"{gpl_path}: Call to Grave Haunt anchor does not fail closed for "
+            f"{missing_fail_closed}"
+        )
+    if own_function.count("return $NullAgent();") != 6:
+        fail(
+            f"{gpl_path}: Call to Grave Own_Haunt must return null from every "
+            "rejected anchor state"
+        )
+    if own_function.count('thisagent\'s "PhantomCallToGraveHaunt"') != 1:
+        fail(
+            f"{gpl_path}: Call to Grave Own_Haunt must read its stored anchor "
+            "exactly once after HasAttribute"
+        )
+    if "$AddAttribute(" in own_function:
+        fail(f"{gpl_path}: Call to Grave Own_Haunt must never infer a new anchor")
+
+    relay_consumers = {
+        "commerce validation": commerce_function,
+        "home validation": home_function,
+        "home callback": move_function,
+        "commerce callback": commerce_move_function,
+    }
+    enumeration_calls = (
+        "$ListObjects(",
+        "$ListCompletedTitles(",
+        "$ListTitles(",
+        "$Pick_Closest(",
+        "$Loyalty_Mod_Pick_Closest(",
+        "$RetrieveAgent(",
+        "$Find_New_Home(",
+        "#MyPlayer",
+        "#MyTeam",
+    )
+    for label, function in {"Own_Haunt": own_function, **relay_consumers}.items():
+        present_enumeration = [
+            value for value in enumeration_calls if value in function
+        ]
+        if present_enumeration:
+            fail(
+                f"{gpl_path}: Call to Grave {label} enumerates or discovers "
+                f"a replacement Haunt with {present_enumeration}"
+            )
+    for label, function in relay_consumers.items():
+        if function.count(
+            "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);"
+        ) != 1:
+            fail(
+                f"{gpl_path}: Call to Grave {label} must consume the "
+                "birth-captured Own_Haunt helper exactly once"
+            )
+        if 'home = thisagent\'s "home";' in function:
+            fail(
+                f"{gpl_path}: Call to Grave {label} trusts mutable home "
+                "instead of the birth anchor"
+            )
+
+    try_body = try_function[try_function.index("\nbegin\n") + len("\nbegin\n") :]
+    if not try_body.lstrip().startswith("if ($HasWayPoints(thisagent) == FALSE)"):
+        fail(
+            f"{gpl_path}: TryTravelSpell no longer keeps HasWayPoints as its "
+            "first executable gate"
+        )
+    try_order = (
+        "if ($HasWayPoints(thisagent) == FALSE)",
+        'thisagent\'s "Title" == "Phantom"',
+        '$isspellavailable(thisagent,"call_to_grave")',
+        "$Call_To_Grave_Check(thisagent) == 1",
+        '$cast(thisagent,"call_to_grave",thisagent, "");',
+        "spellname = $getbestspell(thisagent,#list_travel);",
+        'if (spellname != "nothing")',
+        '$cast(thisagent,spellname,thisagent, "");',
+        "return False;",
+    )
+    try_positions = [try_function.index(value) for value in try_order]
+    if try_positions != sorted(try_positions):
+        fail(
+            f"{gpl_path}: Phantom commerce relay must precede the unchanged "
+            "stock TryTravelSpell fallback"
+        )
+    fallback_start = try_function.index(
+        "spellname = $getbestspell(thisagent,#list_travel);"
+    )
+    fallback_end = try_function.index("return False;", fallback_start) + len(
+        "return False;"
+    )
+    normalized_fallback = re.sub(
+        r"\s+", " ", try_function[fallback_start:fallback_end]
+    ).strip()
+    expected_fallback = (
+        'spellname = $getbestspell(thisagent,#list_travel); '
+        'if (spellname != "nothing") begin '
+        '$cast(thisagent,spellname,thisagent, ""); return True; end return False;'
+    )
+    if normalized_fallback != expected_fallback:
+        fail(f"{gpl_path}: stock TryTravelSpell fallback was changed")
+    if '$isspellavailable(thisagent,"call_to_grave",1)' in try_function:
+        fail(
+            f"{gpl_path}: normal travel bypasses Call to Grave cooldown state"
+        )
+
     travel_order = (
         'thisagent\'s "Title" == "Phantom"',
-        '$isspellavailable(thisagent,"call_to_grave",1)',
+        '$isspellavailable(thisagent,"call_to_grave")',
         "$Call_To_Grave_Check(thisagent) == 1",
         '$cast(thisagent,"call_to_grave",thisagent, "");',
         "$hasLowHP(thisagent) == FALSE",
@@ -4480,18 +4731,212 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
             f"{gpl_path}: Phantom Call to Grave must precede the unchanged "
             "stock low-HP and generic travel-spell branches"
         )
-    self_target = check_function.index('thisagent\'s "Target" == thisagent')
-    saved_destination = check_function.index(
-        'destination = thisagent\'s "destination";', self_target
+    if '$isspellavailable(thisagent,"call_to_grave",1)' in travel_function:
+        fail(f"{gpl_path}: safe travel bypasses Call to Grave cooldown state")
+
+    commerce_order = (
+        'thisagent\'s "Title" != "Phantom"',
+        "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);",
+        'target = thisagent\'s "target";',
+        "$IsValidGamePiece(home) == False",
+        "$IsValidGamePiece(target) == False",
+        '$IsDead(target) || target\'s "Type" != "Building"',
+        'target == home || thisagent\'s "TaskName" == "go_home"',
+        'thisagent\'s "ActiveScript" != $travel_to',
+        'thisagent\'s "BackScript" != $use_building',
+        "$InsideBuilding(thisagent)",
+        "direct_distance = $DistanceBetweenAgents(thisagent,target);",
+        "relay_distance = $DistanceBetweenAgents(home,target);",
+        "direct_distance >=",
+        "relay_distance + #Phantom_Call_To_Grave_Min_Relay_Savings",
     )
-    home_target = check_function.index(
-        'thisagent\'s "target" != thisagent\'s "home"', saved_destination
-    )
-    if not self_target < saved_destination < home_target:
+    commerce_positions = [commerce_function.index(value) for value in commerce_order]
+    if commerce_positions != sorted(commerce_positions):
         fail(
-            f"{gpl_path}: Call to Grave rejects stock self-target travel state "
-            "before reading its saved destination"
+            f"{gpl_path}: Call to Grave commerce relay guards or savings test "
+            "are out of order"
         )
+    if "$IsEnteringBuilding" in commerce_function:
+        fail(
+            f"{gpl_path}: Call to Grave rejects stock hide/enter orders before "
+            "a commerce relay can run"
+        )
+    if re.search(r"direct_distance\s*>(?!=)", commerce_function):
+        fail(f"{gpl_path}: Call to Grave relay excludes exact 500-unit savings")
+    commerce_pipeline = commerce_function + effect_function + commerce_move_function
+    ownership_gates = (
+        "$GetUnitPlayerNumber",
+        "$GetPlayerTeamNumber",
+        "$UnitsAreSamePlayer",
+        "#MyPlayer",
+        "#MyTeam",
+    )
+    present_ownership_gates = [
+        value for value in ownership_gates if value in commerce_pipeline
+    ]
+    if present_ownership_gates:
+        fail(
+            f"{gpl_path}: Call to Grave ownership-gates commerce targets with "
+            f"{present_ownership_gates}"
+        )
+    commerce_whitelists = ('target\'s "Title"', 'target\'s "SubType"')
+    present_whitelists = [
+        value for value in commerce_whitelists if value in commerce_function
+    ]
+    if present_whitelists:
+        fail(
+            f"{gpl_path}: Call to Grave restricts ordinary building visits with "
+            f"{present_whitelists}"
+        )
+
+    home_order = (
+        'thisagent\'s "taskname" != "go_home"',
+        "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);",
+        "$IsValidGamePiece(home) == False",
+        'thisagent\'s "Target" != thisagent && thisagent\'s "target" != home',
+        "$DistanceBetweenAgents(thisagent,home) > #Phantom_Call_To_Grave_Min_Distance",
+    )
+    home_positions = [home_function.index(value) for value in home_order]
+    if home_positions != sorted(home_positions):
+        fail(
+            f"{gpl_path}: Call to Grave home validation must accept only the "
+            "stock self/anchor target forms and measure the immutable anchor"
+        )
+    mutable_home_inputs = (
+        'thisagent\'s "destination"',
+        "$DistanceBetweenCoords(",
+        "$LocationOf(",
+        "$TeleportToPoint(",
+    )
+    present_mutable_home_inputs = [
+        value for value in mutable_home_inputs if value in home_function
+    ]
+    if present_mutable_home_inputs:
+        fail(
+            f"{gpl_path}: Call to Grave home validation trusts mutable "
+            f"coordinate state {present_mutable_home_inputs}"
+        )
+
+    check_order = (
+        "$Phantom_Call_To_Grave_Home_Check(thisagent) == 1",
+        "$Phantom_Call_To_Grave_Commerce_Check(thisagent) == 1",
+        "return 0;",
+    )
+    check_positions = [check_function.index(value) for value in check_order]
+    if check_positions != sorted(check_positions):
+        fail(f"{gpl_path}: Call to Grave validation dispatch is out of order")
+
+    commerce_dispatch = effect_function.index(
+        "$Phantom_Call_To_Grave_Commerce_Check(thisagent) == 1"
+    )
+    commerce_callback = effect_function.index(
+        'thisagent\'s "teleportScript" = $Call_To_Grave_DoCommerceMove;',
+        commerce_dispatch,
+    )
+    commerce_thread = effect_function.index("$RunThread(", commerce_callback)
+    target_snapshot = effect_function.index(
+        'thisagent\'s "Target"', commerce_thread
+    )
+    home_dispatch = effect_function.index(
+        "else if ($Phantom_Call_To_Grave_Home_Check(thisagent) == 1)",
+        target_snapshot,
+    )
+    home_callback = effect_function.index(
+        'thisagent\'s "teleportScript" = $Call_To_Grave_DoMove;', home_dispatch
+    )
+    home_thread = effect_function.index("$RunThread(", home_callback)
+    effect_order = (
+        commerce_dispatch,
+        commerce_callback,
+        commerce_thread,
+        target_snapshot,
+        home_dispatch,
+        home_callback,
+        home_thread,
+    )
+    if list(effect_order) != sorted(effect_order):
+        fail(
+            f"{gpl_path}: Call to Grave does not snapshot commerce before its "
+            "separately validated home fallback"
+        )
+
+    direct_order = (
+        "$IsValidGamePiece(ThisAgent) == False",
+        "$IsDead(ThisAgent)",
+        "#ATTRIB_HP) <= 0",
+        "$Phantom_Call_To_Grave_Home_Check(thisagent) == 0",
+        "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);",
+        "$TeleportToUnit(",
+        "theRange,",
+        "home,",
+        'thisagent\'s "castingrange"',
+    )
+    direct_positions = [move_function.index(value) for value in direct_order]
+    if direct_positions != sorted(direct_positions):
+        fail(
+            f"{gpl_path}: delayed home recall does not revalidate and teleport "
+            "only to the immutable Haunt anchor"
+        )
+    forbidden_direct_inputs = (
+        "$TeleportToPoint(",
+        'thisagent\'s "destination"',
+        'thisagent\'s "Target"',
+    )
+    present_forbidden_direct = [
+        value for value in forbidden_direct_inputs if value in move_function
+    ]
+    if present_forbidden_direct:
+        fail(
+            f"{gpl_path}: delayed home recall still consumes mutable target or "
+            f"coordinate state {present_forbidden_direct}"
+        )
+
+    commerce_move_order = (
+        "$IsValidGamePiece(thisagent) == False",
+        "$IsDead(thisagent)",
+        "#ATTRIB_HP) <= 0",
+        "$IsValidGamePiece(commerce_target) == False",
+        "$IsDead(commerce_target)",
+        'thisagent\'s "Target" != commerce_target',
+        "$Phantom_Call_To_Grave_Commerce_Check(thisagent) == 0",
+        "home = $Phantom_Call_To_Grave_Own_Haunt(thisagent);",
+        "$TeleportToUnit(",
+        "#Phantom_Call_To_Grave_Range",
+        "home,",
+        'thisagent\'s "castingrange"',
+    )
+    commerce_move_positions = [
+        commerce_move_function.index(value) for value in commerce_move_order
+    ]
+    if commerce_move_positions != sorted(commerce_move_positions):
+        fail(
+            f"{gpl_path}: delayed commerce relay does not reject an invalid, "
+            "dead, stale, or no-longer-beneficial target before teleporting"
+        )
+    state_preserving_functions = (
+        commerce_function + effect_function + commerce_move_function
+    )
+    relay_mutations = {
+        "target assignment": r'thisagent\'s\s+"Target"\s*=(?!=)',
+        "task assignment": r'thisagent\'s\s+"TaskName"\s*=(?!=)',
+        "task reset": r"\$Reset_Tasks\(",
+        "movement stop": r"\$StopMoving\(",
+    }
+    present_relay_mutations = [
+        label
+        for label, pattern in relay_mutations.items()
+        if re.search(pattern, state_preserving_functions)
+    ]
+    if present_relay_mutations:
+        fail(
+            f"{gpl_path}: Call to Grave relay mutates the original visit state "
+            f"with {present_relay_mutations}"
+        )
+    if re.search(
+        r"\$TeleportToUnit\([^;]*commerce_target", commerce_move_function, re.DOTALL
+    ):
+        fail(f"{gpl_path}: Call to Grave teleports directly to the commerce target")
+
     forbidden_gpl = (
         "expression #Phantom_Call_To_Grave_Walk_Range",
         "function Phantom_Is_Returning_Home(",
@@ -4500,6 +4945,7 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         "function Phantom_Try_Call_To_Grave(",
         "function Call_To_Grave_Begin(",
         "function Call_To_Grave_Move(",
+        "function travel_to(agent thisagent)",
         "function use_building(",
         "function use_building_safe(",
         "$TeleportToUnit(thisagent, 50000, home, 0);",
@@ -4507,11 +4953,13 @@ def validate_call_to_grave_contract(output_root: Path) -> None:
         "return $main_teleport_check(thisagent,#Teleport_Short_Range);",
         '$RunThread(thisagent\'s "teleportScript",theTimePeriod/2,thisagent,#Teleport_Range);',
         '$LearnSpell(thisagent, "call_to_grave");',
+        "$TeleportToPoint(",
     )
     present_forbidden_gpl = [value for value in forbidden_gpl if value in gpl]
     if present_forbidden_gpl:
         fail(
-            f"{gpl_path}: Call to Grave retains custom home-recall hooks "
+            f"{gpl_path}: Call to Grave retains unsafe travel/building overrides "
+            "or obsolete home-recall hooks "
             f"{present_forbidden_gpl}"
         )
 
