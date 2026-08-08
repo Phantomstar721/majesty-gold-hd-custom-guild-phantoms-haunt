@@ -314,12 +314,6 @@ map, processing method, and game-format contract.
 ## Repository Layout
 
 ```text
-assets/audio/                    Final game-used voice WAVs
-assets/source/buildings/         Haunt source art by building level
-assets/source/hero/              Phantom portrait and animation source art
-assets/source/interface/         Interface source art
-assets/source/references/        Current raster-art references
-assets/source/spells/            Spell and effect source art
 docs/                            Public technical documentation
 scripts/                         Build, review, generation, and audio tools
 scripts/majesty_imag.py          IMAG and v1 TILE helpers for the review scripts
@@ -334,6 +328,24 @@ changes.
 
 Generated packages live under `dist/`, and visual inspection output lives
 under `artifacts/`. Neither directory is source-controlled.
+
+### Art and audio are not distributed
+
+The `assets/` folder holds the original artwork, voice recordings, and Steam
+Workshop images for this mod. It is deliberately not source-controlled, so a
+clone of this repository does not include it.
+
+Every image and audio path in the build and deployment scripts is an
+overridable parameter, so the tooling works against your own files. Point the
+parameters at your art, for example:
+
+```powershell
+.\scripts\Build-CustomGuildPhantomsHaunt.ps1 -PortraitImage .\my-art\portrait.png
+```
+
+Run `Get-Help .\scripts\Build-CustomGuildPhantomsHaunt.ps1 -Detailed` for the
+full parameter list. The code, documentation, and tests in this repository are
+complete and self-contained; only the artwork is withheld.
 
 ## Building
 

@@ -2,6 +2,7 @@ dist/
 artifacts/
 docs/internal/
 private/
+assets/
 local_tile_*.bmp
 __pycache__/
 *.pyc
