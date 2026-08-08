@@ -611,6 +611,20 @@ class GeneratedXmlTests(unittest.TestCase):
         ids = [d.get("ID") for d in root.iter("Description") if d.get("ID")]
         self.assertEqual(len(ids), len(set(ids)), "duplicate Description ID")
 
+    def test_custom_dialog_id_is_applied_to_every_haunt_level(self):
+        root = ET.fromstring(builder.phantom_units_xml(b"CGPH"))
+        values = [
+            root.find(f'.//Description[@ID="{description_id}"]/Game/DialogID').get("value")
+            for description_id in ("PHG1", "PHG2", "PHG3")
+        ]
+        self.assertEqual(values, ["CGPH", "CGPH", "CGPH"])
+
+    def test_dialog_id_requires_four_ascii_alphanumeric_characters(self):
+        self.assertEqual(builder.parse_dialog_id("CGPH"), b"CGPH")
+        for value in ("CGP", "CGPH1", "CG-P", "Café"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                builder.parse_dialog_id(value)
+
     def test_haunt_levels_use_stock_krypta_repeat_build_multiplier(self):
         root = ET.fromstring(builder.phantom_units_xml())
         for description_id in ("PHG1", "PHG2", "PHG3"):

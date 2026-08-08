@@ -189,6 +189,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--game-path", required=True, type=Path)
     parser.add_argument("--output-root", required=True, type=Path)
+    parser.add_argument(
+        "--dialog-id",
+        default=PHANTOM_GUILD_DIALOG_ID.decode("ascii"),
+        help="Four-character recruit dialog ID (default: AP07).",
+    )
     parser.add_argument("--voices-only", action="store_true")
     parser.add_argument("--gpl-only", action="store_true")
     parser.add_argument("--units-only", action="store_true")
@@ -218,6 +223,7 @@ def main() -> int:
     # argument.
     parser.add_argument("--voice-dir", type=Path)
     args = parser.parse_args()
+    dialog_id = parse_dialog_id(args.dialog_id)
 
     data_dir = args.output_root / "Data"
     gpl_dir = args.output_root / "GPL"
@@ -240,7 +246,7 @@ def main() -> int:
             encoding="utf-8",
         )
         (data_dir / "phantom_units.xml").write_text(
-            phantom_units_xml(),
+            phantom_units_xml(dialog_id),
             encoding="utf-8",
         )
         (args.output_root / "CustomGuildPhantomsHaunt.mmxml").write_text(
@@ -255,7 +261,7 @@ def main() -> int:
 
     if args.units_only:
         (data_dir / "phantom_units.xml").write_text(
-            phantom_units_xml(),
+            phantom_units_xml(dialog_id),
             encoding="utf-8",
         )
         return 0
@@ -292,7 +298,7 @@ def main() -> int:
     if not source_interfacedata.exists():
         raise FileNotFoundError(source_interfacedata)
 
-    write_textdata_cam(source_textdata, data_dir / "phantom_textdata.cam")
+    write_textdata_cam(source_textdata, data_dir / "phantom_textdata.cam", dialog_id)
     write_gpltext_cam(
         source_mx_gpltext if source_mx_gpltext.exists() else source_gpltext,
         data_dir / "phantom_gpltext.cam",
@@ -344,7 +350,9 @@ def main() -> int:
         data_dir / "phantom_sounddesc.cam",
     )
 
-    (data_dir / "phantom_units.xml").write_text(phantom_units_xml(), encoding="utf-8")
+    (data_dir / "phantom_units.xml").write_text(
+        phantom_units_xml(dialog_id), encoding="utf-8"
+    )
     (data_dir / "phantom_actions.xml").write_text(phantom_actions_xml(), encoding="utf-8")
     (data_dir / "phantom_projectiles.xml").write_text(phantom_projectiles_xml(), encoding="utf-8")
     (data_dir / "phantom_overlays.xml").write_text(phantom_overlays_xml(), encoding="utf-8")
@@ -456,7 +464,17 @@ def phantom_equipment_units_xml() -> str:
     return "\n".join(descriptions)
 
 
-def phantom_units_xml() -> str:
+def parse_dialog_id(value: str) -> bytes:
+    try:
+        encoded = value.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise ValueError("dialog ID must contain exactly four ASCII characters") from exc
+    if len(encoded) != 4 or not all(chr(byte).isalnum() for byte in encoded):
+        raise ValueError("dialog ID must contain exactly four ASCII letters or digits")
+    return encoded
+
+
+def phantom_units_xml(dialog_id: bytes = PHANTOM_GUILD_DIALOG_ID) -> str:
     return f"""<Majesty>
 \t<Description type="Unit" subType="Character" ID="PHM1" Name="Phantom" Description="Phantom">
 \t\t<Engine version="1">
@@ -556,7 +574,7 @@ def phantom_units_xml() -> str:
 \t\t\t<DefaultSound value="Phantoms_Haunt"/>
 \t\t</Engine>
 \t\t<Game version="1">
-\t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
+\t\t\t<DialogID value="{dialog_id.decode('ascii')}"/>
 \t\t\t<Cost value="1400"/>
 \t\t\t<UpgradeTo value="Phantoms_Haunt2"/>
 \t\t\t<Multiplier value="2.0"/>
@@ -585,7 +603,7 @@ def phantom_units_xml() -> str:
 \t\t\t<DefaultSound value="Phantoms_Haunt"/>
 \t\t</Engine>
 \t\t<Game version="1">
-\t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
+\t\t\t<DialogID value="{dialog_id.decode('ascii')}"/>
 \t\t\t<Cost value="1800"/>
 \t\t\t<UpgradeTo value="Phantoms_Haunt3"/>
 \t\t\t<UpgradeFrom value="Phantoms_Haunt"/>
@@ -616,7 +634,7 @@ def phantom_units_xml() -> str:
 \t\t\t<DefaultSound value="Phantoms_Haunt"/>
 \t\t</Engine>
 \t\t<Game version="1">
-\t\t\t<DialogID value="{PHANTOM_GUILD_DIALOG_ID.decode('ascii')}"/>
+\t\t\t<DialogID value="{dialog_id.decode('ascii')}"/>
 \t\t\t<Cost value="2200"/>
 \t\t\t<UpgradeFrom value="Phantoms_Haunt2"/>
 \t\t\t<Multiplier value="2.0"/>
@@ -1663,7 +1681,11 @@ def append_haunt_building_dependency(stock_data: bytes) -> bytes:
     )
 
 
-def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
+def write_textdata_cam(
+    source_textdata: Path,
+    output_path: Path,
+    dialog_id: bytes = PHANTOM_GUILD_DIALOG_ID,
+) -> None:
     unit_names = read_cam_entry(source_textdata, b"STRT", b"UNTN")
     action_names = read_cam_entry(source_textdata, b"STRT", b"ACTN")
     source_guild_menu = read_cam_entry(source_textdata, b"SMNU", SOURCE_RECRUIT_GUILD_DIALOG_ID)
@@ -1725,7 +1747,7 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
                 extension=b"SMNU",
                 padding=b"\x00\x00\x00\x00",
                 entries=(
-                    CamEntry(name=pad_name(PHANTOM_GUILD_DIALOG_ID), data=cloned_guild_menu),
+                    CamEntry(name=pad_name(dialog_id), data=cloned_guild_menu),
                 ),
             ),
             CamSection(
@@ -1734,7 +1756,7 @@ def write_textdata_cam(source_textdata: Path, output_path: Path) -> None:
                 entries=(
                     CamEntry(name=pad_name(b"UNTN"), data=patched_unit_names),
                     CamEntry(name=pad_name(b"ACTN"), data=patched_action_names),
-                    CamEntry(name=pad_name(PHANTOM_GUILD_DIALOG_ID), data=cloned_guild_strings),
+                    CamEntry(name=pad_name(dialog_id), data=cloned_guild_strings),
                 ),
             ),
         ),

@@ -558,10 +558,9 @@ def validate_archive(path: Path) -> tuple[dict[bytes, list[Entry]], dict[tuple[b
                 )
 
         for entry in sections.get(b"SMNU", []):
-            if entry.name == b"AP07":
-                captured[(entry.section, entry.name)] = bytes(
-                    data[entry.offset : entry.offset + entry.size]
-                )
+            captured[(entry.section, entry.name)] = bytes(
+                data[entry.offset : entry.offset + entry.size]
+            )
 
         for entry in sections.get(b"WAVE", []):
             payload = bytes(data[entry.offset : entry.offset + entry.size])
@@ -1238,8 +1237,17 @@ def custom_tile_owner(name: bytes) -> tuple[bytes, str] | None:
     return None
 
 
-def validate_expected_entries(path: Path, sections: dict[bytes, list[Entry]]) -> None:
+def validate_expected_entries(
+    path: Path,
+    sections: dict[bytes, list[Entry]],
+    dialog_id: bytes = builder.PHANTOM_GUILD_DIALOG_ID,
+) -> None:
     expected_sections = EXPECTED_CAM_ENTRIES[path.name]
+    if path.name == "phantom_textdata.cam" and dialog_id != builder.PHANTOM_GUILD_DIALOG_ID:
+        expected_sections = {
+            b"SMNU": {dialog_id},
+            b"STRT": {b"UNTN", b"ACTN", dialog_id},
+        }
     if set(sections) != set(expected_sections):
         fail(
             f"{path}: unexpected sections; "
@@ -5988,7 +5996,11 @@ def validate_building_dependencies_against_stock(
         )
 
 
-def validate(output_root: Path, game_path: Path) -> None:
+def validate(
+    output_root: Path,
+    game_path: Path,
+    dialog_id: bytes = builder.PHANTOM_GUILD_DIALOG_ID,
+) -> None:
     if not output_root.is_dir():
         fail(f"{output_root}: build output directory does not exist")
     validate_manifest(output_root)
@@ -6017,7 +6029,7 @@ def validate(output_root: Path, game_path: Path) -> None:
         if not path.is_file():
             fail(f"{path}: required archive is missing")
         result = validate_archive(path)
-        validate_expected_entries(path, result[0])
+        validate_expected_entries(path, result[0], dialog_id)
         validate_no_redistributed_stock_art(path, result[0])
         archive_results[filename] = result
 
@@ -6110,8 +6122,8 @@ def validate(output_root: Path, game_path: Path) -> None:
     textdata_path = output_root / "Data" / "phantom_textdata.cam"
     textdata_captured = archive_results["phantom_textdata.cam"][1]
     unit_names = textdata_captured.get((b"STRT", b"UNTN"))
-    guild_menu = textdata_captured.get((b"SMNU", b"AP07"))
-    guild_strings = textdata_captured.get((b"STRT", b"AP07"))
+    guild_menu = textdata_captured.get((b"SMNU", dialog_id))
+    guild_strings = textdata_captured.get((b"STRT", dialog_id))
     guild_menu_bytes = bytes(guild_menu) if guild_menu is not None else None
     guild_strings_bytes = bytes(guild_strings) if guild_strings is not None else None
     if unit_names is None or b"Phantoms Haunt" not in unit_names:
@@ -6126,13 +6138,13 @@ def validate(output_root: Path, game_path: Path) -> None:
         or b"AVC1" in guild_menu_bytes
     ):
         fail(
-            f"{textdata_path}: AP07 is not the expected Phantom-remapped "
+            f"{textdata_path}: {dialog_id.decode('ascii')} is not the expected Phantom-remapped "
             "stock AP10 upgradable menu layout"
         )
     spell_rect = struct.unpack_from("<4I", guild_menu_bytes, 0x0D34)
     if spell_rect != (103, 162, 0, 0):
         fail(
-            f"{textdata_path}: AP07 retains a clickable AP10 temple-spell "
+            f"{textdata_path}: {dialog_id.decode('ascii')} retains a clickable AP10 temple-spell "
             f"control: {spell_rect}"
         )
     guild_string_count = struct.unpack_from("<H", guild_strings_bytes, 0)[0]
@@ -6142,7 +6154,7 @@ def validate(output_root: Path, game_path: Path) -> None:
         or b"SPELLS" in guild_strings_bytes
     ):
         fail(
-            f"{textdata_path}: AP07 strings retain unsafe AP10-only level or "
+            f"{textdata_path}: {dialog_id.decode('ascii')} strings retain unsafe AP10-only level or "
             "temple-spell controls"
         )
     help_text = archive_results["phantom_gpltext.cam"][1].get((b"STRT", b"HPTX"))
@@ -6393,11 +6405,18 @@ def main() -> int:
         type=Path,
         help="Game root used to compare DATA/BDEP byte-for-byte with stock.",
     )
+    parser.add_argument(
+        "--dialog-id",
+        default=builder.PHANTOM_GUILD_DIALOG_ID.decode("ascii"),
+        help="Expected four-character recruit dialog ID (default: AP07).",
+    )
     args = parser.parse_args()
     try:
+        dialog_id = builder.parse_dialog_id(args.dialog_id)
         validate(
             args.output_root.resolve(),
             args.game_path.resolve(),
+            dialog_id,
         )
     except ValidationError as exc:
         print(f"Verification failed: {exc}", file=sys.stderr)

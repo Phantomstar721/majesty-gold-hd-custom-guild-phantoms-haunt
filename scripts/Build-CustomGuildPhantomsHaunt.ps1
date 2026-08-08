@@ -1,6 +1,8 @@
 param(
     [string]$GamePath = "C:\Program Files (x86)\Steam\steamapps\common\Majesty HD",
     [string]$OutputRoot = ".\dist\CustomGuildPhantomsHaunt",
+    [ValidatePattern("^[A-Za-z0-9]{4}$")]
+    [string]$DialogID = "AP07",
     [string]$PortraitImage = ".\assets\source\hero\portrait.png",
     [string]$BuildingProfileImage = ".\assets\source\buildings\haunt\level-1\profile.png",
     [string]$BuildingSpriteSheet = ".\assets\source\buildings\haunt\level-1\sprite-sheet.png",
@@ -186,6 +188,7 @@ if ($GplOnly -or $GameplayOnly) {
         & $toolsPython $builder `
             --game-path $GamePath `
             --output-root $outputRootPath `
+            --dialog-id $DialogID `
             --units-only
         if ($LASTEXITCODE -ne 0) {
             throw "Phantom unit data generation failed with exit code $LASTEXITCODE"
@@ -197,6 +200,7 @@ if ($GplOnly -or $GameplayOnly) {
         & $toolsPython $builder `
             --game-path $GamePath `
             --output-root $outputRootPath `
+            --dialog-id $DialogID `
             --voices-only `
             --voice-dir $audioRootPath
         if ($LASTEXITCODE -ne 0) {
@@ -207,6 +211,7 @@ if ($GplOnly -or $GameplayOnly) {
     & $toolsPython $builder `
         --game-path $GamePath `
         --output-root $outputRootPath `
+        --dialog-id $DialogID `
         --gpl-only
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom GPL source generation failed with exit code $LASTEXITCODE"
@@ -238,7 +243,7 @@ if ($GplOnly -or $GameplayOnly) {
     }
     Copy-Item -Path $compiledPath -Destination (Join-Path $dataDir "Phantom.bcd") -Force
 
-    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
+    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath --dialog-id $DialogID
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
@@ -269,12 +274,12 @@ if ($TextOnly) {
         throw "Shared tools Python does not exist: $toolsPython"
     }
 
-    & $toolsPython $builder --game-path $GamePath --output-root $outputRootPath --text-only
+    & $toolsPython $builder --game-path $GamePath --output-root $outputRootPath --dialog-id $DialogID --text-only
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom text CAM builder failed with exit code $LASTEXITCODE"
     }
 
-    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
+    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath --dialog-id $DialogID
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
@@ -305,13 +310,14 @@ if ($InterfaceOnly) {
     & $toolsPython $builder `
         --game-path $GamePath `
         --output-root $outputRootPath `
+        --dialog-id $DialogID `
         --interface-only `
         --building-dialog-panel-rgb $interfacePanelRgb
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom interface CAM builder failed with exit code $LASTEXITCODE"
     }
 
-    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
+    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath --dialog-id $DialogID
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
@@ -339,13 +345,14 @@ if ($AudioOnly) {
     & $toolsPython $builder `
         --game-path $GamePath `
         --output-root $outputRootPath `
+        --dialog-id $DialogID `
         --voices-only `
         --voice-dir $audioRootPath
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom voice CAM builder failed with exit code $LASTEXITCODE"
     }
 
-    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
+    & $toolsPython $validator --output-root $outputRootPath --game-path $GamePath --dialog-id $DialogID
     if ($LASTEXITCODE -ne 0) {
         throw "Phantom package verification failed with exit code $LASTEXITCODE"
     }
@@ -435,6 +442,7 @@ if ($LASTEXITCODE -ne 0) {
 & $toolsPython $builder `
     --game-path $GamePath `
     --output-root $outputRootPath `
+    --dialog-id $DialogID `
     --portrait-rgb $portraitRgb `
     --hero-icon-rgb $heroIconRgb `
     --building-profile-rgb $buildingProfileRgb `
@@ -485,7 +493,7 @@ if (-not (Test-Path $compiledPath)) {
 }
 Copy-Item -Path $compiledPath -Destination (Join-Path $dataDir "Phantom.bcd") -Force
 
-& $toolsPython $validator --output-root $outputRootPath --game-path $GamePath
+& $toolsPython $validator --output-root $outputRootPath --game-path $GamePath --dialog-id $DialogID
 if ($LASTEXITCODE -ne 0) {
     throw "Phantom package verification failed with exit code $LASTEXITCODE"
 }
