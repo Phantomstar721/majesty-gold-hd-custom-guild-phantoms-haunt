@@ -74,8 +74,18 @@ complete building dependency table. CAM records with the same section and name
 override one another according to the effective mod/archive order; their text
 payloads are not concatenated or merged.
 
-The official Haunt package therefore contains the complete installed stock BDEP
-table followed by its one rule:
+Stock constructs this resource by loading `Data/miscdata.cam` for Original
+Majesty and replacing the whole record with `DataMX/mx_miscdata.cam` when the
+Northern Expansion dataset is active. The expansion record is a superset: it
+retains the Original rules, adds Outpost alternatives where stock intends them,
+and owns the Palace prerequisites for Hall of Champions, Magic Bazaar, Outpost,
+and Embassy. Those extra IDs cannot be constructed in Original quests, so the
+additional conditions remain inert there.
+
+Because the Haunt uses one `Dataset base="Any"` package, its archive starts with
+the complete installed `DataMX/mx_miscdata.cam` BDEP payload—the final stock
+resource used by Freestyle and Northern Expansion quests—and appends its one
+rule:
 
 ```text
 PHG1 : ABJ2 ABJ3 NOT NOT ||
@@ -85,7 +95,7 @@ If another custom-building mod also supplies `DATA/BDEP`, a separate
 compatibility provider must be made:
 
 1. Start with the unmodified BDEP payload from the installed game's
-   `Data/miscdata.cam`.
+   `DataMX/mx_miscdata.cam` so expansion-only prerequisites are retained.
 2. Append each mod's custom dependency rule exactly once, retaining CRLF line
    endings and the final newline.
 3. Package that combined payload as the single effective `DATA/BDEP` record
@@ -105,7 +115,7 @@ supports.
 | `phantom_interfacedata.cam` | Custom recruitment-panel raw texture |
 | `phantom_textdata.cam` | Menu and description strings |
 | `phantom_gpltext.cam` | GPL-facing names and help text |
-| `phantom_miscdata.cam` | Full stock BDEP table plus the Haunt's native level-2 Palace dependency |
+| `phantom_miscdata.cam` | Full stock Northern Expansion BDEP superset plus the Haunt's native level-2 Palace dependency |
 | `phantom_voices.cam` | Event-specific PCM WAVE payloads |
 | `phantom_sounddesc.cam` | Runtime DSND registrations |
 

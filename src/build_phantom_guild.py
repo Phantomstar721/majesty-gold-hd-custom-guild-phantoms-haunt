@@ -113,6 +113,13 @@ PHANTOM_ICEROD_BASE_ITEM_ID = 81
 PHANTOM_FROST_ARMOR_ITEM_ID = 82
 HAUNT_BDEP_RULE = b"PHG1 : ABJ2 ABJ3 NOT NOT ||"
 HAUNT_BDEP_COMMENT = b"# Phantoms Haunt requires a level 2 Palace or better"
+STOCK_BDEP_CAM_RELATIVE_PATH = Path("DataMX") / "mx_miscdata.cam"
+STOCK_EXPANSION_BDEP_RULES = (
+    b"ABo1 : ABJ3 ABm1 || ABo1 NOT &&",
+    b"ABl1 : ABJ2 ABJ3 NOT NOT || ABm1 ||",
+    b"ABm1 : ABJ2 ABJ3 NOT NOT || ABm1 ||",
+    b"ABr1 : ABJ2 ABJ3 NOT NOT || ABm1 ||",
+)
 PHANTOM_COWL_VARIANT_FIRST_ID = 83
 PHANTOM_COWL_VARIANT_LAST_ID = 97
 PHANTOM_ICEROD_VARIANT_FIRST_ID = 98
@@ -282,7 +289,7 @@ def main() -> int:
     source_textdata = args.game_path / "Data" / "textdata.cam"
     source_gpltext = args.game_path / "Data" / "gpltext.cam"
     source_mx_gpltext = args.game_path / "DataMX" / "mx_gpltext.cam"
-    source_miscdata = args.game_path / "Data" / "miscdata.cam"
+    source_miscdata = stock_building_dependency_cam(args.game_path)
     source_maindata = args.game_path / "Data" / "maindata.cam"
     source_ice_effect_maindata = args.game_path / "DataMX" / "mx_maindata.cam"
     source_interfacedata = args.game_path / "Data" / "interfacedata.cam"
@@ -1662,6 +1669,17 @@ def write_miscdata_cam(source_miscdata: Path, output_path: Path) -> None:
         ),
         output_path,
     )
+
+
+def stock_building_dependency_cam(game_path: Path) -> Path:
+    """Return the stock BDEP provider that is effective in expansion games.
+
+    Gold HD loads the Original table first, then Northern Expansion replaces the
+    whole BDEP resource with this expanded table.  A Dataset base="Any" mod must
+    preserve that final stock resource; cloning Data/miscdata.cam would erase
+    the expansion-only Embassy, Bazaar, Outpost, and Hall prerequisites.
+    """
+    return game_path / STOCK_BDEP_CAM_RELATIVE_PATH
 
 
 def append_haunt_building_dependency(stock_data: bytes) -> bytes:

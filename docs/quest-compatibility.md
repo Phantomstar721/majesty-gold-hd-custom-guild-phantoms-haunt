@@ -22,6 +22,13 @@ individual dependency lines supplied by different mods. A second mod that also
 provides BDEP therefore needs a combined compatibility record. This affects only
 mods that replace the building dependency table, not ordinary content mods.
 
+The universal package preserves the complete stock Northern Expansion BDEP
+overlay rather than the smaller Original table. This mirrors stock load order
+and retains the level gates for Hall of Champions, Magic Bazaar, Outpost, and
+Embassy in Freestyle and Northern Expansion quests. The expansion-only IDs are
+not constructible in Original quests, so the superset leaves Original behavior
+unchanged.
+
 Confirmed in game on 2026-08-01: A Deal with a Demon hides the Haunt at Palace
 level 1, exposes it immediately after the Palace reaches level 2, and peasants
 construct it normally. Rise of the Rat King exposes it from its starting
@@ -115,7 +122,8 @@ The release validator checks:
 
 - `Dataset base="Any"` packaging;
 - unique custom identities;
-- native `BDEP` Palace-level gating and preservation of the stock table;
+- native `BDEP` Palace-level gating and preservation of the stock expansion
+  table, including Embassy, Magic Bazaar, Outpost, and Hall prerequisites;
 - documentation of the whole-record BDEP compatibility requirement;
 - Embassy and Outpost selection;
 - Paladin exclusion and restoration;

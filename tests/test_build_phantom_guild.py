@@ -172,6 +172,24 @@ class TileReductionTests(unittest.TestCase):
             self.assertIn(getattr(builder, name), keep, f"{name} missing from keep set")
 
 class PackageInvariantTests(unittest.TestCase):
+    def test_universal_bdep_uses_stock_expansion_overlay(self):
+        game_path = Path("Majesty HD")
+        self.assertEqual(
+            builder.stock_building_dependency_cam(game_path),
+            game_path / "DataMX" / "mx_miscdata.cam",
+        )
+
+    def test_expansion_bdep_regression_rules_cover_gated_buildings(self):
+        self.assertEqual(
+            builder.STOCK_EXPANSION_BDEP_RULES,
+            (
+                b"ABo1 : ABJ3 ABm1 || ABo1 NOT &&",
+                b"ABl1 : ABJ2 ABJ3 NOT NOT || ABm1 ||",
+                b"ABm1 : ABJ2 ABJ3 NOT NOT || ABm1 ||",
+                b"ABr1 : ABJ2 ABJ3 NOT NOT || ABm1 ||",
+            ),
+        )
+
     def test_one_unexpected_unreferenced_tile_byte_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "phantom_interfacedata.cam"

@@ -6100,12 +6100,22 @@ def validate(
             f"{miscdata_path}: BDEP did not preserve the stock dependency table; "
             f"missing {missing_stock_rules}"
         )
+    missing_expansion_rules = [
+        rule
+        for rule in builder.STOCK_EXPANSION_BDEP_RULES
+        if rule not in building_dependencies.splitlines()
+    ]
+    if missing_expansion_rules:
+        fail(
+            f"{miscdata_path}: BDEP did not preserve the Northern Expansion "
+            f"building prerequisites; missing {missing_expansion_rules}"
+        )
     if not building_dependencies.endswith(haunt_rule + b"\r\n"):
         fail(
             f"{miscdata_path}: Haunt BDEP rule must be last and retain the "
             "parser's required blank final line"
         )
-    source_miscdata = game_path / "Data" / "miscdata.cam"
+    source_miscdata = builder.stock_building_dependency_cam(game_path)
     if not source_miscdata.is_file():
         fail(f"{source_miscdata}: stock miscdata archive was not found")
     stock_dependencies = builder.read_cam_entry(
