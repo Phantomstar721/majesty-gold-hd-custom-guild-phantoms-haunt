@@ -3696,6 +3696,10 @@ def tile_from_png_source(
     shadow_png_path: Path | None = None,
     edge_margin: int = 0,
     body_base_offset: int | None = None,
+    source_registration_x: float | None = None,
+    source_registration_y: float | None = None,
+    source_scale_height: float | None = None,
+    source_crop_box: tuple[int, int, int, int] | None = None,
 ) -> bytes:
     decoded = decode_indexed_v3_tile(original_tile)
     colors = tile_palette_colors(original_tile, palettes)
@@ -3708,7 +3712,7 @@ def tile_from_png_source(
 
     source = Image.open(png_path).convert("RGBA")
     source = remove_small_detached_alpha_components(source)
-    bbox = (
+    bbox = source_crop_box or (
         source.getchannel("A").getbbox()
         if target_art_height is not None
         else source.getbbox()
@@ -3716,6 +3720,7 @@ def tile_from_png_source(
     if bbox is None:
         return original_tile
 
+    source_left, source_top = bbox[:2]
     source = source.crop(bbox)
     art_points = [
         (x, y)
@@ -3745,7 +3750,7 @@ def tile_from_png_source(
         # Give the art an explicit visible height, grow the canvas upward, and
         # translate the hotspot with the added pixels so its world position and
         # robe base remain unchanged.
-        scale = target_art_height / source.height
+        scale = target_art_height / (source_scale_height or source.height)
         required_width = math.ceil(source.width * scale) + edge_margin * 2
         required_height = math.ceil(source.height * scale) + edge_margin * 2
         expanded_width = max(width, required_width)
@@ -3795,8 +3800,20 @@ def tile_from_png_source(
 
     target = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     anchor_x = (anchor_left + anchor_right) // 2
-    x = anchor_x - source.width // 2
-    if body_base_offset is None:
+    if source_registration_x is None:
+        x = anchor_x - source.width // 2
+    else:
+        # A rendered animation has a stable world/root coordinate even though
+        # its changing limbs alter the alpha bounds. Register that coordinate
+        # to the TILE hotspot so weapons and footfalls cannot recenter the body.
+        anchor_x = struct.unpack_from("<H", original_tile, 10)[0]
+        registered_x = round((source_registration_x - source_left) * scale)
+        x = anchor_x - registered_x
+    if source_registration_y is not None:
+        hotspot_y = struct.unpack_from("<H", original_tile, 12)[0]
+        registered_y = round((source_registration_y - source_top) * scale)
+        y = hotspot_y - registered_y
+    elif body_base_offset is None:
         y = anchor_bottom - source.height + vertical_offset
     else:
         hotspot_y = struct.unpack_from("<H", original_tile, 12)[0]
@@ -3815,8 +3832,9 @@ def tile_from_png_source(
     if shadow_png_path is not None:
         shadow_source = Image.open(shadow_png_path).convert("RGBA")
         shadow_source = remove_small_detached_alpha_components(shadow_source)
-        shadow_bbox = shadow_source.getbbox()
+        shadow_bbox = source_crop_box or shadow_source.getbbox()
         if shadow_bbox is not None:
+            shadow_source_left = shadow_bbox[0]
             shadow_source = shadow_source.crop(shadow_bbox)
             # The visible Phantom is intentionally 112% of the stock body.
             # Its flattened ground projection must remain within the original
@@ -3834,8 +3852,21 @@ def tile_from_png_source(
                 Image.Resampling.LANCZOS,
             )
             shadow_target = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-            shadow_x = anchor_x - shadow_source.width // 2
-            if body_base_offset is None:
+            if source_registration_x is None:
+                shadow_x = anchor_x - shadow_source.width // 2
+            else:
+                shadow_hotspot_x = struct.unpack_from("<H", original_tile, 10)[0]
+                shadow_registered_x = round(
+                    (source_registration_x - shadow_source_left) * shadow_scale
+                )
+                shadow_x = shadow_hotspot_x - shadow_registered_x
+            if source_registration_y is not None:
+                shadow_hotspot_y = struct.unpack_from("<H", original_tile, 12)[0]
+                shadow_registered_y = round(
+                    (source_registration_y - shadow_bbox[1]) * shadow_scale
+                )
+                shadow_y = shadow_hotspot_y - shadow_registered_y
+            elif body_base_offset is None:
                 shadow_y = anchor_bottom - shadow_source.height + vertical_offset
             else:
                 hotspot_y = struct.unpack_from("<H", original_tile, 12)[0]
